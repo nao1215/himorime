@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-17
+
 ### Added
 
 - `--section NAME` for `run`, `compare` and `ci`, and `section` under
