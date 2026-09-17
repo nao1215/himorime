@@ -587,6 +587,7 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.better", equals: "higher"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.change_percent", lt: -50}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.unit", equals: "records/s"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.reason", equals: ""}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
       # Committing the slow version and making the tree fast again turns
       # the same change around: throughput rising is an improvement.

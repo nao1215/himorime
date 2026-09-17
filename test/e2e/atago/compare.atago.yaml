@@ -86,6 +86,7 @@ scenarios:
               - {path: "$.git.base_ref", equals: "main"}
               - {path: "$.git.base_source", equals: "--against"}
               - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.reason", equals: ""}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: true}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.change_percent", gt: 100}
@@ -322,6 +323,7 @@ scenarios:
               # The base ran its own 40ms delay, the head the working tree's
               # 250ms: a regression.
               - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.reason", equals: ""}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.stats.median", lt: 150000000}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.median", gte: 250000000}
@@ -434,6 +436,7 @@ scenarios:
           stdout:
             json:
               - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.reason", equals: ""}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: false}
               - {path: "$.summary.regression", equals: 0}

@@ -77,6 +77,11 @@ scenarios:
           exit_code: 1
           stdout:
             json:
+              # The reason of a regression is empty. Asserting it puts the
+              # actual reason in the failure message when a runner is too
+              # noisy to call the change, which the report tail does not show
+              # (issue #29).
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.reason", equals: ""}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.change_percent", gt: 20}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.min_difference", equals: 5000000}
@@ -201,6 +206,7 @@ scenarios:
           exit_code: 1
           stdout:
             json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.reason", equals: ""}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.stats.median", lt: 250000000}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.median", gte: 300000000}
@@ -234,6 +240,7 @@ scenarios:
           exit_code: 0
           stdout:
             json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.reason", equals: ""}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: false}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.verdict", equals: "pass"}
