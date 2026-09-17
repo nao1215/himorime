@@ -48,8 +48,9 @@ type CompareOptions struct {
 	Confidence float64
 	// MinSamples is the smallest sample count on either side that can be judged.
 	MinSamples int
-	// MaxCV marks a side noisier than this coefficient of variation as
-	// inconclusive. 0 disables the check.
+	// MaxCV marks a side whose dispersion exceeds it as inconclusive. The
+	// dispersion follows Metric: Summary.RobustCV for an order statistic,
+	// Summary.CV for the mean. 0 disables the check.
 	MaxCV float64
 	// Resamples is the bootstrap iteration count; DefaultResamples when 0.
 	Resamples int
@@ -98,7 +99,9 @@ type Comparison struct {
 //   - improved:   P(degradation < -MaxPercent) >= Confidence
 //   - pass:       P(degradation <= +MaxPercent) >= Confidence
 //   - inconclusive: none of the above, or too few samples, or a side whose
-//     coefficient of variation exceeds MaxCV.
+//     dispersion exceeds MaxCV. The dispersion follows the compared statistic:
+//     the classic coefficient of variation for the mean, the robust one for
+//     the median and the other order statistics.
 //
 // An observed absolute difference below MinDifference is a pass whatever the
 // relative change. A regression therefore needs an observed degradation
@@ -154,7 +157,7 @@ func Compare(base, head []float64, o CompareOptions) Comparison {
 	case c.Base.Count < o.MinSamples || c.Head.Count < o.MinSamples:
 		c.Verdict = VerdictInconclusive
 		c.Reason = ReasonFewSamples
-	case o.MaxCV > 0 && (c.Base.CV > o.MaxCV || c.Head.CV > o.MaxCV):
+	case o.MaxCV > 0 && (c.Base.Dispersion(o.Metric) > o.MaxCV || c.Head.Dispersion(o.Metric) > o.MaxCV):
 		c.Verdict = VerdictInconclusive
 		c.Reason = ReasonNoisy
 	case o.MinDifference > 0 && math.Abs(c.Difference) < o.MinDifference:

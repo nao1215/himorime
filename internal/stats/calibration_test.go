@@ -190,6 +190,17 @@ func bimodal(r *rand.Rand, cv float64) float64 {
 	return f
 }
 
+// wideBimodal is lognormal noise where half the samples land in a mode five
+// times slower, like a command that sometimes takes a wholly different path.
+// Neither mode describes the command on its own.
+func wideBimodal(r *rand.Rand, cv float64) float64 {
+	f := lognormal(r, cv)
+	if r.Float64() < 0.5 {
+		f *= 5
+	}
+	return f
+}
+
 // linearDrift slows both sides by up to frac from the first round to the
 // last, like a machine heating up.
 func linearDrift(frac float64) func(i, n int) float64 {
@@ -347,7 +358,7 @@ func pairedCompare(base, head []float64, o CompareOptions) Comparison {
 	switch {
 	case c.Base.Count < o.MinSamples || c.Head.Count < o.MinSamples:
 		c.Verdict, c.Reason = VerdictInconclusive, ReasonFewSamples
-	case o.MaxCV > 0 && (c.Base.CV > o.MaxCV || c.Head.CV > o.MaxCV):
+	case o.MaxCV > 0 && (c.Base.Dispersion(o.Metric) > o.MaxCV || c.Head.Dispersion(o.Metric) > o.MaxCV):
 		c.Verdict, c.Reason = VerdictInconclusive, ReasonNoisy
 	case o.MinDifference > 0 && math.Abs(c.Difference) < o.MinDifference:
 		c.Verdict, c.Reason = VerdictPass, ReasonBelowMinDiff
@@ -481,15 +492,20 @@ func calibrationScenarios() []calibrationScenario {
 	add(calibrationScenario{name: "throughput +20% n=30 cv=5%", n: 30, cv: 0.05, change: 20, higherIsBetter: true, independent: faster})
 	add(calibrationScenario{name: "throughput identical n=30 cv=10%", n: 30, cv: 0.10, higherIsBetter: true, independent: quiet})
 
-	// Outliers 3-10x slower push the coefficient of variation past MaxCV,
-	// so the comparison is inconclusive, even with a real change underneath.
-	// Without the gate the median ignores them.
+	// Outliers 3-10x slower leave the median where it was, and the gate now
+	// measures the spread of the bulk of the samples, so they no longer hide
+	// a verdict: an unchanged pair passes and a real change is still called.
+	// The same scenarios with the gate off show the bootstrap alone.
 	add(calibrationScenario{name: "outliers head 1/30 cv=5%", n: 30, cv: 0.05, headOutliers: 1,
-		independent: expect{regression: never, improved: never}})
-	add(calibrationScenario{name: "outliers head 3/30 cv=5%", n: 30, cv: 0.05, headOutliers: 3, independent: cvGated})
-	add(calibrationScenario{name: "outliers both 3/30 cv=5%", n: 30, cv: 0.05, baseOutliers: 3, headOutliers: 3, independent: cvGated})
-	add(calibrationScenario{name: "outliers head 2/10 cv=5%", n: 10, cv: 0.05, headOutliers: 2, independent: cvGated})
-	add(calibrationScenario{name: "outliers base 3/30 +20% cv=5%", n: 30, cv: 0.05, change: 20, baseOutliers: 3, independent: cvGated})
+		independent: expect{regression: never, improved: never, pass: mostly}})
+	add(calibrationScenario{name: "outliers head 3/30 cv=5%", n: 30, cv: 0.05, headOutliers: 3,
+		independent: expect{regression: never, improved: never, pass: mostly}})
+	add(calibrationScenario{name: "outliers both 3/30 cv=5%", n: 30, cv: 0.05, baseOutliers: 3, headOutliers: 3,
+		independent: expect{regression: never, improved: never, pass: mostly}})
+	add(calibrationScenario{name: "outliers head 2/10 cv=5%", n: 10, cv: 0.05, headOutliers: 2,
+		independent: expect{regression: never, improved: never, pass: atLeast(0.5)}})
+	add(calibrationScenario{name: "outliers base 3/30 +20% cv=5%", n: 30, cv: 0.05, change: 20, baseOutliers: 3, independent: slower})
+	add(calibrationScenario{name: "outliers head 3/30 +20% cv=5%", n: 30, cv: 0.05, change: 20, headOutliers: 3, independent: slower})
 	add(calibrationScenario{name: "outliers head 3/30 no max_cv", n: 30, cv: 0.05, headOutliers: 3, noCVGate: true,
 		independent: expect{regression: rarely, improved: never, pass: mostly}})
 	add(calibrationScenario{name: "outliers base 3/30 +20% no max_cv", n: 30, cv: 0.05, change: 20, baseOutliers: 3, noCVGate: true,
@@ -497,6 +513,11 @@ func calibrationScenarios() []calibrationScenario {
 
 	// Bimodal noise: 30% of samples in a mode 25% slower.
 	add(calibrationScenario{name: "bimodal identical n=30 cv=5%", n: 30, cv: 0.05, noise: bimodal, independent: quiet})
+	// Two modes 5x apart is what the gate exists for: half the samples are
+	// far from the other half, so neither side describes one workload and no
+	// verdict is offered, with or without a real change underneath.
+	add(calibrationScenario{name: "wide bimodal identical n=30", n: 30, cv: 0.05, noise: wideBimodal, independent: cvGated})
+	add(calibrationScenario{name: "wide bimodal +25% n=30", n: 30, cv: 0.05, change: 25, noise: wideBimodal, independent: cvGated})
 	add(calibrationScenario{name: "bimodal +25% n=30 cv=5%", n: 30, cv: 0.05, change: 25, noise: bimodal,
 		independent: expect{regression: atLeast(0.5), pass: rarely, improved: never}})
 
