@@ -433,11 +433,14 @@ defaults:
   runs: 10
 benchmarks:
   - name: sleepy
-    # Shared Windows runners start processes with outliers of hundreds of
-    # milliseconds. These tests check the command plumbing, not the noise
-    # gate, so min_difference keeps start-up jitter from turning an unchanged
-    # comparison into a regression, and the change under test is far above it.
+    # The base is a 20ms sleep, and shared runners spend as long again
+    # starting the process, so three slow runs of ten are 30% of the samples
+    # and widen the interquartile range honestly. These tests check the
+    # command plumbing, not the noise gate, which internal/stats and the
+    # cookbook E2E cover, so the gate is off here. min_difference keeps
+    # start-up jitter from turning an unchanged comparison into a regression.
     regression:
+      max_cv: 0
       latency:
         min_difference: 50ms
     commands:

@@ -504,6 +504,9 @@ func calibrationScenarios() []calibrationScenario {
 		independent: expect{regression: never, improved: never, pass: mostly}})
 	add(calibrationScenario{name: "outliers head 2/10 cv=5%", n: 10, cv: 0.05, headOutliers: 2,
 		independent: expect{regression: never, improved: never, pass: atLeast(0.5)}})
+	// Three of ten is 30% of the samples, not a rare outlier: the quartiles
+	// move with them and the gate fires, as it does for any wide spread.
+	add(calibrationScenario{name: "outliers head 3/10 cv=5%", n: 10, cv: 0.05, headOutliers: 3, independent: cvGated})
 	add(calibrationScenario{name: "outliers base 3/30 +20% cv=5%", n: 30, cv: 0.05, change: 20, baseOutliers: 3, independent: slower})
 	add(calibrationScenario{name: "outliers head 3/30 +20% cv=5%", n: 30, cv: 0.05, change: 20, headOutliers: 3, independent: slower})
 	add(calibrationScenario{name: "outliers head 3/30 no max_cv", n: 30, cv: 0.05, headOutliers: 3, noCVGate: true,

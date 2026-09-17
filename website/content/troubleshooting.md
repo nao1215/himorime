@@ -6,7 +6,7 @@ toc: true
 
 ## Every comparison is inconclusive
 
-The measurements are too noisy, or there are too few of them, for the tolerance you set. See [Regression detection](/regression-detection/#noise-and-inconclusive-results): raise `runs`, widen `max_percent`, measure a heavier workload, or use a quieter machine. The reason is printed under the table. A reason of "measurements are noisier than max_cv" means the bulk of the samples is spread out, such as a command with two modes far apart, not that a few runs were slow: the gate ignores rare outliers when the statistic is the median. A metric you want to see but not gate on can have `gate: false`; see [What fails the run](/regression-detection/#what-fails-the-run).
+The measurements are too noisy, or there are too few of them, for the tolerance you set. See [Regression detection](/regression-detection/#noise-and-inconclusive-results): raise `runs`, widen `max_percent`, measure a heavier workload, or use a quieter machine. The reason is printed under the table. A reason of "measurements are noisier than max_cv" means the bulk of the samples is spread out, such as a command with two modes far apart, not that a few runs were slow: the gate ignores rare outliers when the statistic is the median. How rare is rare depends on `runs`: three slow runs of 10 are 30% of the samples and do trip it, where three of 30 do not. A metric you want to see but not gate on can have `gate: false`; see [What fails the run](/regression-detection/#what-fails-the-run).
 
 ## A comparison passes although the working tree is clearly slower
 
