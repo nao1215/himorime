@@ -30,6 +30,8 @@ func WriteGitHubSummary(w io.Writer, r *Report) error {
 		icon, verdict = "⚠️", "some comparisons were inconclusive"
 	case s.NotGated.Regression > 0:
 		icon, verdict = "⚠️", "no regression in gated metrics; a metric that is not gated regressed"
+	case s.NewSuites > 0 && s.NewSuites == s.Suites:
+		verdict = "nothing to compare yet, every suite is new in this revision"
 	}
 	title := "benchmarks"
 	if r.Mode == ModeCompare {
@@ -38,8 +40,10 @@ func WriteGitHubSummary(w io.Writer, r *Report) error {
 	fmt.Fprintf(&sb, "## %s himorime %s: %s\n\n", icon, title, verdict)
 	fmt.Fprintf(&sb, "%d passed · %d improved · %d inconclusive · %d over budget · %d regressed · %d metric errors · %d errored",
 		s.Pass, s.Improved, s.Inconclusive, s.OverBudget, s.Regression, s.MetricError, s.Error)
-	if note := checksNote(s); note != "" {
-		sb.WriteString(" · " + note)
+	for _, note := range []string{newSuitesNote(s), checksNote(s)} {
+		if note != "" {
+			sb.WriteString(" · " + note)
+		}
 	}
 	sb.WriteString("\n\n")
 	writeMarkdownBody(&sb, r, 3)

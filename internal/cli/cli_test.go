@@ -517,6 +517,92 @@ func TestCompare(t *testing.T) {
 	}
 }
 
+// newSuite would fail if anything ran: its build copies a file that does not
+// exist, and its setup hook exits non-zero.
+const newSuite = `version: "1"
+suite: {name: added}
+build:
+  command: [@EXE@, copy, missing.txt, "${artifact}"]
+defaults:
+  warmup: 0
+  runs: 10
+benchmarks:
+  - name: fresh
+    setup:
+      - command: [@EXE@, exit, "3"]
+    commands:
+      app:
+        command: [@EXE@, sleep-from, "${artifact}"]
+`
+
+func TestCompareSuiteNewInHead(t *testing.T) {
+	dir := compareRepo(t)
+	write(t, filepath.Join(dir, "bench", "himorime.yaml"), suite(t, newSuite))
+
+	r := run(t, dir, nil, "compare", "--against", "main", "bench")
+	if r.code != exitcode.OK {
+		t.Fatalf("a suite added by the change must not fail the comparison: %+v", r)
+	}
+	for _, want := range []string{
+		"suite: added (" + filepath.Join("bench", "himorime.yaml") + ")",
+		"new in this revision: bench does not exist in the base revision, so there is nothing to compare yet",
+		"1 suite new in this revision",
+		"exit 0",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("stdout lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	if strings.Contains(r.stdout, "PASS") || strings.Contains(r.stdout, "error") {
+		t.Errorf("a new suite is neither a pass nor an error:\n%s", r.stdout)
+	}
+
+	type reportJSON struct {
+		Suites []struct {
+			Name       string            `json:"name"`
+			Result     string            `json:"result"`
+			NewInHead  bool              `json:"new_in_head"`
+			Error      *json.RawMessage  `json:"error"`
+			Benchmarks []json.RawMessage `json:"benchmarks"`
+		} `json:"suites"`
+		Summary struct {
+			Suites    int `json:"suites"`
+			NewSuites int `json:"new_suites"`
+			Commands  int `json:"commands"`
+			ExitCode  int `json:"exit_code"`
+		} `json:"summary"`
+	}
+	r = run(t, dir, nil, "compare", "--against", "main", "--format", "json", "--quiet", "bench")
+	var rep reportJSON
+	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
+		t.Fatalf("%v\n%s", err, r.stdout)
+	}
+	if r.code != exitcode.OK || len(rep.Suites) != 1 || !rep.Suites[0].NewInHead || rep.Suites[0].Error != nil || rep.Suites[0].Benchmarks == nil || len(rep.Suites[0].Benchmarks) != 0 ||
+		rep.Summary.NewSuites != 1 || rep.Summary.Commands != 0 || rep.Summary.ExitCode != exitcode.OK {
+		t.Fatalf("report = %+v\n%s", rep, r.stdout)
+	}
+
+	// The suite that exists on both revisions is still measured and judged.
+	r = run(t, dir, nil, "compare", "--against", "main", "--format", "json", "--quiet", "himorime.yaml", "bench")
+	rep = reportJSON{}
+	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
+		t.Fatalf("%v\n%s", err, r.stdout)
+	}
+	if r.code != exitcode.OK || len(rep.Suites) != 2 || rep.Suites[0].NewInHead || len(rep.Suites[0].Benchmarks) != 1 || !rep.Suites[1].NewInHead ||
+		rep.Summary.Suites != 2 || rep.Summary.NewSuites != 1 || rep.Summary.Commands != 1 {
+		t.Fatalf("mixed report = %+v\n%s", rep, r.stdout)
+	}
+	write(t, filepath.Join(dir, "delay.txt"), "400ms\n")
+	if r := run(t, dir, nil, "compare", "--against", "main", "--quiet", "himorime.yaml", "bench"); r.code != exitcode.Failed || !strings.Contains(r.stdout, "REGRESSION") || !strings.Contains(r.stdout, "new in this revision") {
+		t.Fatalf("a regression next to a new suite: %+v", r)
+	}
+
+	// A plain run measures the new suite as usual, so its broken build fails.
+	if r := run(t, dir, nil, "run", "--quiet", "bench"); r.code != exitcode.Execution || strings.Contains(r.stdout, "new in this revision") {
+		t.Fatalf("run: %+v", r)
+	}
+}
+
 func TestCIGitHubActions(t *testing.T) {
 	dir := compareRepo(t)
 	base := git(t, dir, "rev-parse", "HEAD")

@@ -50,6 +50,10 @@ func WriteTerminal(w io.Writer, r *Report, o TerminalOptions) error {
 			writeStderr(&sb, s.Error)
 			continue
 		}
+		if s.NewInHead {
+			sb.WriteString(newInHeadLine(s) + "\n")
+			continue
+		}
 		if r.Mode == ModeCompare {
 			compareTable(&sb, s, o)
 		} else {
@@ -343,8 +347,10 @@ func summaryLine(sb *strings.Builder, r *Report) {
 		noun = "benchmark"
 	}
 	extra := ""
-	if note := checksNote(s); note != "" {
-		extra = " · " + note
+	for _, note := range []string{newSuitesNote(s), checksNote(s)} {
+		if note != "" {
+			extra += " · " + note
+		}
 	}
 	fmt.Fprintf(sb, "%s · %d %s%s · seed %d · exit %d\n", strings.Join(parts, ", "), s.Benchmarks, noun, extra, r.Seed, s.ExitCode)
 }

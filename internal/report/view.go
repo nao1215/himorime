@@ -3,6 +3,7 @@ package report
 import (
 	"fmt"
 	"math"
+	"path/filepath"
 	"strings"
 
 	"github.com/nao1215/himorime/internal/metric"
@@ -83,6 +84,24 @@ func checksNote(s Summary) string {
 		parts = append(parts, fmt.Sprintf("%d checks skipped (unsupported metric)", s.Skipped))
 	}
 	return strings.Join(parts, " · ")
+}
+
+// newInHeadLine explains a suite the base revision does not have. The
+// directory is taken from the suite path as the user gave it.
+func newInHeadLine(s Suite) string {
+	return fmt.Sprintf("new in this revision: %s does not exist in the base revision, so there is nothing to compare yet", filepath.Dir(s.File))
+}
+
+// newSuitesNote counts the suites the base revision does not have, or
+// returns "" when there are none.
+func newSuitesNote(s Summary) string {
+	switch s.NewSuites {
+	case 0:
+		return ""
+	case 1:
+		return "1 suite new in this revision"
+	}
+	return fmt.Sprintf("%d suites new in this revision", s.NewSuites)
 }
 
 func hasBudgets(s Suite) bool {

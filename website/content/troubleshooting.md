@@ -87,11 +87,12 @@ in GitHub Actions check out with `fetch-depth: 0`.
 `himorime ci` runs outside GitHub Actions, or on an event without a base, such
 as `schedule`. Pass `--against <ref>` or set `HIMORIME_BASE_REF`.
 
-## "the suite directory does not exist in the base revision"
+## "new in this revision: ... does not exist in the base revision"
 
-The suite file was added after the base revision, so the base cannot be built
-from it. Commit the suite to the base branch first, or compare against a newer
-revision.
+The suite directory was added after the base revision, usually by the pull
+request that adopts himorime, so there is nothing to compare it with yet.
+Nothing is built or run for that suite and the exit status is not affected.
+Comparisons start once the suite is in the base branch.
 
 ## "the build ... did not write ${artifact}"
 

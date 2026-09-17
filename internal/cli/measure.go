@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -402,6 +403,16 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		}
 	}
 
+	for _, side := range sides {
+		// The change adds this suite: the base revision has nothing to
+		// compare against, which is reported, not treated as a failure, so
+		// the pull request that adopts himorime does not fail.
+		if _, err := os.Stat(side.Root); side.Name == runner.SideBase && errors.Is(err, fs.ErrNotExist) {
+			m.logf("suite %q (%s): new in this revision; %s does not exist in the base revision, so nothing is measured", s.Name, ls.display, filepath.Dir(ls.display))
+			in.NewInHead = true
+			return in
+		}
+	}
 	m.logf("suite %q (%s): %s", s.Name, ls.display, plural(len(s.Benchmarks), "benchmark"))
 	for _, side := range sides {
 		// Commands, hooks and relative paths run inside ${root} of each

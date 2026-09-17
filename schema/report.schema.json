@@ -225,6 +225,7 @@
         "file",
         "result",
         "error",
+        "new_in_head",
         "benchmarks",
         "geometric_mean",
         "geometric_mean_unavailable"
@@ -248,6 +249,10 @@
         },
         "error": {
           "$ref": "#/definitions/error"
+        },
+        "new_in_head": {
+          "description": "True in a comparison when the suite directory does not exist in the base revision. Nothing was built, run or compared: benchmarks is empty, result stays pass and the suite does not change the exit status.",
+          "type": "boolean"
         },
         "benchmarks": {
           "description": "Benchmarks in file order.",
@@ -547,7 +552,8 @@
         "fail_on_inconclusive",
         "exit_code",
         "not_gated",
-        "skipped"
+        "skipped",
+        "new_suites"
       ],
       "additionalProperties": false,
       "properties": {
@@ -649,6 +655,11 @@
         },
         "skipped": {
           "description": "Budgets and comparisons skipped because their metric is unsupported on this platform (metrics.unsupported: skip).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "new_suites": {
+          "description": "Suites with new_in_head: the base revision does not have them, so nothing of them was compared. They never change the exit status.",
           "type": "integer",
           "minimum": 0
         }

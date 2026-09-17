@@ -109,6 +109,71 @@ scenarios:
             path: summary.md
             contains: ["## ❌ himorime benchmark comparison: performance regression", "REGRESSION"]
 
+  # The pull request that adopts himorime: its base has no suite directory.
+  - name: the pull request that adds a suite passes and reports the suite as new
+    env:
+      GITHUB_ACTIONS: "true"
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_EVENT_PATH: ${workdir}/event.json
+      GITHUB_STEP_SUMMARY: ${workdir}/summary.md
+    steps:
+      - fixture: {file: repo/README.md, content: "before himorime\n"}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run: {command: "e2ehelper event pull_request ${workdir}/repo ${workdir}/event.json"}
+      - run: {command: git switch -q -c adopt, cwd: repo}
+      # Nothing of the new suite may run: its build copies a missing file
+      # and its command would leave a marker behind.
+      - fixture:
+          file: repo/bench/himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: adopted}
+            build:
+              command: [e2ehelper, copy, missing.txt, "$${artifact}"]
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: version
+                commands:
+                  app: {command: [e2ehelper, write, "$${root}/ran"]}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m "add a suite", cwd: repo}
+      - run:
+          command: himorime ci bench
+          cwd: repo
+      - assert:
+          exit_code: 0
+          stdout:
+            # The suite path uses the platform's separator.
+            matches: "(?m)^suite: adopted \\(bench[/\\\\]himorime\\.yaml\\)\\r?\\nnew in this revision: bench does not exist in the base revision, so there is nothing to compare yet\\r?$"
+            contains: "0 passed · 0 benchmarks · 1 suite new in this revision · seed "
+            not_contains: ["PASS", "error"]
+          stderr:
+            matches: "(?m)^::notice file=bench[/\\\\]himorime\\.yaml,title=himorime%3A suite new in this revision::suite adopted: new in this revision: bench does not exist in the base revision"
+            not_contains: ["::error", "exit 4"]
+      - assert:
+          file: {path: repo/bench/ran, exists: false}
+      - assert:
+          file:
+            path: summary.md
+            contains:
+              - "## ✅ himorime benchmark comparison: nothing to compare yet, every suite is new in this revision"
+              - "New in this revision: bench does not exist in the base revision"
+      - run:
+          command: himorime ci --quiet --format json bench
+          cwd: repo
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].new_in_head", equals: true}
+              - {path: "$.suites[0].result", equals: "pass"}
+              - {path: "$.suites[0].error", equals: null}
+              - {path: "$.suites[0].benchmarks", length: 0}
+              - {path: "$.summary.new_suites", equals: 1}
+              - {path: "$.summary.exit_code", equals: 0}
+
   - name: push and merge_group events use their own base fields
     env:
       GITHUB_ACTIONS: "true"

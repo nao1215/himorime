@@ -164,6 +164,9 @@ out.
   comparisons with `gate: false` by verdict, and `skipped` the budgets and
   comparisons skipped because their metric is unsupported; neither changes a
   result.
+- In a comparison, a suite whose directory does not exist in the base
+  revision has `new_in_head: true`, no benchmarks and result `pass`, and is
+  counted in `summary.new_suites`. It never changes the exit status.
 
 ```console
 $ himorime run --format json --output result.json
@@ -180,7 +183,9 @@ parsing a cell. The header is fixed:
 suite,benchmark,command,result,record,side,metric,unit,scope,source,process_aggregation,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,gate,reason,error_kind,error_message
 ```
 
-- `record` is `stat`, `budget`, `comparison` or `error`.
+- `record` is `stat`, `budget`, `comparison`, `error` or `new_in_head`, the
+  only row of a suite the base revision does not have, with the explanation in
+  `reason`.
 - A `stat` row has `side` (`base` or `head`), `metric`, `unit`, `scope`,
   `source`, `process_aggregation`, `status`,
   `statistic` (`count`, `min`, `median`, `mean`, `max`, `stddev`, `cv`,

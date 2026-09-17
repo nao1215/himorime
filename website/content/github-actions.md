@@ -60,6 +60,11 @@ jobs:
    comparisons too. See
    [What fails the run](/regression-detection/#what-fails-the-run).
 
+On the pull request that adds the suite, the base revision has no suite
+directory yet. The job passes, and the log, the job summary and a notice
+annotation say the suite is new in this revision; comparisons start with the
+next pull request.
+
 The same suite file and the same command work on a laptop: `himorime compare
 --against main` does steps 1 to 3 and 5 against a branch you name, and
 `himorime run` checks the budgets without a base revision.
