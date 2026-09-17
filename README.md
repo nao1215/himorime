@@ -108,6 +108,14 @@ jobs:
 
 Exit status 1 means performance got worse; 4 and 6 mean the measurement itself failed. Shared runners are noisy: himorime interleaves the revisions, needs statistical confidence to call a regression, and reports anything it cannot tell apart from noise as inconclusive.
 
+## Measuring programs you did not write
+
+himorime measures a command, so a third-party tool is measured like your own. The suites in [bench/thirdparty](./bench/thirdparty) do that with real programs, and they are written to be read and copied: [real-world suites](https://nao1215.github.io/himorime/real-world/) says what each one shows and what was made equal between the programs.
+
+| Suite | Programs |
+|---|---|
+| [json](./bench/thirdparty/json) | jq, gojq, jaq |
+
 ## Install
 
 ```shell

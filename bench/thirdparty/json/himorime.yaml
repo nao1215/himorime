@@ -1,0 +1,112 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# jq, gojq and jaq doing the same extraction over generated JSON Lines.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+suite:
+  name: json processors
+  description: jq, gojq and jaq writing one field of every line of generated JSON Lines to a file.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  metrics:
+    cpu: true
+    memory: true
+    unsupported: skip
+
+report:
+  versions:
+    jq: [jq, --version]
+    gojq: [gojq, --version]
+    jaq: [jaq, --version]
+
+benchmarks:
+  - name: extract one field from 5MiB of JSON Lines
+    description: >-
+      Each command writes .user.id of every line, compact, one per line, to a
+      file in the working directory. The three outputs are compared byte for
+      byte in setup. At this size the process start dominates: jq and jaq are
+      native binaries, gojq starts a Go runtime. gojq runs the garbage
+      collector on other threads, so its CPU time is above its wall-clock
+      time, while jq and jaq stay on one thread. jaq reads the whole input
+      into memory; jq and gojq read it as they go, so peak RSS follows the
+      input size for jaq only.
+    tags: [thirdparty, json, small]
+    baseline: jq
+    setup:
+      - command: ["${artifact}", -kind, jsonl, -size, 5MiB, -seed, "1", -o, "${workdir}/input.jsonl"]
+      - command: jq -c .user.id ${workdir}/input.jsonl > ${workdir}/expect.txt
+        shell: true
+      - command: gojq -c .user.id ${workdir}/input.jsonl > ${workdir}/got-gojq.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-gojq.txt
+        shell: true
+      - command: jaq -c .user.id ${workdir}/input.jsonl > ${workdir}/got-jaq.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-jaq.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.jsonl"
+    commands:
+      jq:
+        command: [jq, -c, .user.id, "${workdir}/input.jsonl"]
+        stdout: "out-jq.txt"
+      gojq:
+        command: [gojq, -c, .user.id, "${workdir}/input.jsonl"]
+        stdout: "out-gojq.txt"
+      jaq:
+        command: [jaq, -c, .user.id, "${workdir}/input.jsonl"]
+        stdout: "out-jaq.txt"
+
+  - name: extract one field from 100MiB of JSON Lines
+    description: >-
+      The same job over twenty times the input, where parsing dominates and
+      the process start no longer shows. The seed differs from the 5MiB
+      benchmark, so the two are different bytes of the same shape. The
+      asymmetries of the 5MiB benchmark hold here and are larger: gojq's
+      garbage collector has more to do, and jaq's peak RSS follows the whole
+      100MiB.
+    tags: [thirdparty, json, large]
+    baseline: jq
+    setup:
+      - command: ["${artifact}", -kind, jsonl, -size, 100MiB, -seed, "2", -o, "${workdir}/input.jsonl"]
+      - command: jq -c .user.id ${workdir}/input.jsonl > ${workdir}/expect.txt
+        shell: true
+      - command: gojq -c .user.id ${workdir}/input.jsonl > ${workdir}/got-gojq.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-gojq.txt
+        shell: true
+      - command: jaq -c .user.id ${workdir}/input.jsonl > ${workdir}/got-jaq.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-jaq.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.jsonl"
+    commands:
+      jq:
+        command: [jq, -c, .user.id, "${workdir}/input.jsonl"]
+        stdout: "out-jq.txt"
+      gojq:
+        command: [gojq, -c, .user.id, "${workdir}/input.jsonl"]
+        stdout: "out-gojq.txt"
+      jaq:
+        command: [jaq, -c, .user.id, "${workdir}/input.jsonl"]
+        stdout: "out-jaq.txt"

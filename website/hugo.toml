@@ -71,6 +71,11 @@ pageRef = "/comparison"
 weight = 50
 
 [[menus.main]]
+name = "Real-world"
+pageRef = "/real-world"
+weight = 52
+
+[[menus.main]]
 name = "Reference"
 pageRef = "/exit-codes"
 weight = 55

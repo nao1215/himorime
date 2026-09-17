@@ -1,0 +1,35 @@
+---
+title: Real-world suites
+description: Suites in this repository that measure programs nobody here maintains, what each one shows about writing a himorime.yaml, and what was made equal between the programs.
+toc: true
+---
+
+himorime measures a command, so a program you did not write is measured like your own: name it, give it an input, and read the numbers. The suites below do that with real third-party tools, and they are meant to be read and copied. Each one is a working `himorime.yaml` for a shape of program you are likely to have.
+
+Run one yourself, with the tools it names on your PATH:
+
+```console
+$ himorime run bench/thirdparty/json
+```
+
+[thirdparty.yml](https://github.com/nao1215/himorime/blob/main/.github/workflows/thirdparty.yml) runs them weekly on a pinned runner so the examples stay correct as the tools and himorime change. The numbers of the latest run are in that workflow's job summary and in its artifact. They are not repeated here: a number measured on a shared runner last month says less than the suite you can run today on the machine you care about.
+
+No suite here carries a budget. The speed of a program this repository does not maintain is not a reason to fail its CI, so the scheduled job fails only when a measurement fails: a tool that cannot be installed, a command that exits non-zero, or himorime reporting an error.
+
+| Suite | Programs | What it shows |
+|---|---|---|
+| [json](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/json) | jq, gojq, jaq | Several implementations of one job in a single benchmark, input generated from a fixed seed, throughput declared from that input file, and a setup hook that proves the outputs match before anything is measured |
+
+## JSON processors
+
+Same job: write `.user.id` of every line of generated JSON Lines, compact, one per line, to a file. Measured at 5MiB, where starting the process dominates, and at 100MiB, where parsing dominates.
+
+Made equal: compact output on every tool (`-c`), the same input file, the same filter, and the same destination, a file in the benchmark's working directory. Each tool also runs once in setup and the three outputs are compared byte for byte, so a tool that stopped doing the job would fail the benchmark instead of looking fast. A comparison of tools doing different work is a comparison of nothing.
+
+Not equal: gojq runs a Go garbage collector on threads of its own, so its CPU time is above its wall-clock time while jq and jaq stay on one thread. jaq reads the whole input into memory, while jq and gojq read it as they go, so peak RSS follows the input size for jaq only; the peaks of jq and gojq are close to what starting a process already costs, and are reported as at or below that floor. jq and jaq are native binaries and gojq starts a Go runtime, which is most of the difference at 5MiB.
+
+The baseline is jq, the oldest and most widely used of the three, so `RELATIVE` reads as a multiple of it.
+
+The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed, so no sample data from anyone else's project is committed here and every run measures the same bytes. Every tool is installed at a pinned version whose digest is checked.
+
+Suite: [bench/thirdparty/json](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/json)
