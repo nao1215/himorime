@@ -65,9 +65,7 @@ scenarios:
             suite: {name: compare}
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
-            # max_cv: 0 keeps a few slow runs on a shared runner from hiding
-            # a change far larger than the noise.
-            defaults: {warmup: 1, runs: 10, regression: {max_cv: 0}}
+            defaults: {warmup: 1, runs: 10}
             benchmarks:
               - name: sleepy
                 commands:
@@ -121,9 +119,7 @@ scenarios:
             suite: {name: compare}
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
-            # max_cv: 0 keeps a few slow runs on a shared runner from hiding
-            # a change far larger than the noise.
-            defaults: {warmup: 0, runs: 10, regression: {max_cv: 0}}
+            defaults: {warmup: 0, runs: 10}
             benchmarks:
               - name: sleepy
                 commands:
@@ -418,9 +414,7 @@ scenarios:
           content: |
             version: "1"
             suite: {name: gate}
-            # max_cv: 0 keeps a few slow runs on a shared runner from hiding
-            # a change far larger than the noise (issue #8).
-            defaults: {warmup: 1, runs: 10, regression: {max_cv: 0}}
+            defaults: {warmup: 1, runs: 10}
             benchmarks:
               - name: sleepy
                 commands:

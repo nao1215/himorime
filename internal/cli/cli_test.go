@@ -435,9 +435,9 @@ benchmarks:
   - name: sleepy
     # Shared Windows runners start processes with outliers of hundreds of
     # milliseconds. These tests check the command plumbing, not the noise
-    # gate, so the CV check is off and the regression is far above the noise.
+    # gate, so min_difference keeps start-up jitter from turning an unchanged
+    # comparison into a regression, and the change under test is far above it.
     regression:
-      max_cv: 0
       latency:
         min_difference: 50ms
     commands:
