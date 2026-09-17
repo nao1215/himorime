@@ -433,6 +433,13 @@ defaults:
   runs: 10
 benchmarks:
   - name: sleepy
+    # Shared Windows runners start processes with outliers of hundreds of
+    # milliseconds. These tests check the command plumbing, not the noise
+    # gate, so the CV check is off and the regression is far above the noise.
+    regression:
+      max_cv: 0
+      latency:
+        min_difference: 50ms
     commands:
       app:
         command: [@EXE@, sleep-from, "${artifact}"]
@@ -461,7 +468,7 @@ func TestCompare(t *testing.T) {
 		t.Fatalf("unchanged compare: %+v", r)
 	}
 
-	write(t, filepath.Join(dir, "delay.txt"), "120ms\n")
+	write(t, filepath.Join(dir, "delay.txt"), "400ms\n")
 	r = run(t, dir, nil, "compare", "--against", "main", "--format", "json")
 	if r.code != exitcode.Failed {
 		t.Fatalf("regression: %+v", r)
@@ -546,7 +553,7 @@ func TestCIGitHubActions(t *testing.T) {
 	if r := run(t, dir, env{"HIMORIME_BASE_REF": "main"}, "ci", "--quiet"); r.code != 0 {
 		t.Fatalf("ci with HIMORIME_BASE_REF: %+v", r)
 	}
-	write(t, filepath.Join(dir, "delay.txt"), "150ms\n")
+	write(t, filepath.Join(dir, "delay.txt"), "400ms\n")
 	if r := run(t, dir, nil, "ci", "--against", "main", "--quiet"); r.code != exitcode.Failed || !strings.Contains(r.stdout, "REGRESSION") {
 		t.Fatalf("ci regression: %+v", r)
 	}
