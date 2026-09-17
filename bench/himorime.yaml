@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=../schema/himorime.schema.json
 #
-# himorime measuring itself. Informational: .github/workflows/benchmark.yml runs
-# `himorime ci bench` on pull requests without blocking merges, and `make bench`
-# runs it locally.
+# himorime measuring itself. .github/workflows/benchmark.yml runs
+# `himorime ci bench` on pull requests with a released himorime and fails on a
+# confirmed regression; `make bench` runs the suite locally.
 version: "1"
 
 suite:

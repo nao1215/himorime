@@ -98,7 +98,7 @@ release-smoke: ## Build a snapshot release locally and smoke-test the artifacts
 	go run ./scripts/smoke dist
 
 .PHONY: bench
-bench: ## Run the dogfood suite that measures himorime itself (not a CI gate)
+bench: ## Run the dogfood suite that measures himorime itself
 	go run . run bench
 
 .PHONY: check
