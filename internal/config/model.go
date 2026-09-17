@@ -85,6 +85,8 @@ type Suite struct {
 	Build       *Exec
 	Benchmarks  []Benchmark
 	Outputs     []Output
+	// Versions lists the tools of report.versions in the order of the file.
+	Versions []ToolVersion
 }
 
 // Exec is a process himorime starts: a build step, a hook, or a measured command.
@@ -313,4 +315,17 @@ func (r Regression) Compares(name string) bool {
 type Output struct {
 	Format Format
 	Path   string
+	// Section, when set, names the section of an existing Markdown file the
+	// report replaces; the rest of the file is kept.
+	Section string
+}
+
+// DefaultVersionTimeout bounds a command of report.versions.
+const DefaultVersionTimeout = 30 * time.Second
+
+// ToolVersion is a tool whose version reports record, and the command that
+// prints it.
+type ToolVersion struct {
+	Name string
+	Argv []string
 }

@@ -1,0 +1,8 @@
+# expect: section is only allowed with format: markdown
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    commands: {a: {command: [a]}}
+report:
+  outputs: [{format: csv, path: out.csv, section: bench}]

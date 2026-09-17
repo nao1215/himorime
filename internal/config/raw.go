@@ -166,13 +166,17 @@ type RawMetricRegression struct {
 	Gate          *bool    `yaml:"gate"`
 }
 
-// RawReport lists the report files written after every run.
+// RawReport lists the report files written after every run, and the tools
+// whose versions reports record.
 type RawReport struct {
-	Outputs []RawOutput `yaml:"outputs"`
+	Outputs  []RawOutput `yaml:"outputs"`
+	Versions Versions    `yaml:"versions"`
 }
 
-// RawOutput is one report file.
+// RawOutput is one report file. Section names the part of an existing
+// Markdown file the report replaces.
 type RawOutput struct {
-	Format string `yaml:"format"`
-	Path   string `yaml:"path"`
+	Format  string `yaml:"format"`
+	Path    string `yaml:"path"`
+	Section string `yaml:"section"`
 }

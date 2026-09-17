@@ -221,6 +221,43 @@ func (s *StdinSpec) UnmarshalYAML(_ context.Context, node ast.Node) error {
 	return nil
 }
 
+// Versions is the ordered mapping of tool names to the commands that print
+// their versions.
+type Versions struct {
+	Names []string
+	ByKey map[string][]string
+}
+
+// UnmarshalYAML decodes the mapping while keeping the declared order, which is
+// the order reports list the tools in. The schema has already checked that
+// every value is a list of strings.
+func (v *Versions) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	m, ok := unwrap(node).(*ast.MappingNode)
+	if !ok {
+		return errAt(node, "expected a mapping of tool names to commands, got %s", kindOf(node))
+	}
+	v.ByKey = map[string][]string{}
+	for _, mv := range m.Values {
+		name, ok := scalarString(mv.Key)
+		if !ok {
+			return errAt(mv.Key, "tool names must be strings")
+		}
+		if _, dup := v.ByKey[name]; dup {
+			return errAt(mv.Key, "tool %q is declared twice", name)
+		}
+		var argv Argv
+		if err := argv.UnmarshalYAML(ctx, mv.Value); err != nil {
+			return err
+		}
+		if !argv.IsList {
+			return errAt(mv.Value, "the version command of %q must be a list of arguments, such as [%s, --version]", name, name)
+		}
+		v.Names = append(v.Names, name)
+		v.ByKey[name] = argv.List
+	}
+	return nil
+}
+
 // Commands is the ordered mapping of command names to commands.
 type Commands struct {
 	Names []string

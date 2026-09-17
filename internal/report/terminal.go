@@ -59,7 +59,7 @@ func WriteTerminal(w io.Writer, r *Report, o TerminalOptions) error {
 		} else {
 			runTable(&sb, s, o)
 		}
-		details(&sb, r.Mode, s)
+		details(&sb, r.Mode, s, true)
 	}
 	sb.WriteString("\n")
 	summaryLine(&sb, r)
@@ -277,7 +277,9 @@ func renderColored(sb *strings.Builder, t *table, results []cellResult, color bo
 	}
 }
 
-func details(sb *strings.Builder, mode Mode, s Suite) {
+// details writes the notes under a suite's tables. geoNote adds why the
+// geometric mean is missing, when it is.
+func details(sb *strings.Builder, mode Mode, s Suite, geoNote bool) {
 	var notes []string
 	for _, b := range s.Benchmarks {
 		if b.Error != nil {
@@ -297,7 +299,7 @@ func details(sb *strings.Builder, mode Mode, s Suite) {
 		for _, v := range s.GeometricMean.Values {
 			fmt.Fprintf(sb, "geometric mean over %d cases (%s): %s %s\n", s.GeometricMean.Cases, geoLabel(s.GeometricMean.Reference), v.Command, FormatRatio(v.Ratio))
 		}
-	} else if note := GeometricMeanNote(s); note != "" {
+	} else if note := GeometricMeanNote(s); note != "" && geoNote {
 		fmt.Fprintf(sb, "no geometric mean: %s\n", note)
 	}
 }

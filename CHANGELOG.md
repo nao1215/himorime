@@ -7,6 +7,27 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `--section NAME` for `run`, `compare` and `ci`, and `section` under
+  `report.outputs`, update one section of an existing Markdown page, between
+  `<!-- himorime:begin NAME -->` and `<!-- himorime:end NAME -->`, and keep
+  the rest of the page byte for byte. Heading levels follow the page, the
+  file is replaced atomically, and a missing file or marker fails the run with
+  exit 4. See Publish results in documentation on the Reports page.
+- `report.versions` records the versions of the compared tools, such as
+  `jc: [jc, --version]`. Each command runs once before measuring; its first
+  line is written to `environment.tools` in JSON and under the Markdown
+  report. A version command that fails exits 4.
+
+### Changed
+
+- Markdown reports and job summaries of plain runs leave out rows of commands
+  that do not measure a metric group, and the `Result` column when no command
+  has a budget and nothing failed. Markdown no longer explains why a
+  geometric mean is missing; the terminal still does. CSV and the terminal
+  table are unchanged, and JSON only gains `environment.tools`.
+
 ## [0.1.1] - 2026-09-17
 
 ### Changed

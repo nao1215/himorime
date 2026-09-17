@@ -208,6 +208,7 @@ func configReference() (string, error) {
 		{"regression", []string{"definitions", "regressionBenchmark"}},
 		{"regression.latency, regression.throughput, regression.cpu, regression.memory", []string{"definitions", "latencyRegression"}},
 		{"report", []string{"properties", "report"}},
+		{"report.outputs[]", []string{"properties", "report", "properties", "outputs", "items"}},
 	}
 	var sb strings.Builder
 	for _, sec := range sections {

@@ -51,6 +51,19 @@ type measurement struct {
 	logw    io.Writer
 	redact  *redact.Redactor
 	tempDir string
+	// tools are the versions of report.versions of every suite measured.
+	tools []report.Tool
+}
+
+// addTool records a tool version. A tool several suites name is listed once,
+// with the version the first of them recorded.
+func (m *measurement) addTool(t report.Tool) {
+	for _, x := range m.tools {
+		if x.Name == t.Name {
+			return
+		}
+	}
+	m.tools = append(m.tools, t)
 }
 
 func (m *measurement) logf(format string, args ...any) {
@@ -109,6 +122,16 @@ func (f *measureFlags) check(a *App, cmd string) int {
 		return exitcode.Usage
 	case cmd == "compare" && f.against == "":
 		fmt.Fprintf(a.Stderr, "himorime compare: --against is required, for example: himorime compare --against main\n")
+		return exitcode.Usage
+	case f.section == "":
+	case !report.ValidSectionName(f.section):
+		fmt.Fprintf(a.Stderr, "himorime %s: invalid --section %q: use lowercase letters, digits and '-', starting with a letter or digit\n", cmd, f.section)
+		return exitcode.Usage
+	case f.output == "":
+		fmt.Fprintf(a.Stderr, "himorime %s: --section needs --output FILE: it replaces a section of an existing Markdown file, for example: himorime %s --format markdown --output README.md --section %s\n", cmd, cmd, f.section)
+		return exitcode.Usage
+	case f.format != string(config.FormatMarkdown):
+		fmt.Fprintf(a.Stderr, "himorime %s: --section needs --format markdown, not %q\n", cmd, f.format)
 		return exitcode.Usage
 	}
 	return 0
@@ -181,6 +204,7 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 	if compare {
 		mode = report.ModeCompare
 	}
+	rep.Environment.Tools = m.tools
 	report.Judge(rep, inputs, report.Options{Mode: mode, Seed: seed, FailOnInconclusive: f.failOnInconclusive})
 	rep.FinishedAt = a.Now().UTC()
 	if ctx.Err() != nil && rep.Summary.ExitCode == exitcode.OK {
@@ -414,6 +438,17 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		}
 	}
 	m.logf("suite %q (%s): %s", s.Name, ls.display, plural(len(s.Benchmarks), "benchmark"))
+	// Versions are recorded from the working tree, once, before anything is
+	// built or measured.
+	for _, tool := range s.Versions {
+		version, f := r.Version(ctx, tool, head)
+		if f != nil {
+			in.BuildFailure = f
+			return in
+		}
+		m.logf("%s: %s", tool.Name, version)
+		m.addTool(report.Tool{Name: tool.Name, Version: version})
+	}
 	for _, side := range sides {
 		// Commands, hooks and relative paths run inside ${root} of each
 		// revision, so a revision without the suite directory cannot be
@@ -493,7 +528,9 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh 
 	}
 
 	var errs []error
-	if f.output != "" {
+	if f.section != "" {
+		errs = append(errs, report.UpdateMarkdownSection(f.output, f.section, rep))
+	} else if f.output != "" {
 		errs = append(errs, writeFile(f.output, false, func(w io.Writer) error {
 			return report.Write(w, config.Format(f.format), rep, false)
 		}))
@@ -505,6 +542,11 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh 
 		for _, o := range ls.suite.Outputs {
 			p := filepath.Join(ls.suite.Dir, filepath.FromSlash(o.Path))
 			format := o.Format
+			if o.Section != "" {
+				errs = append(errs, report.UpdateMarkdownSection(p, o.Section, rep))
+				m.logf("updated section %s of %s", o.Section, p)
+				continue
+			}
 			errs = append(errs, writeFile(p, false, func(w io.Writer) error {
 				return report.Write(w, format, rep, false)
 			}))

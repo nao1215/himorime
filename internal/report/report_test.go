@@ -369,7 +369,7 @@ func TestMarkdownEscaping(t *testing.T) {
 		t.Fatalf("markdown:\n%s", md)
 	}
 	for _, line := range strings.Split(md, "\n") {
-		if strings.HasPrefix(line, "| pipe") && strings.Count(strings.ReplaceAll(line, `\|`, ""), "|") != 12 {
+		if strings.HasPrefix(line, "| pipe") && strings.Count(strings.ReplaceAll(line, `\|`, ""), "|") != 11 {
 			t.Fatalf("row has the wrong number of cells: %s", line)
 		}
 	}
@@ -527,6 +527,7 @@ func TestJSONMatchesReportSchema(t *testing.T) {
 		"empty":   judge(ModeRun, false),
 	}
 	reports["compare"].Git = &Git{HeadSHA: "abc", BaseRef: "main", BaseSHA: "def", BaseSource: "--against", Dirty: true}
+	reports["run"].Environment.Tools = []Tool{{Name: "jc", Version: "jc version 1.25.7"}, {Name: "jo", Version: "1.9"}}
 	buildFailed := &Report{Environment: Environment{LogicalCPUs: 1}}
 	Judge(buildFailed, []SuiteInput{{Suite: &config.Suite{Name: "b"}, File: "y.yaml", BuildFailure: &runner.Failure{Kind: runner.FailBuild, Message: "no"}}}, Options{Mode: ModeCompare})
 	reports["build failed"] = buildFailed

@@ -108,6 +108,93 @@ scenarios:
             path: out/summary.md
             contains: ["## ✅ himorime benchmarks: no regression"]
 
+  - name: a Markdown section of an existing page is updated and the rest of the page is kept
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: sections}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: quick
+                commands:
+                  helper: {command: [e2ehelper, sleep, 1ms]}
+                metrics: {cpu: true, unsupported: skip}
+              - name: records
+                commands:
+                  helper: {command: [e2ehelper, sleep, 1ms]}
+                metrics:
+                  throughput:
+                    work: {value: 100, unit: records}
+            report:
+              versions:
+                helper: [e2ehelper, print, "e2ehelper 1.0"]
+      - fixture:
+          file: docs/compare.md
+          content: |
+            # Compare
+
+            ## Speed
+
+            Written by hand.
+
+            <!-- himorime:begin speed -->
+            stale table
+            <!-- himorime:end speed -->
+
+            ## License
+
+            MIT
+      - run:
+          command: himorime run --quiet --seed 3 --format markdown --output docs/compare.md --section speed
+      - assert:
+          exit_code: 0
+          stdout: {empty: true}
+          stderr: {empty: true}
+      - assert:
+          file:
+            path: docs/compare.md
+            contains:
+              - "# Compare\n\n## Speed\n\nWritten by hand.\n\n<!-- himorime:begin speed -->\n\n### sections\n\n#### Latency\n\n| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative |\n"
+              - "#### Throughput\n\n| Benchmark | Command | Median | Mean | Min | P95 |\n|---|---|--:|--:|--:|--:|\n| records | helper |"
+              - ", seed 3.\n\n- helper: e2ehelper 1.0\n\n<!-- himorime:end speed -->\n\n## License\n\nMIT\n"
+      - assert:
+          file:
+            path: docs/compare.md
+            not_contains: ["stale table", "PASS", "| Result |", "geometric mean"]
+      - assert:
+          file:
+            path: docs/compare.md
+            contains: ["| records | helper |"]
+            count: 2
+      - run:
+          command: himorime run --quiet --format markdown --output docs/missing.md --section speed
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: ['docs/missing.md: section "speed": the file does not exist']
+      - fixture:
+          file: docs/plain.md
+          content: |
+            # Plain
+      - run:
+          command: himorime run --quiet --format markdown --output docs/plain.md --section speed
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: ['docs/plain.md: section "speed": no line "<!-- himorime:begin speed -->"']
+      - assert:
+          file:
+            path: docs/plain.md
+            equals: "# Plain\n"
+      - run:
+          command: himorime run --quiet --format json --section speed
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: ["--section needs --output FILE"]
+
   - name: an exceeded absolute budget exits 1
     steps:
       - fixture:

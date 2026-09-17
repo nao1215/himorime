@@ -66,6 +66,7 @@ Builds the suite's artifact when a build section exists, then measures every sel
 | `--output FILE` | write the report to this file instead of stdout |
 | `--quiet` | do not print progress to stderr |
 | `--runs N` | measure exactly n runs per command, overriding the suite |
+| `--section NAME` | update only the name section of the existing --output file, between its himorime:begin and himorime:end comment lines; needs --format markdown |
 | `--seed SEED` | seed for the execution order and the bootstrap (default: random, printed in the report) |
 | `--skip-tag TAG` | skip benchmarks with this tag (repeatable, or comma-separated); wins over --tag |
 | `--summary FILE` | also append a GitHub-flavored Markdown summary to this file |
@@ -90,6 +91,7 @@ Checks REF out into a temporary Git worktree, builds both REF and the current wo
 | `--output FILE` | write the report to this file instead of stdout |
 | `--quiet` | do not print progress to stderr |
 | `--runs N` | measure exactly n runs per command, overriding the suite |
+| `--section NAME` | update only the name section of the existing --output file, between its himorime:begin and himorime:end comment lines; needs --format markdown |
 | `--seed SEED` | seed for the execution order and the bootstrap (default: random, printed in the report) |
 | `--skip-tag TAG` | skip benchmarks with this tag (repeatable, or comma-separated); wins over --tag |
 | `--summary FILE` | also append a GitHub-flavored Markdown summary to this file |
@@ -114,6 +116,7 @@ Like compare, with CI defaults: no colors, and a Markdown summary appended to $G
 | `--output FILE` | write the report to this file instead of stdout |
 | `--quiet` | do not print progress to stderr |
 | `--runs N` | measure exactly n runs per command, overriding the suite |
+| `--section NAME` | update only the name section of the existing --output file, between its himorime:begin and himorime:end comment lines; needs --format markdown |
 | `--seed SEED` | seed for the execution order and the bootstrap (default: random, printed in the report) |
 | `--skip-tag TAG` | skip benchmarks with this tag (repeatable, or comma-separated); wins over --tag |
 | `--summary FILE` | also append a GitHub-flavored Markdown summary to this file |

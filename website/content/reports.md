@@ -155,7 +155,9 @@ out.
   `gate`: `false` when the metric has `gate: false` and its verdict did not
   decide the result. `comparisons` is `null` outside a comparison.
 - `environment` records the operating system, architecture, CPU model, logical
-  CPU count, Go version and CI provider. `himorime_version`, `seed` and `git`
+  CPU count, Go version and CI provider, and `tools` the versions of the tools
+  named in `report.versions`, as `name` and `version` in the order the suites
+  list them (`[]` when none are named). `himorime_version`, `seed` and `git`
   (head and base commits, and whether the working tree was dirty) complete what
   is needed to reproduce a run. Host names, user names and environment
   variables are never recorded.
@@ -218,7 +220,71 @@ budgets table when there are budgets (only the latency table for a
 latency-only suite), followed by notes and one line describing the machine.
 Names are escaped, so a `|` in a benchmark name cannot break a table. It is
 meant to be pasted into a README, a pull request, a blog post or release
-notes.
+notes, so it leaves out what only matters while measuring:
+
+- A metric group table lists only the commands that measure the group. A
+  benchmark without declared work has no throughput row.
+- In a plain run, the `Result` column appears only when a command has a
+  budget or something failed. Otherwise every cell would say `PASS`.
+- Why a geometric mean could not be computed is shown in the terminal, not in
+  Markdown.
+
+The tools named in `report.versions` follow the machine line, one per line,
+such as `- jc: jc version 1.25.7`.
+
+## Publish results in documentation
+
+A page that shows benchmark results can be regenerated with one command
+instead of copying numbers by hand. Mark the part himorime owns with two
+comment lines:
+
+```markdown
+# Compare
+
+## Speed
+
+The numbers below are measured with himorime on the machine named under the
+table.
+
+<!-- himorime:begin speed -->
+<!-- himorime:end speed -->
+
+## Features
+```
+
+Then update it:
+
+```console
+$ himorime run --quiet --format markdown --output docs/compare.md --section speed bench
+```
+
+himorime replaces everything between the two lines with the report, with one
+blank line inside each marker, and keeps every other byte of the page,
+including its line endings. Running it again with the same results writes the
+same file. The suite heading is one level below the nearest heading above the
+begin line (`###` under `## Speed`), its tables one level further, and never
+deeper than `######`; without a heading above, they are `##` and `###`.
+Headings and marker lines inside fenced code blocks are ignored.
+
+- `--section` needs `--output FILE` and `--format markdown`; anything else is
+  a usage error (exit 3). A suite does the same with `section:` under
+  `report.outputs`.
+- The file must already exist and hold exactly one begin line and, after it,
+  exactly one end line. A missing file, a missing, repeated or misordered
+  marker fails the run with exit 4, and the message names the file, the
+  section and what is wrong.
+- The page is written to a temporary file next to it and renamed into place,
+  so a failed run never leaves a truncated page.
+
+List the compared tools under `report.versions` so the page says which
+versions were measured:
+
+```yaml
+report:
+  versions:
+    jc: [jc, --version]
+    jo: [jo, -v]
+```
 
 ## GitHub Actions job summary and annotations
 

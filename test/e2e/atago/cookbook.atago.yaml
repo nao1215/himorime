@@ -374,7 +374,7 @@ scenarios:
             contains:
               - "## reports"
               - "### Latency"
-              - "| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative | Result |"
+              - "| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative |\n"
               - "| count 20k lines | scanner |"
               - "### CPU"
               - "### Memory"
