@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Changed
+
+- The noise gate `regression.max_cv` compares the spread that matches the statistic being judged: the interquartile range divided by 1.349 and by the median for the median and the other order statistics, the coefficient of variation for the mean. A few slow runs, which shared CI runners produce, no longer make a comparison inconclusive and no longer hide a real change; a distribution with two modes far apart still does. The key, its default of `0.5` and the reason string are unchanged, but a `max_cv` tuned for the old definition is worth reviewing, and `max_cv: 0` is no longer the workaround for outliers. JSON reports gain `robust_cv` next to `cv`, and CSV a `robust_cv` stat row.
+
 ### Added
 
 - `metrics.throughput.work` in JSON has `measured_min` and `measured_max`, the work each run was measured over, and CSV has `measured_work_min` and `measured_work_max` stat rows for `throughput`. A `file_size` is read before every run, so the work can differ between runs and between revisions. See Throughput on the Metrics page.
