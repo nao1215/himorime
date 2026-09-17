@@ -423,3 +423,17 @@ main .table-wrap {
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+
+.hero {
+  text-align: center;
+  margin: 0.5rem 0 1.5rem;
+}
+
+.hero-logo {
+  max-width: min(420px, 90%);
+  height: auto;
+}
+
+.hero h1 {
+  margin: 0.75rem 0 0;
+}

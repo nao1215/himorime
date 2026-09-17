@@ -9,11 +9,29 @@
 {{- $desc := or .Params.description site.Params.description }}
 <meta name="description" content="{{ $desc }}">
 <link rel="canonical" href="{{ .Permalink }}">
-<link rel="icon" href="data:,">
+{{- /* A 1.91:1 social card and a square favicon, derived at build time from
+       doc/images/himorime-logo.jpeg: the 3:1 logo is fit to 1000px wide and
+       padded onto a white 1200x630 canvas, so link previews show the whole
+       logo instead of cropping it. */ -}}
+{{- $ogImage := "" }}{{ $ogW := "" }}{{ $ogH := "" }}{{ $favicon := "data:," }}{{ $faviconType := "" }}
+{{- with resources.Get "imgsrc/himorime-logo.jpeg" }}
+  {{- $card := (.Resize "1000x q90").Filter (images.Padding 149 100 148 100 "#ffffff") }}
+  {{- $ogImage = $card.Permalink }}{{ $ogW = string $card.Width }}{{ $ogH = string $card.Height }}
+  {{- $icon := ((.Resize "512x").Filter (images.Padding 170 0 171 0 "#ffffff")).Resize "64x64 png" }}
+  {{- $favicon = $icon.RelPermalink }}{{ $faviconType = "image/png" }}
+{{- end }}
+<link rel="icon" href="{{ $favicon }}"{{ with $faviconType }} type="{{ . }}" sizes="64x64"{{ end }}>
 <meta property="og:title" content="{{ $title }}">
 <meta property="og:description" content="{{ $desc }}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ .Permalink }}">
+{{- with $ogImage }}
+<meta property="og:image" content="{{ . }}">
+<meta property="og:image:width" content="{{ $ogW }}">
+<meta property="og:image:height" content="{{ $ogH }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{{ . }}">
+{{- end }}
 {{- $css := slice (resources.Get "css/site.css") (resources.Get "css/chroma.css") | resources.Concat "css/bundle.css" | minify | fingerprint }}
 <link rel="stylesheet" href="{{ $css.RelPermalink }}">
 <meta name="himorime-build-commit" content="{{ or site.Params.buildCommit "dev" }}">
@@ -22,7 +40,7 @@
 <a class="skip-link" href="#main">Skip to content</a>
 <header>
 <nav>
-<a class="brand" href="{{ site.Home.RelPermalink }}"><strong>himorime</strong></a>
+<a class="brand" href="{{ site.Home.RelPermalink }}">himorime</a>
 {{- range site.Menus.main }}
 <a{{ if or ($.IsMenuCurrent "main" .) ($.HasMenuCurrent "main" .) }} class="active"{{ end }} href="{{ .URL }}">{{ .Name }}</a>
 {{- end }}
