@@ -165,9 +165,13 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.stats.median", gte: 100000000}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_utilization.unit", equals: "percent"}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_utilization.better", equals: "neutral"}
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_utilization.stats.median", gt: 60}
+              # Utilization depends on how much of a CPU the runner gives the
+              # threads: a loaded macOS runner gave this command 44%. A
+              # sleeping command stays near 0%, so the bounds only separate
+              # the two.
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_utilization.stats.median", gt: 25}
               - {path: "$.suites[0].benchmarks[0].commands[1].result", equals: "pass"}
-              - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.cpu_utilization.stats.median", lt: 60}
+              - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.cpu_utilization.stats.median", lt: 15}
               - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.peak_rss.status", equals: "not_requested"}
               - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.peak_rss.stats", equals: null}
               - {path: "$.suites[0].benchmarks[1].commands[0].result", equals: "over_budget"}
