@@ -6,8 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+
+- `metrics.throughput.work` in JSON has `measured_min` and `measured_max`, the work each run was measured over, and CSV has `measured_work_min` and `measured_work_max` stat rows for `throughput`. A `file_size` is read before every run, so the work can differ between runs and between revisions. See Throughput on the Metrics page.
+
 ### Fixed
 
+- A comparison of throughput over different amounts of work is inconclusive instead of a regression or an improvement, and its reason names both amounts. A file named by `metrics.throughput.work.file_size` whose size differs between the revisions moved throughput without the command running any faster or slower, and `compare` and `ci` called that a regression at full confidence and exited 1.
+- A relative path whose `..` leaves the repository holding the suite, or the suite's own directory when it is not in a repository, is rejected when the suite is loaded, so `validate`, `run`, `compare` and `ci` exit 2. Such a path validated ok and then failed the run with exit 4, after the build, on the first run. A `..` that stays inside is unchanged.
+- `unit: KB` with a byte-rate budget and tolerance reported three errors, two of which asked for the unit the first error had rejected; it now reports one. A rejected work unit is no longer used in the hints of the errors after it.
 - On Linux the peak RSS floor has 1MiB of slack. Read exactly, it could come out a few pages below the peak folded into a command, and a coverage build on a GitHub runner reported one run of `true` in ten above its floor.
 
 ## [0.1.2] - 2026-09-17

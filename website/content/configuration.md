@@ -226,6 +226,7 @@ A relative path that exists only in the working tree fails the base revision, wi
 
 - Paths may start with `${root}`, `${head_root}` or `${workdir}`. Absolute paths, `~`, and `..` after a variable are rejected.
 - After symbolic links are resolved, a path must stay inside the Git repository (or the suite's directory outside Git), the base worktree, or `${workdir}`. `stdout`, `stderr` and report paths may not climb out of their base directory at all.
+- A relative path whose `..` leaves the repository (or the suite's directory outside Git) is rejected when the suite is loaded, before the build. A `..` that stays inside, such as `cwd: ..` in a `bench` directory, is allowed.
 
 ## Environment
 
