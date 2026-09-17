@@ -134,7 +134,7 @@ Runs on Linux, macOS and Windows. What each metric covers on each OS is on the [
 
 ## The name
 
-himorime was inspired by atago, whose name is associated with protection from fire. It is named after the Maiden in Black (Hi no Bōjo) of Demon's Souls, who manages the player's stats through leveling, which fits a tool that measures performance stats and detects regressions.
+himorime was inspired by atago, whose name is associated with protection from fire. It is named after 火防女 (himorime), the maiden who tends the fire: in Demon's Souls, 黒衣の火防女, the Maiden in Black in English, manages the player's stats through leveling, which fits a tool that measures performance stats and detects regressions.
 
 ## License
 
