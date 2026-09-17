@@ -544,7 +544,7 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 		t.Fatalf("a suite added by the change must not fail the comparison: %+v", r)
 	}
 	for _, want := range []string{
-		"suite: added (" + filepath.Join("bench", "himorime.yaml") + ")",
+		"suite: added (bench/himorime.yaml)",
 		"new in this revision: bench does not exist in the base revision, so there is nothing to compare yet",
 		"1 suite new in this revision",
 		"exit 0",
