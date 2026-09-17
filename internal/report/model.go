@@ -93,12 +93,16 @@ type Git struct {
 
 // Suite is one suite file.
 type Suite struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	File        string      `json:"file"`
-	Result      Result      `json:"result"`
-	Error       *Error      `json:"error"`
-	Benchmarks  []Benchmark `json:"benchmarks"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	File        string `json:"file"`
+	Result      Result `json:"result"`
+	Error       *Error `json:"error"`
+	// NewInHead is true in a comparison when the suite directory does not
+	// exist in the base revision. Nothing was built, run or compared, so
+	// Benchmarks is empty and the suite does not change the exit status.
+	NewInHead  bool        `json:"new_in_head"`
+	Benchmarks []Benchmark `json:"benchmarks"`
 	// GeometricMean is present only when every command completed every case.
 	GeometricMean *GeometricMean `json:"geometric_mean"`
 	// GeometricMeanUnavailable explains why GeometricMean is absent.
@@ -302,6 +306,9 @@ type Summary struct {
 	// Skipped counts the budgets and comparisons skipped because their
 	// metric is unsupported on this platform (metrics.unsupported: skip).
 	Skipped int `json:"skipped"`
+	// NewSuites counts the suites with new_in_head: suites the base revision
+	// does not have, so nothing of them was compared.
+	NewSuites int `json:"new_suites"`
 }
 
 // VerdictCounts counts metric comparisons by verdict.

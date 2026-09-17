@@ -49,6 +49,11 @@ func writeMarkdownBody(sb *strings.Builder, r *Report, level int) {
 			fmt.Fprintf(sb, "**Error:** %s\n\n", EscapeMarkdown(errorLine(s.Error)))
 			continue
 		}
+		if s.NewInHead {
+			line := newInHeadLine(s)
+			fmt.Fprintf(sb, "%s.\n\n", EscapeMarkdown(strings.ToUpper(line[:1])+line[1:]))
+			continue
+		}
 		if r.Mode == ModeCompare {
 			markdownCompare(sb, s, level)
 		} else {

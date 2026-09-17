@@ -28,6 +28,9 @@ const (
 	recordBudget     = "budget"
 	recordComparison = "comparison"
 	recordError      = "error"
+	// recordNewInHead is the only row of a suite the base revision does not
+	// have; reason says so.
+	recordNewInHead = "new_in_head"
 )
 
 // csvCol returns the index of a CSVHeader column.
@@ -89,6 +92,9 @@ func (b *csvRowBuilder) setError(e *Error) *csvRowBuilder {
 func suiteRows(mode Mode, s Suite) [][]string {
 	if s.Error != nil {
 		return [][]string{newRow(s.Name, "", "", s.Result, recordError).setError(s.Error).row}
+	}
+	if s.NewInHead {
+		return [][]string{newRow(s.Name, "", "", s.Result, recordNewInHead).set("reason", newInHeadLine(s)).row}
 	}
 	var rows [][]string
 	for _, b := range s.Benchmarks {

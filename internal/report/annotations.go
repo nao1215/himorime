@@ -17,6 +17,7 @@ const (
 	TitleNotGated     = "himorime: performance regression (not gated)"
 	TitleMetricError  = "himorime: metric could not be measured"
 	TitleError        = "himorime: benchmark could not run"
+	TitleNewInHead    = "himorime: suite new in this revision"
 )
 
 // WriteAnnotations writes GitHub Actions workflow commands (::error,
@@ -28,6 +29,10 @@ func WriteAnnotations(w io.Writer, r *Report) error {
 		file := s.File
 		if s.Error != nil {
 			annotate(&sb, "error", errorTitle(s.Error), file, fmt.Sprintf("suite %s: %s", s.Name, errorLine(s.Error)))
+		}
+		if s.NewInHead {
+			// Nothing failed; the notice explains why the suite has no results.
+			annotate(&sb, "notice", TitleNewInHead, file, fmt.Sprintf("suite %s: %s", s.Name, newInHeadLine(s)))
 		}
 		for _, b := range s.Benchmarks {
 			if b.Error != nil {

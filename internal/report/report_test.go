@@ -633,3 +633,131 @@ func TestResultOrder(t *testing.T) {
 		t.Fatal("label")
 	}
 }
+
+// newSuiteReport judges a comparison of an existing suite and of a suite the
+// base revision does not have.
+func newSuiteReport(t *testing.T) *Report {
+	t.Helper()
+	existing := compareResult("ok", samples(10*time.Millisecond, 20, 0), samples(10*time.Millisecond, 20, 0))
+	r := &Report{Environment: Environment{LogicalCPUs: 1}}
+	Judge(r, []SuiteInput{
+		{Suite: &config.Suite{Name: "old", Benchmarks: []config.Benchmark{existing.Benchmark}}, File: "himorime.yaml", Benchmarks: []runner.BenchmarkResult{existing}},
+		{Suite: &config.Suite{Name: "added", Benchmarks: []config.Benchmark{{Name: "fresh"}}}, File: "bench/himorime.yaml", NewInHead: true},
+	}, Options{Mode: ModeCompare, Seed: 7})
+	return r
+}
+
+func TestJudgeSuiteNewInHead(t *testing.T) {
+	t.Parallel()
+	r := newSuiteReport(t)
+	s := r.Suites[1]
+	if !s.NewInHead || s.Error != nil || s.Result != ResultPass || s.Benchmarks == nil || len(s.Benchmarks) != 0 || s.GeometricMean != nil {
+		t.Fatalf("new suite = %+v", s)
+	}
+	if r.Suites[0].NewInHead || len(r.Suites[0].Benchmarks) != 1 {
+		t.Fatalf("existing suite = %+v", r.Suites[0])
+	}
+	if r.Summary.Suites != 2 || r.Summary.NewSuites != 1 || r.Summary.Benchmarks != 1 || r.Summary.Commands != 1 || r.Summary.Error != 0 || r.Summary.ExitCode != exitcode.OK {
+		t.Fatalf("summary = %+v", r.Summary)
+	}
+	only := &Report{}
+	Judge(only, []SuiteInput{{Suite: &config.Suite{Name: "added"}, File: "bench/himorime.yaml", NewInHead: true}}, Options{Mode: ModeCompare, FailOnInconclusive: true})
+	if only.Summary.ExitCode != exitcode.OK || only.Summary.NewSuites != 1 || only.Summary.Pass != 0 {
+		t.Fatalf("a run whose only suite is new = %+v", only.Summary)
+	}
+}
+
+func TestRenderSuiteNewInHead(t *testing.T) {
+	t.Parallel()
+	r := newSuiteReport(t)
+	const line = "new in this revision: bench does not exist in the base revision, so there is nothing to compare yet"
+
+	var term bytes.Buffer
+	if err := WriteTerminal(&term, r, TerminalOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	text := term.String()
+	if !strings.Contains(text, "suite: added (bench/himorime.yaml)\n"+line+"\n\n") {
+		t.Errorf("terminal:\n%s", text)
+	}
+	if !strings.HasSuffix(text, "1 passed · 1 benchmark · 1 suite new in this revision · seed 7 · exit 0\n") {
+		t.Errorf("terminal summary line:\n%s", text)
+	}
+
+	var md bytes.Buffer
+	if err := WriteMarkdown(&md, r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(md.String(), "## added\n\nNew in this revision: bench does not exist in the base revision, so there is nothing to compare yet.\n\n") || strings.Contains(md.String(), "**") {
+		t.Errorf("markdown:\n%s", md.String())
+	}
+
+	var summary bytes.Buffer
+	if err := WriteGitHubSummary(&summary, r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(summary.String(), " · 1 suite new in this revision\n") || !strings.Contains(summary.String(), "New in this revision: bench") {
+		t.Errorf("job summary:\n%s", summary.String())
+	}
+	only := &Report{}
+	Judge(only, []SuiteInput{{Suite: &config.Suite{Name: "added"}, File: "bench/himorime.yaml", NewInHead: true}}, Options{Mode: ModeCompare})
+	summary.Reset()
+	if err := WriteGitHubSummary(&summary, only); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(summary.String(), "## ✅ himorime benchmark comparison: nothing to compare yet, every suite is new in this revision\n") {
+		t.Errorf("job summary of a new suite only:\n%s", summary.String())
+	}
+
+	var ann bytes.Buffer
+	if err := WriteAnnotations(&ann, r); err != nil {
+		t.Fatal(err)
+	}
+	if ann.String() != "::notice file=bench/himorime.yaml,title=himorime%3A suite new in this revision::suite added: "+line+"\n" {
+		t.Errorf("annotations = %q", ann.String())
+	}
+
+	var out bytes.Buffer
+	if err := WriteCSV(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(&out).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := rows[len(rows)-1]
+	if last[csvCol("suite")] != "added" || last[csvCol("record")] != "new_in_head" || last[csvCol("result")] != "pass" || last[csvCol("reason")] != line || last[csvCol("error_kind")] != "" {
+		t.Errorf("csv row = %q", last)
+	}
+	for _, row := range rows[1 : len(rows)-1] {
+		if row[csvCol("suite")] == "added" {
+			t.Errorf("a new suite has a single row: %q", row)
+		}
+	}
+
+	var js bytes.Buffer
+	if err := WriteJSON(&js, r); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(js.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reportSchema(t).Validate(inst); err != nil {
+		t.Errorf("report does not match schema/report.schema.json: %v\n%s", err, js.String())
+	}
+	var decoded struct {
+		Suites []struct {
+			NewInHead *bool `json:"new_in_head"`
+		} `json:"suites"`
+		Summary struct {
+			NewSuites *int `json:"new_suites"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(js.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Suites[0].NewInHead == nil || *decoded.Suites[0].NewInHead || !*decoded.Suites[1].NewInHead || decoded.Summary.NewSuites == nil || *decoded.Summary.NewSuites != 1 {
+		t.Errorf("json:\n%s", js.String())
+	}
+}

@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `compare` and `ci` no longer fail with exit 4 on the pull request that adds
+  a suite. A suite whose directory does not exist in the base revision is
+  reported as new in this revision (`new_in_head` in JSON, counted in
+  `summary.new_suites`, a `new_in_head` CSV row and a notice annotation);
+  nothing is built or run for it and it does not change the exit status.
+
 ### Fixed
 
 - A command that runs Git in its repository, such as a build embedding

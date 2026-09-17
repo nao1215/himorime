@@ -24,7 +24,10 @@ type SuiteInput struct {
 	File string
 	// BuildFailure is set when a side's build failed; no benchmark ran.
 	BuildFailure *runner.Failure
-	Benchmarks   []runner.BenchmarkResult
+	// NewInHead is set in a comparison when the base revision has no suite
+	// directory; nothing was built or run.
+	NewInHead  bool
+	Benchmarks []runner.BenchmarkResult
 }
 
 // Options control judgement.
@@ -56,6 +59,17 @@ func judgeSuite(in SuiteInput, o Options) Suite {
 		File:        in.File,
 		Result:      ResultPass,
 		Benchmarks:  []Benchmark{},
+	}
+	if in.NewInHead {
+		// A suite the base revision does not have keeps result pass: like
+		// any suite, its result is the worst of its benchmarks, and it has
+		// none. A dedicated result would have to be placed in the severity
+		// order that decides the exit status, which a suite nothing was
+		// measured for has no place in. new_in_head, not the result, tells
+		// it apart, and no renderer shows it as PASS.
+		s.NewInHead = true
+		s.GeometricMeanUnavailable = reasonNewInHead
+		return s
 	}
 	if in.BuildFailure != nil {
 		s.Error = toError(in.BuildFailure)
@@ -541,13 +555,14 @@ func nonNil(s []string) []string {
 const (
 	reasonTooFewCases    = "needs at least two cases"
 	reasonTooFewCommands = "needs at least two commands per benchmark"
+	reasonNewInHead      = "the suite does not exist in the base revision"
 )
 
 // GeometricMeanNote returns the explanation worth showing for a missing
 // geometric mean, or "" when there is nothing to explain.
 func GeometricMeanNote(s Suite) string {
 	switch s.GeometricMeanUnavailable {
-	case "", reasonTooFewCases, reasonTooFewCommands:
+	case "", reasonTooFewCases, reasonTooFewCommands, reasonNewInHead:
 		return ""
 	}
 	return s.GeometricMeanUnavailable
@@ -715,6 +730,9 @@ func summarize(r *Report) {
 		}
 	}
 	for _, s := range r.Suites {
+		if s.NewInHead {
+			sum.NewSuites++
+		}
 		if s.Error != nil {
 			count(errorResult(runner.FailureKind(s.Error.Kind)))
 		}

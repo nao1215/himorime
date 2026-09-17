@@ -63,9 +63,13 @@ func TestMain(m *testing.M) {
 		for i := 0; i < len(buf); i += 4096 {
 			buf[i] = 1
 		}
+		// Spin until the process has used HELPER_BURN of CPU time, not of
+		// wall-clock time: on a loaded runner a loop timed by the clock was
+		// given a third of its duration on a CPU. The deadline only stops a
+		// helper that cannot read its own CPU time.
 		d, _ := time.ParseDuration(os.Getenv("HELPER_BURN"))
 		x := 0
-		for start := time.Now(); time.Since(start) < d; {
+		for deadline := time.Now().Add(d + 10*time.Second); selfCPU() < d && time.Now().Before(deadline); {
 			x++
 		}
 		runtime.KeepAlive(buf)
@@ -80,7 +84,7 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(0)
 	case "marker":
-		time.Sleep(1500 * time.Millisecond)
+		time.Sleep(4 * time.Second)
 		_ = os.WriteFile(os.Getenv("HELPER_MARKER"), []byte("alive"), 0o600)
 		os.Exit(0)
 	default:
@@ -213,8 +217,9 @@ func TestRunTimeoutKillsTheProcessTree(t *testing.T) {
 	if time.Since(start) > 20*time.Second {
 		t.Fatalf("Run returned after %v; the timeout did not stop the child", time.Since(start))
 	}
-	// The grandchild would write the marker 1.5s after it started.
-	time.Sleep(2500 * time.Millisecond)
+	// The grandchild would write the marker 4s after it started, before Run
+	// returned.
+	time.Sleep(4500 * time.Millisecond)
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("the grandchild survived the timeout and wrote its marker")
 	}
@@ -378,10 +383,14 @@ func TestRunStopsProcessesLeftBehindAndDoesNotWaitForThem(t *testing.T) {
 	if res.ExitCode != 0 || res.TimedOut || res.Canceled {
 		t.Fatalf("result = %+v", res)
 	}
-	if elapsed := time.Since(start); elapsed > 1200*time.Millisecond {
+	// The grandchild writes its marker 4s after it starts, so waiting for it
+	// would take that long. The bound leaves room for starting a
+	// race-instrumented helper on a shared macOS runner, which has taken over
+	// a second on its own.
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
 		t.Fatalf("Run waited %v for a background process", elapsed)
 	}
-	time.Sleep(2500 * time.Millisecond)
+	time.Sleep(4500 * time.Millisecond)
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("a process left running by the command survived it")
 	}
