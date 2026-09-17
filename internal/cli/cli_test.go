@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -432,6 +433,13 @@ defaults:
   runs: 10
 benchmarks:
   - name: sleepy
+    # Shared Windows runners start processes with outliers of hundreds of
+    # milliseconds. These tests check the command plumbing, not the noise
+    # gate, so the CV check is off and the regression is far above the noise.
+    regression:
+      max_cv: 0
+      latency:
+        min_difference: 50ms
     commands:
       app:
         command: [@EXE@, sleep-from, "${artifact}"]
@@ -454,11 +462,13 @@ func compareRepo(t *testing.T) string {
 func TestCompare(t *testing.T) {
 	dir := compareRepo(t)
 	r := run(t, dir, nil, "compare", "--against", "main", "--quiet")
-	if r.code != 0 || !strings.Contains(r.stdout, "PASS") || !strings.Contains(r.stdout, "CHANGE") {
+	// An unchanged program passes, or is inconclusive when a shared runner is
+	// too noisy to tell; it is never a regression.
+	if r.code != 0 || !regexp.MustCompile(`\b(PASS|INCONCLUSIVE)\b`).MatchString(r.stdout) || !strings.Contains(r.stdout, "CHANGE") {
 		t.Fatalf("unchanged compare: %+v", r)
 	}
 
-	write(t, filepath.Join(dir, "delay.txt"), "120ms\n")
+	write(t, filepath.Join(dir, "delay.txt"), "400ms\n")
 	r = run(t, dir, nil, "compare", "--against", "main", "--format", "json")
 	if r.code != exitcode.Failed {
 		t.Fatalf("regression: %+v", r)
@@ -526,7 +536,7 @@ func TestCIGitHubActions(t *testing.T) {
 		t.Fatal("ci output must not be colored")
 	}
 	data, err := os.ReadFile(summary)
-	if err != nil || !strings.HasPrefix(string(data), "previous step\n## ✅ himorime benchmark comparison") || !strings.Contains(string(data), "| sleepy | app |") {
+	if err != nil || !regexp.MustCompile(`^previous step\n## (✅|⚠️) himorime benchmark comparison`).Match(data) || !strings.Contains(string(data), "| sleepy | app |") {
 		t.Fatalf("summary = %q, %v", data, err)
 	}
 	if !strings.Contains(r.stderr, "comparing base "+base[:12]) {
@@ -543,7 +553,7 @@ func TestCIGitHubActions(t *testing.T) {
 	if r := run(t, dir, env{"HIMORIME_BASE_REF": "main"}, "ci", "--quiet"); r.code != 0 {
 		t.Fatalf("ci with HIMORIME_BASE_REF: %+v", r)
 	}
-	write(t, filepath.Join(dir, "delay.txt"), "150ms\n")
+	write(t, filepath.Join(dir, "delay.txt"), "400ms\n")
 	if r := run(t, dir, nil, "ci", "--against", "main", "--quiet"); r.code != exitcode.Failed || !strings.Contains(r.stdout, "REGRESSION") {
 		t.Fatalf("ci regression: %+v", r)
 	}

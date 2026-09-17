@@ -128,7 +128,9 @@ func TestWorktreeLifecycleLeavesNoTrace(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(wt.Dir, "version.txt"))
-	if err != nil || string(data) != "v1\n" {
+	// The worktree is checked out with the runner's own Git configuration,
+	// which converts line endings to CRLF on Windows.
+	if err != nil || strings.ReplaceAll(string(data), "\r\n", "\n") != "v1\n" {
 		t.Fatalf("worktree content = %q, %v", data, err)
 	}
 	if !strings.Contains(git(t, dir, "worktree", "list"), filepath.Base(wt.Dir)) {
