@@ -22,9 +22,11 @@ atago tests what a CLI does, himorime tests how fast and how lean it does it.
 $ go install github.com/nao1215/himorime@latest
 ```
 
-Prebuilt archives and `.deb`, `.rpm` and `.apk` packages for Linux, macOS and
-Windows are on [GitHub Releases](https://github.com/nao1215/himorime/releases);
-see [Installation](https://nao1215.github.io/himorime/install/).
+On macOS, `brew install --cask nao1215/tap/himorime`. Prebuilt archives and
+`.deb`, `.rpm` and `.apk` packages for Linux, macOS and Windows are on
+[GitHub Releases](https://github.com/nao1215/himorime/releases), and
+[setup-himorime](https://github.com/nao1215/setup-himorime) installs one in
+GitHub Actions; see [Installation](https://nao1215.github.io/himorime/install/).
 
 ## A suite
 
@@ -134,10 +136,12 @@ jobs:
           # The base commit must exist locally for the temporary worktree.
           fetch-depth: 0
           persist-credentials: false
+      # Go builds the suite's program; drop it if your suite needs no Go.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
-      - run: go install github.com/nao1215/himorime@latest
+      # Installs a prebuilt, checksum-verified himorime release.
+      - uses: nao1215/setup-himorime@b2896dee554ef31ea979f0388d9be22779ce73a2 # v0.1.1
       # Finds the pull request's base commit from the event, compares it with
       # the checked-out head on every metric the suite measures, writes a
       # summary to the job page and annotations to the pull request, and
