@@ -33,7 +33,7 @@ Writes a small suite that measures `git --version`, with a JSON Schema comment s
 yahiko validate [PATH...]
 ```
 
-Checks YAML syntax, the schema (unknown keys, types, durations, percentages, paths) and semantic rules (baselines, budgets and regression settings that refer to real commands, variables that exist). No command is executed. Each PATH is a suite file or a directory holding yahiko.yaml or *.yahiko.yaml files; the default is yahiko.yaml.
+Checks YAML syntax, the schema (unknown keys, types, durations, byte sizes, rates, percentages, paths) and semantic rules (baselines, budgets and regression settings that refer to real commands and measured metrics, budget directions, throughput units, variables that exist). No command is executed. Each PATH is a suite file or a directory holding yahiko.yaml or *.yahiko.yaml files; the default is yahiko.yaml.
 
 ### list
 
@@ -56,7 +56,7 @@ Prints one line per command of every selected benchmark: suite file, benchmark, 
 yahiko run [flags] [PATH...]
 ```
 
-Builds the suite's artifact when a build section exists, then measures every selected benchmark. Commands of one benchmark run interleaved in a seeded random order. Exits 1 when an absolute budget is exceeded and 4 when a command fails.
+Builds the suite's artifact when a build section exists, then measures every selected benchmark: latency, and the throughput, CPU time and peak RSS the suite asks for. Commands of one benchmark run interleaved in a seeded random order. Exits 1 when a budget is exceeded, 4 when a command fails, and 6 when a requested metric cannot be measured.
 
 | Flag | Description |
 |---|---|
@@ -78,7 +78,7 @@ Builds the suite's artifact when a build section exists, then measures every sel
 yahiko compare --against REF [flags] [PATH...]
 ```
 
-Checks REF out into a temporary Git worktree, builds both REF and the current working tree (uncommitted changes included), and measures them interleaved on this machine. The working tree, index and branches are never modified. Exits 1 on a confirmed regression or an exceeded budget.
+Checks REF out into a temporary Git worktree, builds both REF and the current working tree (uncommitted changes included), and measures them interleaved on this machine. Every measured metric is compared in the direction that is worse for it. The working tree, index and branches are never modified. Exits 1 on a confirmed regression or an exceeded budget.
 
 | Flag | Description |
 |---|---|
@@ -102,7 +102,7 @@ Checks REF out into a temporary Git worktree, builds both REF and the current wo
 yahiko ci [flags] [PATH...]
 ```
 
-Like compare, with CI defaults: no colors, and a Markdown summary appended to $GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $YAHIKO_BASE_REF, else the base commit of the GitHub Actions pull_request, merge_group or push event. pull_request_target is refused.
+Like compare, with CI defaults: no colors, and a Markdown summary appended to $GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $YAHIKO_BASE_REF, else the base commit of the GitHub Actions pull_request, merge_group or push event. pull_request_target is refused. In GitHub Actions, every missed budget, regression and failure is also printed as an annotation.
 
 | Flag | Description |
 |---|---|

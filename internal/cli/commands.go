@@ -40,10 +40,11 @@ func Commands() []Command {
 			Name:  "validate",
 			Usage: "yahiko validate [PATH...]",
 			Short: "Check suite files without running anything",
-			Long: "Checks YAML syntax, the schema (unknown keys, types, durations, percentages, paths) and " +
-				"semantic rules (baselines, budgets and regression settings that refer to real commands, " +
-				"variables that exist). No command is executed. Each PATH is a suite file or a directory " +
-				"holding yahiko.yaml or *.yahiko.yaml files; the default is yahiko.yaml.",
+			Long: "Checks YAML syntax, the schema (unknown keys, types, durations, byte sizes, rates, " +
+				"percentages, paths) and semantic rules (baselines, budgets and regression settings that refer " +
+				"to real commands and measured metrics, budget directions, throughput units, variables that " +
+				"exist). No command is executed. Each PATH is a suite file or a directory holding yahiko.yaml " +
+				"or *.yahiko.yaml files; the default is yahiko.yaml.",
 			Flags: func(*flag.FlagSet) any { return nil },
 			run:   runValidate,
 		},
@@ -62,8 +63,9 @@ func Commands() []Command {
 			Usage: "yahiko run [flags] [PATH...]",
 			Short: "Measure the suite in the current environment",
 			Long: "Builds the suite's artifact when a build section exists, then measures every selected " +
-				"benchmark. Commands of one benchmark run interleaved in a seeded random order. Exits 1 when " +
-				"an absolute budget is exceeded and 4 when a command fails.",
+				"benchmark: latency, and the throughput, CPU time and peak RSS the suite asks for. Commands of " +
+				"one benchmark run interleaved in a seeded random order. Exits 1 when a budget is exceeded, 4 " +
+				"when a command fails, and 6 when a requested metric cannot be measured.",
 			Flags: runFlags,
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "run", args) },
 		},
@@ -72,9 +74,9 @@ func Commands() []Command {
 			Usage: "yahiko compare --against REF [flags] [PATH...]",
 			Short: "Compare a Git revision with the working tree",
 			Long: "Checks REF out into a temporary Git worktree, builds both REF and the current working " +
-				"tree (uncommitted changes included), and measures them interleaved on this machine. The " +
-				"working tree, index and branches are never modified. Exits 1 on a confirmed regression or " +
-				"an exceeded budget.",
+				"tree (uncommitted changes included), and measures them interleaved on this machine. Every " +
+				"measured metric is compared in the direction that is worse for it. The working tree, index " +
+				"and branches are never modified. Exits 1 on a confirmed regression or an exceeded budget.",
 			Flags: compareFlags,
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "compare", args) },
 		},
@@ -85,7 +87,8 @@ func Commands() []Command {
 			Long: "Like compare, with CI defaults: no colors, and a Markdown summary appended to " +
 				"$GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $YAHIKO_BASE_REF, " +
 				"else the base commit of the GitHub Actions pull_request, merge_group or push event. " +
-				"pull_request_target is refused.",
+				"pull_request_target is refused. In GitHub Actions, every missed budget, regression and " +
+				"failure is also printed as an annotation.",
 			Flags: ciFlags,
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "ci", args) },
 		},

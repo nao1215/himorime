@@ -117,7 +117,7 @@ func (a *App) Run(ctx context.Context, args []string) (code int) {
 
 func usage(w io.Writer) {
 	var sb strings.Builder
-	sb.WriteString("yahiko - CI-first benchmark runner for command-line programs\n\n")
+	sb.WriteString("yahiko - performance budgets and regression checks for command-line programs\n\n")
 	sb.WriteString("Usage:\n  yahiko <command> [flags] [arguments]\n\nCommands:\n")
 	for _, c := range Commands() {
 		fmt.Fprintf(&sb, "  %-11s %s\n", c.Name, c.Short)

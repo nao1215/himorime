@@ -1,4 +1,6 @@
-// Command yahiko is a CI-first benchmark runner for command-line programs.
+// Command yahiko checks whether command-line programs stay within their
+// performance budgets: latency, throughput, CPU time and peak RSS, locally and
+// in CI.
 //
 // It measures commands declared in a versioned YAML suite, compares them with
 // each other or with a Git base revision, checks absolute performance budgets,

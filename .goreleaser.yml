@@ -69,7 +69,7 @@ nfpms:
     vendor: Naohiro CHIKAMATSU
     homepage: https://nao1215.github.io/yahiko/
     maintainer: Naohiro CHIKAMATSU <n.chika156@gmail.com>
-    description: CI-first benchmark runner for command-line programs.
+    description: Performance budgets and regression checks for command-line programs.
     license: MIT
     formats: [deb, rpm, apk]
     bindir: /usr/bin
@@ -96,7 +96,7 @@ homebrew_casks:
     binaries: [yahiko]
     directory: Casks
     homepage: https://nao1215.github.io/yahiko/
-    description: CI-first benchmark runner for command-line programs
+    description: Performance budgets and regression checks for command-line programs
     license: MIT
     completions:
       bash: completions/yahiko.bash
@@ -122,7 +122,8 @@ release:
   header: |
     ## yahiko {{ .Tag }}
 
-    CI-first benchmark runner for command-line programs. Every artifact is
+    Performance budgets and regression checks for command-line programs:
+    latency, throughput, CPU time and peak RSS. Every artifact is
     signed and ships with an SBOM and build provenance; see
     [Verify a release](https://nao1215.github.io/yahiko/install/#verify-a-release).
   footer: |
