@@ -12,8 +12,13 @@ import (
 	"os"
 
 	"github.com/nao1215/himorime/internal/cli"
+	"github.com/nao1215/himorime/internal/proc"
 )
 
 func main() {
+	// Measured commands are started from a spawner: this executable started
+	// again in spawner mode, which the proc package's init selects before
+	// the rest of himorime initializes.
+	proc.EnableSpawner()
 	os.Exit(cli.Main(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }

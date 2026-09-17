@@ -40,6 +40,13 @@ type Spec struct {
 	// CollectUsage reads the CPU time and peak RSS of the process tree after
 	// it exits. Without it, Result.Usage reports both as not collected.
 	CollectUsage bool
+	// MeasureMemory, with CollectUsage, says the peak RSS will be used. With
+	// EnableSpawner the command is then started from the spawner, so that
+	// himorime's own memory does not raise its peak RSS. The spawner costs
+	// about a millisecond to start once and tens of microseconds per run, all
+	// outside the measured interval, so commands whose memory is not measured
+	// are started directly.
+	MeasureMemory bool
 }
 
 // Result is the outcome of Run.
@@ -74,7 +81,15 @@ type Clock func() time.Time
 // timeout expires or ctx is canceled. A non-zero exit status is reported in
 // Result, not as an error; the error is non-nil only when the process could
 // not be started or waited for.
+//
+// With EnableSpawner, MeasureMemory and no injected clock, the command is
+// started from the spawner, which measures its elapsed time the same way.
 func Run(ctx context.Context, s Spec, now Clock) (Result, error) {
+	if now == nil && s.CollectUsage && s.MeasureMemory && spawnerEnabled.Load() {
+		if res, handled, err := runSpawned(ctx, s); handled {
+			return res, err
+		}
+	}
 	return run(ctx, s, now, attach)
 }
 
@@ -106,6 +121,10 @@ func run(ctx context.Context, s Spec, now Clock, attachTree func(*exec.Cmd) (*tr
 	default:
 	}
 
+	var floor int64
+	if s.CollectUsage {
+		floor = startFloor()
+	}
 	start := now()
 	if err := cmd.Start(); err != nil {
 		return Result{}, fmt.Errorf("%w: %w", ErrStart, err)
@@ -157,6 +176,7 @@ func run(ctx context.Context, s Spec, now Clock, attachTree func(*exec.Cmd) (*tr
 		// Read before the tree is closed: closing stops what the command left
 		// running and releases the handles the counters are read through.
 		usage = probe.collect(cmd, tree)
+		usage.Floor = floor
 		probe.close()
 	}
 	tree.close()

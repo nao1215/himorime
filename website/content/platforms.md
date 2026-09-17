@@ -34,6 +34,7 @@ does) leaves the group and is not stopped with it.
 | Latency, throughput | monotonic clock | monotonic clock | monotonic clock | monotonic clock |
 | CPU time, utilization | `wait4` usage of the process and waited-for descendants (`rusage`, `sum_of_waited_descendants`) | same as Linux | Job Object accounting of every process in the job (`job_object`, `sum_of_job_processes`) | same as Linux |
 | Peak RSS | `ru_maxrss`, kilobytes, largest peak of a single waited-for process (`rusage`, `max_of_single_process_peaks`) | `ru_maxrss`, bytes, same as Linux | peak working set of the started process; unsupported when it started other processes (`process_memory_counters`, `started_process_only`) | `ru_maxrss`, kilobytes, same as Linux |
+| Peak RSS floor | the spawner's RSS, reset before each start (a few MiB) | the spawner's peak RSS (`getrusage`) | none, always 0 | same as macOS |
 
 Every value is read after the process exits, without polling. `ru_maxrss` is
 normalized to bytes on every platform. The names in parentheses are the
@@ -51,6 +52,11 @@ binaries are published for them and CI does not run the suite there.
   typically the slowest. Compare results only within one platform.
 - Peak RSS is not comparable across operating systems: page sizes, the
   loader and what counts as resident differ.
+- On Linux a command's peak RSS includes the peak of the process that
+  started it, and himorime assumes the same on macOS and the BSDs, so a
+  command smaller than that floor is reported as `<=` the floor. Commands whose memory is measured start from a small
+  spawner to keep the floor low; only Linux can also reset the floor before
+  each run. See [The floor](/metrics/#the-floor).
 - A suite that measures memory for a command starting child processes runs on
   Windows with `metrics.unsupported: skip`; without it, it exits 6 there.
 - Virtual machines and laptops on battery scale CPU frequency. A comparison

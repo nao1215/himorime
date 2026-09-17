@@ -205,3 +205,29 @@ func TestMeasureWorkFromFileSize(t *testing.T) {
 		}
 	}
 }
+
+// TestMeasureRecordsThePeakRSSFloor: every peak RSS sample keeps the floor
+// the process that started the command reported with it.
+func TestMeasureRecordsThePeakRSSFloor(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.runner.Exec = fakeUsage(func(n int) proc.Usage {
+		return proc.Usage{PeakRSS: 2 << 20, Floor: int64(n) << 20}
+	})
+	b := bench("floor", 3, f.command("a", "ok"))
+	b.Metrics = config.Metrics{Memory: true, Unsupported: config.UnsupportedFail}
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
+	m := res.Commands[0].Sides[SideHead]
+	if res.Failure != nil || m.Failure != nil {
+		t.Fatalf("failures: %+v %+v", res.Failure, m.Failure)
+	}
+	if len(m.PeakRSS) != 3 || len(m.PeakRSSFloor) != 3 {
+		t.Fatalf("peak rss %v, floors %v", m.PeakRSS, m.PeakRSSFloor)
+	}
+	warmups := int64(m.Warmups)
+	for i, floor := range m.PeakRSSFloor {
+		if floor != (warmups+int64(i)+1)<<20 {
+			t.Fatalf("floors = %v after %d warmups, want the floor of each run", m.PeakRSSFloor, warmups)
+		}
+	}
+}

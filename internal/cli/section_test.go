@@ -102,6 +102,7 @@ func TestRunRecordsToolVersions(t *testing.T) {
   versions:
     stdout-tool: [@EXE@, print, "\n   stdout-tool version 1.25.7  \nsecond line", "ignored"]
     stderr-tool: [@EXE@, exit, "0", "stderr-tool 2.0"]
+    locale: [@EXE@, getenv, LC_ALL]
 `))
 	r := run(t, dir, nil, "run", "--quiet", "--format", "json")
 	if r.code != 0 {
@@ -116,12 +117,12 @@ func TestRunRecordsToolVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 	tools := rep.Environment.Tools
-	if len(tools) != 2 || tools[0]["name"] != "stdout-tool" || tools[0]["version"] != "stdout-tool version 1.25.7" || tools[1]["name"] != "stderr-tool" || tools[1]["version"] != "stderr-tool 2.0" {
+	if len(tools) != 3 || tools[0]["name"] != "stdout-tool" || tools[0]["version"] != "stdout-tool version 1.25.7" || tools[1]["name"] != "stderr-tool" || tools[1]["version"] != "stderr-tool 2.0" || tools[2]["version"] != "C" {
 		t.Fatalf("tools = %v", tools)
 	}
 
 	r = run(t, dir, nil, "run", "--quiet", "--format", "markdown")
-	if !strings.HasSuffix(r.stdout, ".\n\n- stdout-tool: stdout-tool version 1.25.7\n- stderr-tool: stderr-tool 2.0\n") {
+	if !strings.HasSuffix(r.stdout, ".\n\n- stdout-tool: stdout-tool version 1.25.7\n- stderr-tool: stderr-tool 2.0\n- locale: C\n") {
 		t.Fatalf("markdown footer:\n%s", r.stdout)
 	}
 	r = run(t, dir, nil, "run", "--quiet")

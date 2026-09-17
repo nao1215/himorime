@@ -45,32 +45,58 @@ func platformCapabilities() (cpu, memory error) {
 // init, is not included. ru_maxrss is the peak of the largest single process
 // in that tree, not the sum of processes running at the same time.
 func (*usageProbe) collect(cmd *exec.Cmd, _ *tree) Usage {
+	return usageFromRaw(rawUsageOf(cmd))
+}
+
+// usageFromRaw converts the rusage of a reaped command, or says why there is
+// none.
+func usageFromRaw(raw rawUsage) Usage {
 	cpuErr, memErr := platformCapabilities()
 	if cpuErr != nil {
 		return Usage{CPUErr: cpuErr, MemoryErr: memErr}
 	}
-	if cmd.ProcessState == nil {
-		err := errors.New("the process has no exit status")
+	if raw.Missing != "" {
+		err := errors.New(raw.Missing)
 		return Usage{CPUErr: err, MemoryErr: err}
+	}
+	return usageFromValues(raw)
+}
+
+// rawUsage is the part of wait4's rusage himorime reads, as the process that
+// reaped the command saw it. A spawner sends it to himorime as it is.
+type rawUsage struct {
+	// Missing says why there is no rusage; empty when there is.
+	Missing   string `json:"missing,omitempty"`
+	UserCPU   int64  `json:"user_cpu_ns"`
+	SystemCPU int64  `json:"system_cpu_ns"`
+	MaxRSS    int64  `json:"maxrss"`
+}
+
+func rawUsageOf(cmd *exec.Cmd) rawUsage {
+	if cmd.ProcessState == nil {
+		return rawUsage{Missing: "the process has no exit status"}
 	}
 	ru, ok := cmd.ProcessState.SysUsage().(*syscall.Rusage)
 	if !ok || ru == nil {
-		err := errors.New("the operating system returned no resource usage for the process")
-		return Usage{CPUErr: err, MemoryErr: err}
+		return rawUsage{Missing: "the operating system returned no resource usage for the process"}
 	}
-	return usageFromRusage(ru)
+	return rawUsage{UserCPU: ru.Utime.Nano(), SystemCPU: ru.Stime.Nano(), MaxRSS: int64(ru.Maxrss)} //nolint:unconvert // Maxrss is int32 on some systems
 }
 
-func usageFromRusage(ru *syscall.Rusage) Usage {
+func usageFromValues(raw rawUsage) Usage {
 	u := Usage{
-		UserCPU:   time.Duration(ru.Utime.Nano()),
-		SystemCPU: time.Duration(ru.Stime.Nano()),
+		UserCPU:   time.Duration(raw.UserCPU),
+		SystemCPU: time.Duration(raw.SystemCPU),
 	}
 	if u.UserCPU < 0 || u.SystemCPU < 0 {
 		u.CPUErr = fmt.Errorf("the operating system reported negative CPU time (user %v, system %v)", u.UserCPU, u.SystemCPU)
 	}
-	u.PeakRSS, u.MemoryErr = normalizeMaxRSS(int64(ru.Maxrss)) //nolint:unconvert // Maxrss is int32 on some systems
+	u.PeakRSS, u.MemoryErr = normalizeMaxRSS(raw.MaxRSS)
 	return u
+}
+
+func usageFromRusage(ru *syscall.Rusage) Usage {
+	return usageFromValues(rawUsage{UserCPU: ru.Utime.Nano(), SystemCPU: ru.Stime.Nano(), MaxRSS: int64(ru.Maxrss)}) //nolint:unconvert // Maxrss is int32 on some systems
 }
 
 // normalizeMaxRSS converts ru_maxrss to bytes. Its unit differs between
@@ -97,4 +123,29 @@ func platformCollection(memory bool) Collection {
 	default:
 		return Collection{Source: SourceRusage, ProcessAggregation: AggregationSumWaited}
 	}
+}
+
+// startFloor is called by the process that starts a command, right before it
+// starts it and outside the measured interval. It lowers this process's
+// recorded peak RSS where the platform allows it (Linux) and returns the peak
+// RSS the command inherits as a floor: the kernel folds the starting
+// process's peak into the command's ru_maxrss at exec. It is the peak of the
+// address space on Linux and getrusage's ru_maxrss elsewhere; 0 when neither
+// can be read.
+func startFloor() int64 {
+	if !rusageSupported() {
+		return 0
+	}
+	if peak, ok := resetMemoryPeak(); ok {
+		return peak
+	}
+	var ru syscall.Rusage
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &ru); err != nil {
+		return 0
+	}
+	floor, err := normalizeMaxRSS(int64(ru.Maxrss)) //nolint:unconvert // Maxrss is int32 on some systems
+	if err != nil {
+		return 0
+	}
+	return floor
 }

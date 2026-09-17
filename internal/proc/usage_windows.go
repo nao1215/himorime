@@ -108,3 +108,7 @@ func platformCollection(memory bool) Collection {
 	}
 	return Collection{Source: SourceJobObject, ProcessAggregation: AggregationSumJob}
 }
+
+// startFloor is 0: Windows reads the peak working set of the started process
+// itself, which the process that started it does not raise.
+func startFloor() int64 { return 0 }

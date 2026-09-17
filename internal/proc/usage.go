@@ -26,6 +26,12 @@ type Usage struct {
 	// process of the tree.
 	PeakRSS   int64
 	MemoryErr error
+	// Floor, in bytes, is the peak RSS the process that started the command
+	// had reached just before starting it. On Unix the kernel folds that
+	// peak into the command's ru_maxrss at exec, so a PeakRSS at or below
+	// Floor only says the command used at most Floor. 0 where the platform
+	// has no such floor (Windows) or it could not be read.
+	Floor int64
 	// Processes is the number of processes the tree ran, when the platform
 	// counts them (Windows); 0 when unknown.
 	Processes int

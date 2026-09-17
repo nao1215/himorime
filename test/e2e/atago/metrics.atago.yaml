@@ -308,6 +308,39 @@ scenarios:
             json:
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.stats.min", gte: 100663296}
 
+  # Linux counts the peak RSS of the process that starts a command as part of
+  # the command's. himorime starts commands from a small spawner, so a tiny
+  # command no longer reports himorime's own 10MiB and more.
+  - name: peak rss of a command smaller than its starter is reported at the floor on Linux
+    only: {os: linux}
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: floor}
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: tiny
+                metrics: {memory: true}
+                commands:
+                  "true": {command: ["true"]}
+      - run:
+          command: himorime run --quiet --format json
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              # true uses less memory than the process that starts it, so
+              # every run is at the floor: the report says at most the floor,
+              # never a precise value that is really the starter's. How low
+              # the floor is depends on how the binary was built (coverage
+              # instrumentation makes it larger), so it is pinned by the Go
+              # test that holds 200MiB, not here.
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.floor", gt: 0}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.samples_at_floor", equals: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.floor", equals: 0}
+
   - name: peak rss of a multi-process tree is unsupported on Windows and fails unless skipped
     only: {os: windows}
     steps:
@@ -619,9 +652,9 @@ scenarios:
           command: e2ehelper csv-shape out/report.csv
       - assert:
           exit_code: 0
-          # A header, 10 statistics of each of 7 metrics, the relative
-          # speed and the budget.
-          stdout: {equals: "rows=73 columns=29\n"}
+          # A header, 10 statistics of each of 7 metrics, the floor and the
+          # runs at the floor of peak RSS, the relative speed and the budget.
+          stdout: {equals: "rows=75 columns=29\n"}
       - assert:
           file:
             path: out/report.csv

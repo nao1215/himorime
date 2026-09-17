@@ -27,7 +27,7 @@ fails if the repository's `git status` changed.
 | `run` | tables, JSON with raw samples, CSV/Markdown/summary files, budgets (exit 1), failing commands and masked secrets (exit 4), timeouts that stop the process tree, tags and filters, stdin fixtures, `prepare_each`, cleanup after success and failure, interrupts (POSIX), shell pipelines, warm and cold caches, adaptive runs, geometric mean rules |
 | `compare` | scratch Git repositories: pass, regression in uncommitted changes, improvement, inconclusive and `--fail-on-inconclusive`, unknown revisions, a base build failure, interrupts (POSIX), `regression.commands`, commands without a build running each revision's own files and `${head_root}` sharing the working tree's, a fixture missing from the base, adaptive runs reaching `min_samples`, a regression of a metric with `gate: false`; the working tree, branches and worktree list are unchanged afterwards |
 | `ci` | simulated GitHub Actions events and job summary: pull_request, push, merge_group, `pull_request_target` refusal, missing base guidance, shallow clones, `HIMORIME_BASE_REF` |
-| `metrics` | latency percentile budgets, throughput from declared work and file sizes (paths with spaces), CPU time and utilization, peak RSS, several metric budgets at once, process tree CPU and memory, unsupported metrics on Windows, metric collection failures (exit 6) against command failures (exit 4), GitHub Actions annotations, CPU/memory/throughput regressions and improvements against a base revision, the JSON report schema, long CSV, samples CSV, Markdown and job summary tables, validation of units and directions, timeouts with metrics enabled, literal values in shell commands |
+| `metrics` | latency percentile budgets, throughput from declared work and file sizes (paths with spaces), CPU time and utilization, peak RSS and its floor on Linux, several metric budgets at once, process tree CPU and memory, unsupported metrics on Windows, metric collection failures (exit 6) against command failures (exit 4), GitHub Actions annotations, CPU/memory/throughput regressions and improvements against a base revision, the JSON report schema, long CSV, samples CSV, Markdown and job summary tables, validation of units and directions, timeouts with metrics enabled, literal values in shell commands |
 | `cookbook` | one scenario per Cookbook recipe, named exactly like its heading, running the suite under `examples/` |
 
 ## The helper
@@ -42,7 +42,7 @@ has its own speed), `alternate` (bimodal noise), `copy`, `exit`, `gen`,
 `counter`, `cache`, `write`, `remove`, `require`, `replace`, `consume`,
 `event` (a GitHub event payload for a repository's HEAD), `interrupt`,
 `burn` (CPU time on N threads), `alloc` (resident memory held for a while),
-`records` (hash N records), `tree` (run children and wait for them), `print`,
+`records` (hash N records), `tree` (run children and wait for them), `print`, `getenv`,
 `pad` (a file of exact size), `args-from` (a build copies a revision's
 subcommand to `${artifact}`), `json-schema` (validate a report against its
 schema) and `csv-shape` (parse a CSV strictly).

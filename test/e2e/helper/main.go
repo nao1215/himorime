@@ -33,7 +33,7 @@ func subcommand(name string) (func([]string) error, bool) {
 		"gen": gen, "count": count, "spawn": spawn, "counter": counter, "cache": cache, "write": write,
 		"remove": remove, "require": require, "replace": replace, "consume": consume, "event": event,
 		"interrupt": interrupt, "burn": burn, "alloc": alloc, "records": records, "tree": tree,
-		"print": printOut, "pad": pad, "args-from": argsFrom, "json-schema": jsonSchema, "csv-shape": csvShape,
+		"print": printOut, "getenv": getenv, "pad": pad, "args-from": argsFrom, "json-schema": jsonSchema, "csv-shape": csvShape,
 	}[name]
 	return run, ok
 }
@@ -492,6 +492,15 @@ func printOut(args []string) error {
 	if len(args) > 1 {
 		fmt.Fprintln(os.Stderr, args[1])
 	}
+	return nil
+}
+
+// getenv NAME: print the value of an environment variable, or nothing.
+func getenv(args []string) error {
+	if err := need(args, 1, "getenv NAME"); err != nil {
+		return err
+	}
+	fmt.Println(os.Getenv(args[0]))
 	return nil
 }
 

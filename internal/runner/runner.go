@@ -473,7 +473,9 @@ const versionOutputBytes = 64 << 10
 // config.DefaultVersionTimeout or prints nothing is a setup failure.
 func (r *Runner) Version(ctx context.Context, tool config.ToolVersion, side Side) (string, *Failure) {
 	label := "report.versions." + tool.Name
-	e := config.Exec{Argv: tool.Argv, Timeout: config.DefaultVersionTimeout}
+	// LC_ALL=C keeps the version line in English, so a page generated on a
+	// machine with another locale does not change language.
+	e := config.Exec{Argv: tool.Argv, Env: []config.EnvVar{{Name: "LC_ALL", Value: "C"}}, Timeout: config.DefaultVersionTimeout}
 	vars := config.Vars{Root: side.Root, HeadRoot: side.HeadRoot, Exe: exeSuffix(), LookupEnv: r.lookupEnv}
 	var files []*os.File
 	defer func() {
@@ -579,6 +581,7 @@ func (r *Runner) runOnce(ctx context.Context, b config.Benchmark, st *sideState,
 	wantCPU := b.Metrics.CPU && !cpuSkipped
 	wantMemory := b.Metrics.Memory && !memSkipped
 	spec.CollectUsage = wantCPU || wantMemory
+	spec.MeasureMemory = wantMemory
 
 	stderr, closeIO, f := r.openIO(&spec, c, st)
 	defer closeIO()
@@ -637,6 +640,7 @@ func recordRun(u *unit, b config.Benchmark, res proc.Result, work float64, wantC
 	}
 	if _, skipped := u.m.Skipped(metric.GroupMemory); wantMemory && !skipped {
 		u.m.PeakRSS = append(u.m.PeakRSS, res.Usage.PeakRSS)
+		u.m.PeakRSSFloor = append(u.m.PeakRSSFloor, res.Usage.Floor)
 	}
 	if b.Metrics.Throughput != nil {
 		u.m.Work = append(u.m.Work, work)

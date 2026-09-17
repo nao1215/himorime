@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/proc"
 	"github.com/nao1215/himorime/internal/redact"
 )
 
@@ -22,6 +23,12 @@ import (
 func TestMain(m *testing.M) {
 	mode := os.Getenv("RUNNER_HELPER")
 	if mode == "" {
+		// As in himorime, commands start from a spawner where the platform
+		// has one; HIMORIME_TEST_DIRECT=1 runs the same tests with himorime
+		// starting them itself. internal/proc tests both paths either way.
+		if os.Getenv("HIMORIME_TEST_DIRECT") != "1" {
+			proc.EnableSpawner()
+		}
 		os.Exit(m.Run())
 	}
 	args := os.Args[1:]

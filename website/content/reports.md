@@ -71,7 +71,10 @@ himorime: exit 1: performance check failed: a budget or regression threshold was
 - CPU values are medians over runs; `UTILIZATION` above 100% means more than
   one CPU was busy. `PEAK RSS` is the median of the runs' peaks and `MAX` the
   highest run. The sentence under the CPU and memory tables says which
-  processes the values cover and how they were combined on this platform.
+  processes the values cover and how they were combined on this platform. A
+  peak RSS at or below the floor, the memory the process starting the command
+  already used, is shown as `<=` the floor, with a sentence saying so (see
+  [The floor](/metrics/#the-floor)).
 - Each table's `RESULT` is about that metric group: `PASS`, `OVER BUDGET`,
   `UNSUPPORTED` (skipped on this platform), `METRIC ERROR` or `ERROR`. The
   budgets table says `PASS`, `FAIL`, `SKIPPED` or `NO DATA` per budget.
@@ -140,6 +143,10 @@ out.
   (count, min, max, mean, median, stddev, cv and `percentiles` keyed by
   `p90`, `p95`, `p99` and any percentile a budget uses), every raw sample in
   execution order in `samples`, and for throughput the declared `work`.
+  `floor` and `samples_at_floor` are 0 except for `peak_rss`, where `floor`
+  is the largest peak RSS, in bytes, the process starting the command already
+  had before a run, and `samples_at_floor` counts the runs at or below their
+  floor (see [The floor](/metrics/#the-floor)).
   Values are unrounded numbers in the canonical unit: ns, bytes, work per
   second, percent. A metric that was not measured has `stats: null` and no
   samples, never zeros.
@@ -148,7 +155,8 @@ out.
   measured and warmup runs.
 - `budgets` lists every budget with `metric`, `aggregation`, `operator`,
   `limit`, `actual`, `unit`, `status` (`pass`, `fail`, `skipped`, `no_data`)
-  and `reason`.
+  and `reason`. A budget on a peak RSS at the floor has the reason `the peak
+  RSS is at or below the measurement floor`.
 - `comparisons` holds each compared metric with `statistic`, `base`, `head`,
   `difference`, `change_percent`, the bootstrap interval, both tail
   probabilities, `max_percent`, `min_difference`, the verdict, its reason, and
@@ -164,8 +172,8 @@ out.
 - `summary` counts command results, `metric_error` among them, and
   `exit_code` is the exit status of the run. `not_gated` counts the
   comparisons with `gate: false` by verdict, and `skipped` the budgets and
-  comparisons skipped because their metric is unsupported; neither changes a
-  result.
+  comparisons skipped because their metric is unsupported, and the budgets a
+  peak RSS at the floor cannot decide; neither changes a result.
 - In a comparison, a suite whose directory does not exist in the base
   revision has `new_in_head: true`, no benchmarks and result `pass`, and is
   counted in `summary.new_suites`. It never changes the exit status.
@@ -191,8 +199,8 @@ suite,benchmark,command,result,record,side,metric,unit,scope,source,process_aggr
 - A `stat` row has `side` (`base` or `head`), `metric`, `unit`, `scope`,
   `source`, `process_aggregation`, `status`,
   `statistic` (`count`, `min`, `median`, `mean`, `max`, `stddev`, `cv`,
-  percentiles, and `relative_to_baseline` or `relative_to_fastest` for
-  latency) and `value`. A requested metric that was not measured has one row
+  percentiles, `floor` and `samples_at_floor` for `peak_rss`, and
+  `relative_to_baseline` or `relative_to_fastest` for latency) and `value`. A requested metric that was not measured has one row
   with its status and reason.
 - A `budget` row has `statistic` (the aggregation), `value` (the measured
   value), `operator`, `limit` and `verdict`.

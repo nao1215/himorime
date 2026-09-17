@@ -19,6 +19,9 @@ and this project follows [Semantic Versioning](https://semver.org/).
   `jc: [jc, --version]`. Each command runs once before measuring; its first
   line is written to `environment.tools` in JSON and under the Markdown
   report. A version command that fails exits 4.
+- `metrics.peak_rss` in JSON has `floor` and `samples_at_floor`, and CSV has
+  `floor` and `samples_at_floor` stat rows for `peak_rss`. See Peak RSS on the
+  Metrics page.
 
 ### Changed
 
@@ -27,6 +30,25 @@ and this project follows [Semantic Versioning](https://semver.org/).
   has a budget and nothing failed. Markdown no longer explains why a
   geometric mean is missing; the terminal still does. CSV and the terminal
   table are unchanged, and JSON only gains `environment.tools`.
+
+### Fixed
+
+- On Linux, a command's peak RSS could never be reported below himorime's own
+  peak, because the kernel counts the peak of the process that starts a
+  command as part of the command's (macOS and the BSDs are treated the same
+  way), and every memory spike of himorime raised
+  it for all later runs. `/usr/bin/true`, which GNU time reports at 1.4MiB,
+  was reported at 9.3 to 10.4MiB on Linux. Commands whose memory is measured
+  now start from a small spawner process, which on Linux also resets its own
+  peak before each start: `/usr/bin/true` is reported at 5.6 to 6.8MiB. The
+  remaining floor is recorded, and a peak at or below it is shown as
+  `≤ floor`. A comparison of such a peak reports only a regression or an
+  improvement that holds whatever the real value below the floor is, and is
+  inconclusive otherwise; a budget on it passes only when the floor itself is
+  within the budget, and is skipped otherwise. Windows was not affected.
+  Latency-only runs start commands as before; a run that measures memory
+  takes about a millisecond longer to start the spawner and tens of
+  microseconds more per run, outside the measured interval.
 
 ## [0.1.1] - 2026-09-17
 

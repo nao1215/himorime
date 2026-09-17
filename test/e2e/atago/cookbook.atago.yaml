@@ -303,7 +303,7 @@ scenarios:
       # A budget the change cannot meet fails the job with exit 1 and an
       # annotation that names a performance problem, not a broken run.
       - run:
-          command: 'e2ehelper replace examples/github-actions/himorime.yaml "<= 256MiB" "<= 1KiB"'
+          command: 'e2ehelper replace examples/github-actions/himorime.yaml ">= 10000 lines/s" ">= 1000000000 lines/s"'
           cwd: repo
       - run:
           command: himorime ci --quiet examples/github-actions
@@ -313,7 +313,7 @@ scenarios:
           exit_code: 1
           stderr:
             contains:
-              - "::error file=examples/github-actions/himorime.yaml,title=himorime%3A performance budget exceeded::count 50k lines / wordcount: peak rss max budget <= 1.00KiB, measured"
+              - "::error file=examples/github-actions/himorime.yaml,title=himorime%3A performance budget exceeded::count 50k lines / wordcount: throughput median budget >= 1.00G lines/s, measured"
               - "himorime: exit 1: performance check failed"
             not_contains: "could not"
 
