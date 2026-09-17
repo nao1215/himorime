@@ -19,6 +19,13 @@ such as a script run by an interpreter. A file both revisions must share,
 such as a fixture, is written with `${head_root}`; see
 [Paths](/configuration/#paths).
 
+A fresh checkout is not the same as a working tree that has existed for a
+while: Git cannot trust the cached state of files written in the same second
+as its index, and checks their content again on every `git status`. Before
+measuring, himorime waits for that second to pass and refreshes the index of
+the base worktree, so a command that asks Git about its repository costs the
+same in both revisions.
+
 Every round runs each compared command once for each revision, in an order
 shuffled with the seed. A background job that slows the machine for a few
 seconds therefore slows both revisions, instead of all of one of them.

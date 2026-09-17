@@ -2,12 +2,14 @@ package gitwt
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -197,7 +199,7 @@ func TestAddWorktreeFailureCleansUp(t *testing.T) {
 	}
 }
 
-func TestOpenPrunesStaleWorktrees(t *testing.T) {
+func TestAddWorktreePrunesStaleWorktrees(t *testing.T) {
 	t.Parallel()
 	dir := newRepo(t)
 	stale := filepath.Join(t.TempDir(), "stale")
@@ -205,10 +207,89 @@ func TestOpenPrunesStaleWorktrees(t *testing.T) {
 	if err := os.RemoveAll(stale); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Open(context.Background(), dir); err != nil {
+	ctx := context.Background()
+	repo, err := Open(ctx, dir)
+	if err != nil {
 		t.Fatal(err)
 	}
+	// Opening only reads the repository: a plain run must not change it.
+	if list := git(t, dir, "worktree", "list", "--porcelain"); !strings.Contains(list, "stale") {
+		t.Fatalf("Open changed the worktree entries:\n%s", list)
+	}
+	wt, err := repo.AddWorktree(ctx, t.TempDir(), repo.HeadSHA(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = wt.Remove(ctx) }()
 	if list := git(t, dir, "worktree", "list", "--porcelain"); strings.Contains(list, "stale") {
 		t.Fatalf("a worktree killed mid-run was not pruned:\n%s", list)
+	}
+}
+
+// TestAddWorktreeIndexIsNotRacy checks that no file of a new worktree was
+// modified in the same second as its index. Git compares the content of such
+// a file again on every status, so the base revision would pay for Git work
+// the working tree does not.
+func TestAddWorktreeIndexIsNotRacy(t *testing.T) {
+	t.Parallel()
+	dir := newRepo(t)
+	for i := range 50 {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file%02d.txt", i)), []byte("content\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "files")
+	ctx := context.Background()
+	repo, err := Open(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt, err := repo.AddWorktree(ctx, t.TempDir(), repo.HeadSHA(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = wt.Remove(ctx) }()
+	index, err := os.Stat(strings.TrimSpace(git(t, wt.Dir, "rev-parse", "--path-format=absolute", "--git-path", "index")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexSecond := index.ModTime().Truncate(time.Second)
+	entries, err := os.ReadDir(wt.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() == ".git" {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.ModTime().Truncate(time.Second).Before(indexSecond) {
+			t.Fatalf("%s was modified at %v, in the second of the index (%v): Git treats it as racily clean", e.Name(), info.ModTime(), index.ModTime())
+		}
+	}
+}
+
+func TestAddWorktreeCanceled(t *testing.T) {
+	t.Parallel()
+	dir := newRepo(t)
+	repo, err := Open(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	tmp := t.TempDir()
+	if _, err := repo.AddWorktree(ctx, tmp, repo.HeadSHA(context.Background())); err == nil {
+		t.Fatal("AddWorktree succeeded with a canceled context")
+	}
+	if entries, _ := os.ReadDir(tmp); len(entries) != 0 {
+		t.Fatalf("a canceled AddWorktree left %d entries behind", len(entries))
+	}
+	if list := git(t, dir, "worktree", "list", "--porcelain"); strings.Count(list, "worktree ") != 1 {
+		t.Fatalf("a canceled AddWorktree left a worktree entry:\n%s", list)
 	}
 }
