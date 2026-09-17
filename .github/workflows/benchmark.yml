@@ -35,7 +35,7 @@ jobs:
           go-version-file: go.mod
       - uses: nao1215/setup-himorime@b2896dee554ef31ea979f0388d9be22779ce73a2 # v0.1.1
         with:
-          version: v0.1.1
+          version: v0.1.2
       - name: Compare the base with the head
         if: github.event_name == 'pull_request'
         run: himorime ci --output "$RUNNER_TEMP/himorime.json" --format json bench
