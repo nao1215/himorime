@@ -25,6 +25,7 @@ type measureFlags struct {
 	selectFlags
 	format             string
 	output             string
+	section            string
 	summary            string
 	seed               uint64
 	seedSet            bool
@@ -49,6 +50,7 @@ func (m *measureFlags) registerCommon(fs *flag.FlagSet) {
 	m.register(fs)
 	fs.StringVar(&m.format, "format", string(config.FormatTable), "report `format` written to stdout or --output: "+formatNames())
 	fs.StringVar(&m.output, "output", "", "write the report to this `file` instead of stdout")
+	fs.StringVar(&m.section, "section", "", "update only the `name` section of the existing --output file, between its himorime:begin and himorime:end comment lines; needs --format markdown")
 	fs.StringVar(&m.summary, "summary", "", "also append a GitHub-flavored Markdown summary to this `file`")
 	fs.Func("seed", "`seed` for the execution order and the bootstrap (default: random, printed in the report)", func(v string) error {
 		n, err := parseSeed(v)

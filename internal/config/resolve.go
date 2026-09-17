@@ -62,8 +62,20 @@ func (v *validator) resolve(raw *RawFile) *Suite {
 	}
 
 	if raw.Report != nil {
-		for _, o := range raw.Report.Outputs {
-			s.Outputs = append(s.Outputs, Output{Format: Format(o.Format), Path: o.Path})
+		rp := root.key("report")
+		for i, o := range raw.Report.Outputs {
+			if o.Section != "" && Format(o.Format) != FormatMarkdown {
+				v.add(rp.key("outputs").index(i).key("section"), "a section replaces part of a Markdown file; remove section, or set format: markdown",
+					"section is only allowed with format: markdown, not %s", o.Format)
+			}
+			s.Outputs = append(s.Outputs, Output{Format: Format(o.Format), Path: o.Path, Section: o.Section})
+		}
+		for _, name := range raw.Report.Versions.Names {
+			argv := raw.Report.Versions.ByKey[name]
+			for i, arg := range argv {
+				v.checkTemplate(rp.key("versions").key(name).index(i), arg, scopeVersions)
+			}
+			s.Versions = append(s.Versions, ToolVersion{Name: name, Argv: argv})
 		}
 	}
 	return s
@@ -209,6 +221,9 @@ type scope int
 const (
 	scopeBuild scope = iota
 	scopeBenchmark
+	// scopeVersions is report.versions, run in the suite directory before
+	// the build and outside any benchmark.
+	scopeVersions
 )
 
 // checkTemplate validates the variables of a command argument or value.
@@ -224,6 +239,9 @@ func (v *validator) checkTemplate(p path, s string, sc scope) {
 			v.add(p, "add a build section that writes ${artifact}, or remove the reference", "${artifact} is used but the suite has no build section")
 		case r.Name == VarWorkdir && sc == scopeBuild:
 			v.add(p, "the build runs before any benchmark workdir exists; use ${root} or ${artifact}", "${workdir} is not available in build")
+		case (r.Name == VarWorkdir || r.Name == VarArtifact) && sc == scopeVersions:
+			v.add(p, "version commands run once before the build and any benchmark; use a program on PATH or a path under ${root}",
+				"${%s} is not available in report.versions", r.Name)
 		}
 	}
 }

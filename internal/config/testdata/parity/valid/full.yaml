@@ -132,9 +132,15 @@ report:
       path: results/bench.json
     - format: markdown
       path: results/bench.md
+    - format: markdown
+      path: README.md
+      section: bench-results
     - format: csv
       path: results/bench.csv
     - format: github
       path: results/summary.md
     - format: samples-csv
       path: results/samples.csv
+  versions:
+    cat: [cat, --version]
+    go: [go, version]

@@ -44,6 +44,9 @@ func Judge(r *Report, inputs []SuiteInput, o Options) {
 	r.Mode = o.Mode
 	r.Seed = o.Seed
 	r.Summary = Summary{FailOnInconclusive: o.FailOnInconclusive}
+	if r.Environment.Tools == nil {
+		r.Environment.Tools = []Tool{}
+	}
 	r.Suites = []Suite{}
 	for _, in := range inputs {
 		s := judgeSuite(in, o)

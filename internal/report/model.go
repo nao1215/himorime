@@ -80,6 +80,15 @@ type Environment struct {
 	LogicalCPUs int    `json:"logical_cpus"`
 	GoVersion   string `json:"go_version"`
 	CI          string `json:"ci"`
+	// Tools holds the versions of the tools named in report.versions, in the
+	// order the suites list them; empty when none are named.
+	Tools []Tool `json:"tools"`
+}
+
+// Tool is the version of one tool, as its version command printed it.
+type Tool struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 // Git describes the revisions measured.

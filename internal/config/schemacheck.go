@@ -150,6 +150,7 @@ var definitionMessages = []struct {
 }{
 	{"/definitions/shellRule", "", "a string command requires shell: true, and shell: true requires a string command", "write command as a list such as [git, --version], or add shell: true to a string command"},
 	{"/definitions/command", "a list of arguments or a string", "expected a list of arguments whose first element is the program, or a non-empty string used with shell: true", "write the command as a list such as [git, --version]"},
+	{"/definitions/versionCommand", "a list of arguments", "expected a list of arguments whose first element is the program", "write the command as a list such as [jc, --version]"},
 	{"/definitions/positiveDuration", "a duration string such as 500ms", "must be a duration greater than zero, such as 500ms or 2s", ""},
 	{"/definitions/duration", "a duration string such as 500ms", "invalid duration: write a number with a unit, such as 500ms, 2s or 1m30s (units: ns, us, µs, ms, s, m, h)", ""},
 	{"/definitions/budget", `a budget string such as "< 20ms"`, `invalid budget: write "<" or "<=" and a duration greater than zero, such as "< 20ms"; latency and CPU time are better when lower`, ""},
@@ -174,8 +175,15 @@ func walkSchemaError(e *jsonschema.ValidationError, parent path, emit func(path,
 	p := instancePath(e.InstanceLocation)
 	if pn, ok := e.ErrorKind.(*kind.PropertyNames); ok {
 		// The library reports the parent object's location unreliably for
-		// propertyNames; the enclosing group's location is correct.
-		emit(parent.key(pn.Property), propertyNameMessage(e.SchemaURL, pn.Property), "")
+		// propertyNames; the enclosing group's location is correct. An object
+		// reached from the root through properties alone, such as
+		// report.versions, has no enclosing group, and its schema pointer
+		// names the location instead.
+		at := parent
+		if fixed, ok := propertiesPath(e.SchemaURL); ok {
+			at = fixed
+		}
+		emit(at.key(pn.Property), propertyNameMessage(e.SchemaURL, pn.Property), "")
 		return
 	}
 	if definitionIssue(e, p, emit) {
@@ -200,6 +208,29 @@ func walkSchemaError(e *jsonschema.ValidationError, parent path, emit func(path,
 		return
 	}
 	leafIssue(e, p, emit)
+}
+
+// propertiesPath turns a schema location such as
+// #/properties/report/properties/versions/propertyNames into the document path
+// report.versions. It reports false for any location that passes through
+// something other than properties.
+func propertiesPath(schemaURL string) (path, bool) {
+	_, fragment, ok := strings.Cut(schemaURL, "#/")
+	if !ok {
+		return nil, false
+	}
+	segs := strings.Split(strings.TrimSuffix(fragment, "/propertyNames"), "/")
+	if len(segs) == 0 || len(segs)%2 != 0 {
+		return nil, false
+	}
+	p := path{}
+	for i := 0; i < len(segs); i += 2 {
+		if segs[i] != "properties" {
+			return nil, false
+		}
+		p = p.key(segs[i+1])
+	}
+	return p, true
 }
 
 func propertyNameMessage(schemaURL, name string) string {
@@ -277,6 +308,8 @@ func patternMessage(k *kind.Pattern) string {
 		return fmt.Sprintf("invalid name %q: use letters, digits, '.', '_' and '-', starting with a letter or digit", k.Got)
 	case `\S`:
 		return "must not be blank"
+	case `^[a-z0-9][a-z0-9-]*$`:
+		return fmt.Sprintf("invalid section name %q: use lowercase letters, digits and '-', starting with a letter or digit", k.Got)
 	default:
 		return fmt.Sprintf("%q does not match the expected format", k.Got)
 	}
@@ -337,7 +370,8 @@ func sameLoc(a, b []string) bool {
 func instancePath(loc []string) path {
 	p := path{}
 	for i, seg := range loc {
-		if n, ok := atoiStrict(seg); ok && i > 0 && isArrayKey(loc[i-1]) {
+		// The value of a report.versions entry is an argument list too.
+		if n, ok := atoiStrict(seg); ok && i > 0 && (isArrayKey(loc[i-1]) || i > 2 && loc[i-2] == "versions" && loc[i-3] == "report") {
 			p = p.index(n)
 			continue
 		}

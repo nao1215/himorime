@@ -396,8 +396,10 @@ func TestRunStopsProcessesLeftBehindAndDoesNotWaitForThem(t *testing.T) {
 	}
 }
 
+// Not parallel: it writes an executable and runs it, and a process started
+// by a parallel test between the write and the exec can inherit the file
+// open for writing, which makes the exec fail with "text file busy".
 func TestLookPathResolvesRelativeEntriesAgainstTheWorkingDirectory(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	exe, err := os.Executable()
 	if err != nil {
@@ -513,25 +515,5 @@ func TestUnsupportedError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "peak rss is not supported: because") {
 		t.Fatal(err)
-	}
-}
-
-// BenchmarkRunUsage measures what collecting usage adds to starting and
-// reaping a process. The difference between the two sub-benchmarks is the
-// collector's overhead; it lies outside Result.Elapsed either way.
-func BenchmarkRunUsage(b *testing.B) {
-	exe, err := os.Executable()
-	if err != nil {
-		b.Fatal(err)
-	}
-	for _, collect := range []bool{false, true} {
-		b.Run(fmt.Sprintf("collect=%v", collect), func(b *testing.B) {
-			s := Spec{Path: exe, Env: append(os.Environ(), "HIMORIME_PROC_HELPER=exit"), CollectUsage: collect}
-			for b.Loop() {
-				if _, err := Run(context.Background(), s, nil); err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
 	}
 }

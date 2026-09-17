@@ -62,7 +62,8 @@
         "cpu_model",
         "logical_cpus",
         "go_version",
-        "ci"
+        "ci",
+        "tools"
       ],
       "additionalProperties": false,
       "properties": {
@@ -90,6 +91,30 @@
         "ci": {
           "description": "github-actions, unknown (another CI), or empty.",
           "type": "string"
+        },
+        "tools": {
+          "description": "Versions of the tools named in report.versions of the suites, in the order they are listed; empty when none are named.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "version"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "The tool's name as written in report.versions.",
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "description": "The first non-empty line the version command printed on standard output, or else on standard error, trimmed.",
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
         }
       }
     },
