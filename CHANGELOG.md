@@ -7,12 +7,7 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-
-- The peak RSS floor is read after a run instead of before it. Read before,
-  it missed what starting the command added, and a stripped release binary
-  on a CI runner reported `true` above its floor, as a precise value that was
-  really the spawner's.
+## [0.1.2] - 2026-09-17
 
 ### Added
 
@@ -40,6 +35,10 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The peak RSS floor is read after a run instead of before it. Read before,
+  it missed what starting the command added, and a stripped release binary
+  on a CI runner reported `true` above its floor, as a precise value that was
+  really the spawner's.
 - On Linux, a command's peak RSS could never be reported below himorime's own
   peak, because the kernel counts the peak of the process that starts a
   command as part of the command's (macOS and the BSDs are treated the same
