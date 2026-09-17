@@ -396,8 +396,10 @@ func TestRunStopsProcessesLeftBehindAndDoesNotWaitForThem(t *testing.T) {
 	}
 }
 
+// Not parallel: it writes an executable and runs it, and a process started
+// by a parallel test between the write and the exec can inherit the file
+// open for writing, which makes the exec fail with "text file busy".
 func TestLookPathResolvesRelativeEntriesAgainstTheWorkingDirectory(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	exe, err := os.Executable()
 	if err != nil {
