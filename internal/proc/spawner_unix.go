@@ -262,6 +262,8 @@ func ServeSpawner() int {
 	// small and steady.
 	runtime.GOMAXPROCS(2)
 	debug.SetGCPercent(-1)
+	// Start from the smallest RSS: drop what initialization left behind.
+	debug.FreeOSMemory()
 	gc := newHeapGrowth()
 	c := newSpawnConn(os.NewFile(spawnerFD, "himorime"))
 	if err := c.send(spawnReply{Version: spawnProtocol}, nil); err != nil {

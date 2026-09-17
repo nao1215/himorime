@@ -331,7 +331,10 @@ scenarios:
           exit_code: 0
           stdout:
             json:
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.stats.median", lt: 8388608}
+              # himorime itself holds about 10MiB. The spawner that starts a
+              # command whose memory is measured holds 5 to 9MiB, depending on
+              # how the binary was built.
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.stats.median", lt: 9500000}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.floor", gt: 0}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.samples_at_floor", gte: 0}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.floor", equals: 0}
