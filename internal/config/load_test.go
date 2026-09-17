@@ -662,3 +662,68 @@ func TestLoadReportsAWrongWorkUnitOnce(t *testing.T) {
 	}
 }
 
+// TestLoadRejectsARelativePathThatLeavesTheProject pins that validation
+// answers the same question the run answers: a relative path whose .. leaves
+// the repository holding the suite, or the suite's own directory when it is
+// not in a repository, is rejected before anything is built or measured.
+func TestLoadRejectsARelativePathThatLeavesTheProject(t *testing.T) {
+	t.Parallel()
+	write := func(t *testing.T, dir, src string) (*Suite, error) {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, "himorime.yaml")
+		if err := os.WriteFile(p, []byte(src), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(p)
+	}
+	suite := func(cwd string) string {
+		return "version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    commands:\n      tool: {command: [tool], cwd: " + cwd + "}\n"
+	}
+
+	t.Run("outside a repository", func(t *testing.T) {
+		t.Parallel()
+		_, err := write(t, t.TempDir(), suite("../.."))
+		var verr *ValidationError
+		if !errors.As(err, &verr) {
+			t.Fatalf("Load() error = %v, want a ValidationError", err)
+		}
+		is := verr.Issues[0]
+		if is.Field != "benchmarks[0].commands.tool.cwd" || !strings.Contains(is.Message, "leaves the project") {
+			t.Errorf("issue = %+v, want the escaping path", is)
+		}
+		if is.Line == 0 {
+			t.Errorf("issue %q has no position", is.Message)
+		}
+	})
+
+	t.Run("inside a repository", func(t *testing.T) {
+		t.Parallel()
+		top := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(top, ".git"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := write(t, filepath.Join(top, "bench"), suite("..")); err != nil {
+			t.Errorf("a .. that stays in the repository must be accepted: %v", err)
+		}
+		if _, err := write(t, filepath.Join(top, "bench2"), suite("../..")); err == nil {
+			t.Error("a .. that leaves the repository must be rejected")
+		}
+	})
+
+	t.Run("every path setting", func(t *testing.T) {
+		t.Parallel()
+		for _, src := range []string{
+			"version: \"1\"\nsuite: {name: x}\nbuild: {command: [go, build], cwd: ../..}\nbenchmarks:\n  - name: a\n    commands: {tool: {command: [tool]}}\n",
+			"version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    stdin: ../../in.txt\n    commands: {tool: {command: [tool]}}\n",
+			"version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    metrics: {throughput: {work: {file_size: ../../in.txt}}}\n    commands: {tool: {command: [tool]}}\n",
+			"version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    commands: {tool: {command: [tool]}}\nreport: {outputs: [{format: json, path: ../../out.json}]}\n",
+		} {
+			if _, err := write(t, t.TempDir(), src); err == nil {
+				t.Errorf("accepted an escaping path:\n%s", src)
+			}
+		}
+	})
+}
