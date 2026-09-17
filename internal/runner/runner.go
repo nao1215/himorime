@@ -451,12 +451,6 @@ func (r *Runner) runBenchmarkHook(ctx context.Context, h config.Exec, st *sideSt
 
 // runHook runs a build step or a hook to completion and reports a failure.
 func (r *Runner) runHook(ctx context.Context, e config.Exec, vars config.Vars, dir string, kind FailureKind, label string) *Failure {
-	spec, f := r.spec(e, vars, dir)
-	if f != nil {
-		f.Kind = kind
-		f.Message = label + ": " + f.Message
-		return f
-	}
 	errFile, err := os.CreateTemp(r.TempDir, "hook-stderr-")
 	if err != nil {
 		return &Failure{Kind: FailInternal, Message: fmt.Sprintf("capture stderr: %v", err)}
@@ -467,7 +461,77 @@ func (r *Runner) runHook(ctx context.Context, e config.Exec, vars config.Vars, d
 	}()
 	// nil is the null device. A Go writer such as io.Discard would make Wait
 	// also wait for background processes that inherited the output pipe.
-	spec.Stdout = nil
+	return r.runProcess(ctx, e, vars, dir, kind, label, nil, errFile)
+}
+
+// versionOutputBytes bounds how much of a version command's output is read.
+const versionOutputBytes = 64 << 10
+
+// Version runs the version command of a tool once in the suite directory of
+// side and returns the first non-empty line it printed on standard output,
+// or else on standard error, trimmed. A command that fails, times out after
+// config.DefaultVersionTimeout or prints nothing is a setup failure.
+func (r *Runner) Version(ctx context.Context, tool config.ToolVersion, side Side) (string, *Failure) {
+	label := "report.versions." + tool.Name
+	e := config.Exec{Argv: tool.Argv, Timeout: config.DefaultVersionTimeout}
+	vars := config.Vars{Root: side.Root, HeadRoot: side.HeadRoot, Exe: exeSuffix(), LookupEnv: r.lookupEnv}
+	var files []*os.File
+	defer func() {
+		for _, f := range files {
+			_ = f.Close()
+			_ = os.Remove(f.Name())
+		}
+	}()
+	for _, name := range []string{"version-stdout-", "version-stderr-"} {
+		f, err := os.CreateTemp(r.TempDir, name)
+		if err != nil {
+			return "", &Failure{Kind: FailInternal, Message: fmt.Sprintf("capture output: %v", err)}
+		}
+		files = append(files, f)
+	}
+	if f := r.runProcess(ctx, e, vars, side.Root, FailSetup, label, files[0], files[1]); f != nil {
+		return "", f
+	}
+	for _, f := range files {
+		if v := firstLine(f.Name()); v != "" {
+			return r.Redactor.String(v), nil
+		}
+	}
+	return "", &Failure{Kind: FailSetup, Message: fmt.Sprintf("%s printed nothing on standard output or standard error: %s", label, r.Redactor.String(e.Display()))}
+}
+
+// firstLine returns the first non-empty line of a capture file, trimmed.
+func firstLine(path string) string {
+	f, err := os.Open(path) //nolint:gosec // G304: a capture file himorime created in its temp dir
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, versionOutputBytes))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(strings.ToValidUTF8(string(data), "?"), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+// runProcess runs a build step, a hook or a version command to completion
+// with the given output files, and reports a failure with the tail of
+// errFile.
+func (r *Runner) runProcess(ctx context.Context, e config.Exec, vars config.Vars, dir string, kind FailureKind, label string, outFile, errFile *os.File) *Failure {
+	spec, f := r.spec(e, vars, dir)
+	if f != nil {
+		f.Kind = kind
+		f.Message = label + ": " + f.Message
+		return f
+	}
+	if outFile != nil {
+		spec.Stdout = outFile
+	}
 	spec.Stderr = errFile
 	spec.Timeout = e.Timeout
 	res, err := r.exec(ctx, spec)

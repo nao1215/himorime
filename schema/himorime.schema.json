@@ -145,8 +145,23 @@
               "path": {
                 "description": "Relative path of the file.",
                 "$ref": "#/definitions/relativePath"
+              },
+              "section": {
+                "description": "Markdown only: replace the section of this name in the existing file, between its himorime:begin and himorime:end comment lines, and keep the rest of the file. Lowercase letters, digits and '-'.",
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
               }
             }
+          }
+        },
+        "versions": {
+          "description": "Tools whose versions every report records, such as jc: [jc, --version]. Each command runs once in the suite directory before measuring, with a 30s time limit; the first non-empty line it prints is recorded, and a failure fails the run.",
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/versionCommand"
           }
         }
       }
@@ -319,6 +334,21 @@
           "pattern": "\\S"
         }
       ]
+    },
+    "versionCommand": {
+      "description": "A list of arguments whose first element is the program; no shell.",
+      "type": "array",
+      "minItems": 1,
+      "items": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      ],
+      "additionalItems": {
+        "type": "string"
+      }
     },
     "shellRule": {
       "description": "A string command requires shell: true; shell: true requires a string command.",
