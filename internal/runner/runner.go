@@ -579,6 +579,7 @@ func (r *Runner) runOnce(ctx context.Context, b config.Benchmark, st *sideState,
 	wantCPU := b.Metrics.CPU && !cpuSkipped
 	wantMemory := b.Metrics.Memory && !memSkipped
 	spec.CollectUsage = wantCPU || wantMemory
+	spec.MeasureMemory = wantMemory
 
 	stderr, closeIO, f := r.openIO(&spec, c, st)
 	defer closeIO()
@@ -637,6 +638,7 @@ func recordRun(u *unit, b config.Benchmark, res proc.Result, work float64, wantC
 	}
 	if _, skipped := u.m.Skipped(metric.GroupMemory); wantMemory && !skipped {
 		u.m.PeakRSS = append(u.m.PeakRSS, res.Usage.PeakRSS)
+		u.m.PeakRSSFloor = append(u.m.PeakRSSFloor, res.Usage.Floor)
 	}
 	if b.Metrics.Throughput != nil {
 		u.m.Work = append(u.m.Work, work)

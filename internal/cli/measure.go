@@ -19,6 +19,7 @@ import (
 	"github.com/nao1215/himorime/internal/exitcode"
 	"github.com/nao1215/himorime/internal/ghactions"
 	"github.com/nao1215/himorime/internal/gitwt"
+	"github.com/nao1215/himorime/internal/proc"
 	"github.com/nao1215/himorime/internal/redact"
 	"github.com/nao1215/himorime/internal/report"
 	"github.com/nao1215/himorime/internal/runner"
@@ -160,6 +161,11 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 	if code := m.checkMetrics(suites); code != 0 {
 		return code
 	}
+	if measuresMemory(suites) {
+		// Commands whose memory is measured start from a spawner; it comes
+		// up while the run is prepared.
+		proc.PrepareSpawner()
+	}
 
 	tempDir, err := os.MkdirTemp("", "himorime-")
 	if err != nil {
@@ -256,6 +262,17 @@ func (m *measurement) checkMetrics(suites []loadedSuite) int {
 		fmt.Fprintf(m.app.Stderr, "himorime: exit %d: %s\n", code, exitcode.Outcome(code))
 	}
 	return code
+}
+
+func measuresMemory(suites []loadedSuite) bool {
+	for _, ls := range suites {
+		for _, b := range ls.suite.Benchmarks {
+			if b.Metrics.Memory {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // cleanupFailed returns the exit status after a cleanup problem: an execution

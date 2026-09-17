@@ -85,6 +85,10 @@ type Measurement struct {
 	CPUSystem []time.Duration
 	// PeakRSS, in bytes, is collected when the benchmark measures memory.
 	PeakRSS []int64
+	// PeakRSSFloor holds, for each value of PeakRSS, the peak RSS the process
+	// that started the command already had (0 where there is no such floor).
+	// A peak at or below its floor only says the command used at most that.
+	PeakRSSFloor []int64
 	// Work is the declared work of each run when the benchmark measures
 	// throughput.
 	Work    []float64
@@ -113,7 +117,7 @@ func (m *Measurement) skip(g metric.Group, reason string) {
 	case metric.GroupCPU:
 		m.CPUUser, m.CPUSystem = nil, nil
 	case metric.GroupMemory:
-		m.PeakRSS = nil
+		m.PeakRSS, m.PeakRSSFloor = nil, nil
 	case metric.GroupLatency, metric.GroupThroughput:
 	}
 }
