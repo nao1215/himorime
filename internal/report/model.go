@@ -218,6 +218,10 @@ type MetricStats struct {
 	Median float64 `json:"median"`
 	Stddev float64 `json:"stddev"`
 	CV     float64 `json:"cv"`
+	// RobustCV is the interquartile range divided by 1.349 and by the median.
+	// It is the spread the noise gate compares with max_cv for the median and
+	// the other order statistics; cv is used for the mean.
+	RobustCV float64 `json:"robust_cv"`
 	// Percentiles is keyed by pNN: p90, p95 and p99, plus any percentile a
 	// budget of the command uses.
 	Percentiles map[string]float64 `json:"percentiles"`

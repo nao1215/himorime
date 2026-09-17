@@ -872,6 +872,7 @@
         "median",
         "stddev",
         "cv",
+        "robust_cv",
         "percentiles"
       ],
       "additionalProperties": false,
@@ -898,6 +899,10 @@
         },
         "cv": {
           "description": "Coefficient of variation: stddev / mean.",
+          "type": "number"
+        },
+        "robust_cv": {
+          "description": "Robust coefficient of variation: the interquartile range divided by 1.349 and by the median. It is what max_cv is compared with for the median and the other order statistics.",
           "type": "number"
         },
         "percentiles": {

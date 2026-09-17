@@ -44,7 +44,7 @@ func csvCol(name string) int {
 }
 
 // statistics lists the statistic rows written for every measured metric.
-var statistics = []string{"count", "min", "median", "mean", "max", "stddev", "cv"}
+var statistics = []string{"count", "min", "median", "mean", "max", "stddev", "cv", "robust_cv"}
 
 // WriteCSV renders the long-format CSV report. encoding/csv quotes fields
 // holding commas, quotes or line breaks.
@@ -193,7 +193,7 @@ func statRows(s Suite, b Benchmark, c Command, side sideMeasurement, def metric.
 	}
 	values := map[string]float64{
 		"count": float64(ms.Stats.Count), "min": ms.Stats.Min, "median": ms.Stats.Median, "mean": ms.Stats.Mean,
-		"max": ms.Stats.Max, "stddev": ms.Stats.Stddev, "cv": ms.Stats.CV,
+		"max": ms.Stats.Max, "stddev": ms.Stats.Stddev, "cv": ms.Stats.CV, "robust_cv": ms.Stats.RobustCV,
 	}
 	var rows [][]string
 	for _, st := range statistics {

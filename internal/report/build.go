@@ -372,7 +372,7 @@ func metricStats(samples []float64, percentiles []metric.Aggregation) *MetricSta
 	sum := stats.Summarize(samples)
 	st := &MetricStats{
 		Count: sum.Count, Min: sum.Min, Max: sum.Max, Mean: sum.Mean, Median: sum.Median,
-		Stddev: sum.Stddev, CV: sum.CV, Percentiles: map[string]float64{},
+		Stddev: sum.Stddev, CV: sum.CV, RobustCV: sum.RobustCV, Percentiles: map[string]float64{},
 	}
 	for _, p := range percentiles {
 		if v, ok := stats.Aggregate(samples, p); ok {
