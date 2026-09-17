@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The peak RSS floor is read after a run instead of before it. Read before,
+  it missed what starting the command added, and a stripped release binary
+  on a CI runner reported `true` above its floor, as a precise value that was
+  really the spawner's.
+
 ### Added
 
 - `--section NAME` for `run`, `compare` and `ci`, and `section` under

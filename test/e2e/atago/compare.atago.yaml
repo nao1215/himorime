@@ -418,7 +418,9 @@ scenarios:
           content: |
             version: "1"
             suite: {name: gate}
-            defaults: {warmup: 1, runs: 10}
+            # max_cv: 0 keeps a few slow runs on a shared runner from hiding
+            # a change far larger than the noise (issue #8).
+            defaults: {warmup: 1, runs: 10, regression: {max_cv: 0}}
             benchmarks:
               - name: sleepy
                 commands:

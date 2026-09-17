@@ -328,9 +328,8 @@ func serveRequest(c *spawnConn, req spawnRequest, files []*os.File, wakeR, wakeW
 	t := &runningTree{}
 	watched := make(chan bool, 1)
 	go func() { watched <- watchHimorime(c, wakeR, t) }()
-	var floor int64
 	if req.CollectUsage {
-		floor = startFloor()
+		resetFloor()
 	}
 	start := time.Now()
 	err := cmd.Start()
@@ -345,6 +344,10 @@ func serveRequest(c *spawnConn, req spawnRequest, files []*os.File, wakeR, wakeW
 		waitErr = cmd.Wait()
 	}
 	elapsed := time.Since(start)
+	var floor int64
+	if req.CollectUsage {
+		floor = readFloor()
+	}
 	_, _ = wakeW.Write([]byte{0})
 	gone := <-watched
 	if err != nil {

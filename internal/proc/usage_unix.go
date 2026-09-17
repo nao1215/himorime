@@ -125,18 +125,29 @@ func platformCollection(memory bool) Collection {
 	}
 }
 
-// startFloor is called by the process that starts a command, right before it
-// starts it and outside the measured interval. It lowers this process's
-// recorded peak RSS where the platform allows it (Linux) and returns the peak
-// RSS the command inherits as a floor: the kernel folds the starting
-// process's peak into the command's ru_maxrss at exec. It is the peak of the
-// address space on Linux and getrusage's ru_maxrss elsewhere; 0 when neither
-// can be read.
-func startFloor() int64 {
+// resetFloor is called by the process that starts a command, right before it
+// starts it and outside the measured interval. Where the platform allows it
+// (Linux) it lowers this process's recorded peak RSS to its current RSS, so an
+// earlier allocation spike is not folded into the command's ru_maxrss at exec.
+func resetFloor() {
+	if rusageSupported() {
+		resetMemoryPeak()
+	}
+}
+
+// readFloor is called by the same process after it reaped the command, and
+// returns the peak RSS the command may have inherited: the kernel folds the
+// starting process's peak into the command's ru_maxrss at exec. Read after
+// the command rather than before it, the value includes what the start
+// itself added (the child runs in the parent's address space until exec), so
+// it is never below what was folded in; it may be above. It is the peak of
+// the address space since resetFloor on Linux, getrusage's ru_maxrss
+// elsewhere, and 0 when neither can be read.
+func readFloor() int64 {
 	if !rusageSupported() {
 		return 0
 	}
-	if peak, ok := resetMemoryPeak(); ok {
+	if peak, ok := memoryPeak(); ok {
 		return peak
 	}
 	var ru syscall.Rusage

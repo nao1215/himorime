@@ -4,6 +4,7 @@ package proc
 
 import (
 	"context"
+	"os/exec"
 	"runtime"
 	"testing"
 )
@@ -36,5 +37,31 @@ func TestRunPeakRSSIsNotRaisedByHimorimesOwnMemory(t *testing.T) {
 	}
 	if u.Floor <= 0 || u.Floor >= limit {
 		t.Errorf("floor = %d bytes, want a positive value below %d", u.Floor, limit)
+	}
+}
+
+// TestRunFloorCoversWhatExecFoldsIn: a command smaller than the process that
+// starts it reports that process's peak, so its peak RSS must never be above
+// the recorded floor. A floor read before the start missed what the start
+// itself added (the child runs in the starter's address space until exec),
+// and a stripped release binary on a CI runner reported true above its floor.
+func TestRunFloorCoversWhatExecFoldsIn(t *testing.T) {
+	path, err := exec.LookPath("true")
+	if err != nil {
+		t.Skip("true is not installed")
+	}
+	for _, p := range startPaths() {
+		t.Run(p.name, func(t *testing.T) {
+			runWith := p.run(t)
+			for range 30 {
+				res, err := runWith(context.Background(), Spec{Path: path, CollectUsage: true, MeasureMemory: true})
+				if err != nil || res.ExitCode != 0 {
+					t.Fatalf("run = %+v, %v", res, err)
+				}
+				if u := res.Usage; u.Floor <= 0 || u.PeakRSS > u.Floor {
+					t.Fatalf("peak rss %d bytes above its floor %d: true is smaller than its starter", u.PeakRSS, u.Floor)
+				}
+			}
+		})
 	}
 }
