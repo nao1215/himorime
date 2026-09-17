@@ -41,8 +41,19 @@ func resetMemoryPeak() {
 // covers the moment of exec, when Linux folds it into the command's
 // ru_maxrss.
 func memoryPeak() (int64, bool) {
-	return vmHWM()
+	peak, ok := vmHWM()
+	if !ok {
+		return 0, false
+	}
+	return peak + floorSlack, true
 }
+
+// floorSlack is added to the peak read from VmHWM. The kernel keeps RSS in
+// per-CPU counters that are summed approximately, and a peak read a moment
+// later can differ from the one folded into the command by a few pages: on a
+// four-CPU GitHub runner the reported floor matched the folded peak to the
+// byte, and one run of ten in a coverage build came out just above it.
+const floorSlack = 1 << 20
 
 // vmHWM reads VmHWM, the peak RSS of this process's address space, which is
 // what Linux folds into a started command's ru_maxrss. getrusage would not

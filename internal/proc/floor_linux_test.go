@@ -58,8 +58,11 @@ func TestRunFloorCoversWhatExecFoldsIn(t *testing.T) {
 				if err != nil || res.ExitCode != 0 {
 					t.Fatalf("run = %+v, %v", res, err)
 				}
-				if u := res.Usage; u.Floor <= 0 || u.PeakRSS > u.Floor {
-					t.Fatalf("peak rss %d bytes above its floor %d: true is smaller than its starter", u.PeakRSS, u.Floor)
+				// The floor keeps half its slack above the peak: without the
+				// slack a coverage build on a CI runner reported true a few
+				// pages above its floor.
+				if u := res.Usage; u.Floor <= 0 || u.PeakRSS+floorSlack/2 > u.Floor {
+					t.Fatalf("peak rss %d bytes is not at least %d below its floor %d: true is smaller than its starter", u.PeakRSS, floorSlack/2, u.Floor)
 				}
 			}
 		})
