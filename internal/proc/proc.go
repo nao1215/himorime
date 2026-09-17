@@ -121,9 +121,8 @@ func run(ctx context.Context, s Spec, now Clock, attachTree func(*exec.Cmd) (*tr
 	default:
 	}
 
-	var floor int64
 	if s.CollectUsage {
-		floor = startFloor()
+		resetFloor()
 	}
 	start := now()
 	if err := cmd.Start(); err != nil {
@@ -167,6 +166,10 @@ func run(ctx context.Context, s Spec, now Clock, attachTree func(*exec.Cmd) (*tr
 
 	waitErr := cmd.Wait()
 	elapsed := now().Sub(start) - paused
+	var floor int64
+	if s.CollectUsage {
+		floor = readFloor()
+	}
 	close(done)
 	// The watcher may be killing the tree right now; the tree handle is only
 	// released after it has finished.

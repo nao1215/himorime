@@ -165,7 +165,9 @@ costs about a millisecond once and tens of microseconds per run, never inside
 the measured interval.
 
 What remains is the floor: the peak RSS of the process that started a run,
-read right before the start. Every report records it. `metrics.peak_rss` in
+read after the run. Read before the start, it would miss what starting the
+command adds, since the command runs in its starter's memory until it
+replaces itself with the program. Every report records it. `metrics.peak_rss` in
 JSON has `floor`, the largest floor of the runs in bytes, and
 `samples_at_floor`, the runs whose peak RSS was at or below their floor. For
 those runs the command's real peak is unknown, only that it is at most the
