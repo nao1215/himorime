@@ -94,7 +94,9 @@ User and system CPU time are read from the operating system when a run exits. `c
 
 Utilization has no better direction: more can mean better parallelism or wasted work. It can carry a budget in either direction, but it is never judged as a regression.
 
-The operating system accounts CPU time in scheduler ticks or microseconds, so a command that runs for a millisecond or two can report `0ns` of user time. Judge CPU time on workloads that use tens of milliseconds or more.
+The resolution of that accounting differs by platform. Linux and macOS report microseconds from `rusage`: samples measured on Linux are multiples of 1µs. Windows reports whole scheduler ticks of 15.625ms from the Job Object: samples measured on a GitHub-hosted runner were 0, 15.625ms, 31.25ms and 46.875ms, and a command that spends a few milliseconds on a CPU has a median of `0ns` there.
+
+Judge CPU time on a workload that uses more than a few multiples of that resolution, which means tens of milliseconds at least, and hundreds where Windows matters. A comparison whose base is `0ns` is inconclusive, with the reason `the base measurement is zero`, and a `min_difference` below one tick cannot tell two Windows measurements apart.
 
 ## Peak RSS
 

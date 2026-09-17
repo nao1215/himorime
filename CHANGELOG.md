@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Changed
 
+- The `gate-cpu-memory` recipe gives its command 150ms of work and 32MiB to hold, so that the metrics it gates on are measurable everywhere. Its CPU `min_difference` is 32ms, two Windows scheduler ticks. Measured on a GitHub-hosted `windows-latest` runner, the recipe's old command spent so little time on a CPU that its median was `0ns` and the comparison was inconclusive on every run.
 - The noise gate `regression.max_cv` compares the spread that matches the statistic being judged: the interquartile range divided by 1.349 and by the median for the median and the other order statistics, the coefficient of variation for the mean. A few slow runs, which shared CI runners produce, no longer make a comparison inconclusive and no longer hide a real change; a distribution with two modes far apart still does. The key, its default of `0.5` and the reason string are unchanged, but a `max_cv` tuned for the old definition is worth reviewing, and `max_cv: 0` is no longer the workaround for outliers. JSON reports gain `robust_cv` next to `cv`, and CSV a `robust_cv` stat row.
 
 ### Added

@@ -474,7 +474,7 @@ version: "1"
 
 suite:
   name: gate cpu and memory
-  description: A program that mostly waits, compared on CPU time and peak RSS; its latency is shown but decides nothing.
+  description: A program that does a fixed amount of work and then waits, compared on CPU time and peak RSS; its latency is shown but decides nothing.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -484,13 +484,19 @@ defaults:
   runs: 15
 
 benchmarks:
-  - name: wait for input
+  - name: work then wait
     metrics:
       cpu: true
       memory: true
     commands:
       sleepy:
-        command: ["${artifact}"]
+        # -busy-ms 150 keeps a CPU busy for 150ms and -alloc-mb 32 holds
+        # 32MiB before the program waits. Both are chosen so the gated
+        # metrics are measurable everywhere: Windows accounts CPU time in
+        # scheduler ticks of 15.625ms, and a peak RSS at or below the
+        # measurement floor of a few mebibytes can only be compared
+        # conservatively. See CPU time and The floor on the Metrics page.
+        command: ["${artifact}", -busy-ms, "150", -alloc-mb, "32"]
     regression:
       # Latency is still measured, compared and reported with its verdict,
       # marked NOT GATED, but a latency regression or an inconclusive latency
@@ -500,7 +506,9 @@ benchmarks:
       # CPU time and peak RSS decide the result and the exit status.
       cpu:
         max_percent: 25
-        min_difference: 5ms
+        # Two Windows scheduler ticks: a difference smaller than this cannot
+        # be told from the accounting on the coarsest platform.
+        min_difference: 32ms
       memory:
         max_percent: 25
         min_difference: 4MiB
@@ -515,6 +523,7 @@ Three comparison tables. The `latency` row reads `PASS (NOT GATED)`, or `REGRESS
 - `gate: false` keeps a metric measured, compared and reported, verdict included; it only stops that verdict from failing the run. No extreme `max_percent` is needed to switch a metric off.
 - The summary line counts what was not gated, such as `not gated: 1 regressed`, the JSON report has `gate: false` on the comparison and `summary.not_gated`, and GitHub Actions shows a notice instead of an error.
 - `--fail-on-inconclusive` applies to gated comparisons only. Budgets are always enforced; leave out a budget you do not want to fail on.
+- The command is given work to do and memory to hold so that both gated metrics are measurable on every platform. Gate on a metric your program moves by more than the resolution of its measurement: see [CPU time](/metrics/#cpu-time-and-utilization) and [The floor](/metrics/#the-floor).
 
 Example: [`examples/gate-cpu-memory`](https://github.com/nao1215/himorime/tree/main/examples/gate-cpu-memory)
 
