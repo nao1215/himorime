@@ -7,6 +7,19 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- A command that runs Git in its repository, such as a build embedding
+  `git describe --dirty` or himorime itself, was measured slower in the base
+  revision than in the working tree with identical code: the files of the
+  fresh base worktree were written in the same second as its index, so Git
+  compared their content again on every `git status`, and kept doing so when
+  it ran without optional locks. The base worktree's index is now refreshed
+  after that second has passed. On himorime's own suite this removed a false
+  15% improvement.
+- `himorime run` ran `git worktree prune` in the suite's repository. Only a
+  comparison, which creates a worktree, prunes stale worktree entries now.
+
 ## [0.1.0] - 2026-09-17
 
 ### Added

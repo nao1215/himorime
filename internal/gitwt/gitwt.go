@@ -2,9 +2,10 @@
 // worktree without touching the user's working tree, index or branches.
 //
 // The only lasting trace a comparison could leave is the worktree's
-// administrative entry under .git/worktrees; Remove deletes it, and Open runs
-// `git worktree prune` first so an entry orphaned by a killed process is
-// cleared on the next run.
+// administrative entry under .git/worktrees; Remove deletes it, and
+// AddWorktree runs `git worktree prune` first so an entry orphaned by a killed
+// process is cleared by the next comparison. Opening a repository only reads
+// it.
 package gitwt
 
 import (
@@ -51,9 +52,6 @@ func Open(ctx context.Context, dir string) (*Repo, error) {
 		top = resolved
 	}
 	r.Top = top
-	// Clear entries of worktrees whose directories no longer exist, such as
-	// one left behind by a himorime that was killed with SIGKILL.
-	_, _ = r.run(ctx, top, "worktree", "prune")
 	return r, nil
 }
 
@@ -108,7 +106,12 @@ type Worktree struct {
 // checkout is detached, so no branch is created or moved, and the
 // repository's hooks are disabled for it: a post-checkout hook is not part of
 // what is being measured.
+//
+// The checkout is settled before it is returned: see settleIndex.
 func (r *Repo) AddWorktree(ctx context.Context, tempBase, sha string) (*Worktree, error) {
+	// Clear entries of worktrees whose directories no longer exist, such as
+	// one left behind by a himorime that was killed with SIGKILL.
+	_, _ = r.run(ctx, r.Top, "worktree", "prune")
 	if err := os.MkdirAll(tempBase, 0o700); err != nil {
 		return nil, err
 	}
@@ -127,7 +130,47 @@ func (r *Repo) AddWorktree(ctx context.Context, tempBase, sha string) (*Worktree
 		_ = w.Remove(context.WithoutCancel(ctx))
 		return nil, fmt.Errorf("create worktree for %s: %w", short(sha), err)
 	}
+	if err := r.settleIndex(ctx, dir); err != nil {
+		_ = w.Remove(context.WithoutCancel(ctx))
+		return nil, fmt.Errorf("prepare worktree for %s: %w", short(sha), err)
+	}
 	return w, nil
+}
+
+// settleIndex makes the index of a fresh checkout as fast to use as the
+// index of a working tree that has existed for a while.
+//
+// Git records the index's modification time and cannot trust the cached stat
+// data of a file modified in the same second: such an entry is "racily clean"
+// and its content is compared again by every `git status`. A checkout writes
+// its files and its index within the same second, so every entry of a new
+// worktree starts out racy. A measured command that asks Git about the
+// revision it runs in (a build that embeds `git describe --dirty`, a CLI that
+// reads its repository) would then be slower in the base worktree than in the
+// working tree for a reason that has nothing to do with the change, and it
+// stays that way when the command runs Git without optional locks, which
+// never rewrites the index. Rewriting the index once the clock has moved past
+// the second of the checkout ends that.
+func (r *Repo) settleIndex(ctx context.Context, dir string) error {
+	out, err := r.run(ctx, dir, "rev-parse", "--path-format=absolute", "--git-path", "index")
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(strings.TrimSpace(out))
+	if err != nil {
+		return err
+	}
+	if wait := time.Until(info.ModTime().Truncate(time.Second).Add(time.Second)); wait > 0 {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	_, err = r.run(ctx, dir, "update-index", "-q", "--refresh")
+	return err
 }
 
 // Remove deletes the worktree's directory and its administrative entry. It is
