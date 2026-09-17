@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/yahiko/internal/runner"
 )
 
 // TerminalOptions control the terminal table.
@@ -19,11 +22,7 @@ const (
 	ansiBold   = "\x1b[1m"
 )
 
-func colorResult(r Result, on bool) string {
-	label := verdictLabel(r)
-	if !on {
-		return label
-	}
+func colorLabel(label string, r Result) string {
 	switch r {
 	case ResultPass:
 		return ansiGreen + label + ansiReset
@@ -31,7 +30,7 @@ func colorResult(r Result, on bool) string {
 		return ansiGreen + ansiBold + label + ansiReset
 	case ResultInconclusive:
 		return ansiYellow + label + ansiReset
-	case ResultOverBudget, ResultRegression, ResultError:
+	case ResultOverBudget, ResultRegression, ResultMetricError, ResultError:
 		return ansiRed + ansiBold + label + ansiReset
 	}
 	return label
@@ -65,15 +64,51 @@ func WriteTerminal(w io.Writer, r *Report, o TerminalOptions) error {
 }
 
 func runTable(sb *strings.Builder, s Suite, o TerminalOptions) {
+	groups := groupsShown(s)
+	titled := len(groups) > 1 || hasBudgets(s)
+	for _, g := range groups {
+		switch g {
+		case metric.GroupLatency:
+			if titled {
+				sb.WriteString("latency\n")
+			}
+			latencyRunTable(sb, s, o)
+		case metric.GroupThroughput:
+			sb.WriteString("\nthroughput\n")
+			groupRunTable(sb, s, o, g, []string{"MEDIAN", "MEAN", "MIN"}, func(m *Measurement) []string {
+				return []string{statCell(m, metric.Throughput, median), statCell(m, metric.Throughput, mean), statCell(m, metric.Throughput, minOf)}
+			})
+			sb.WriteString("THROUGHPUT is the declared work divided by the latency of each run; MIN is the slowest run.\n")
+		case metric.GroupCPU:
+			sb.WriteString("\ncpu\n")
+			groupRunTable(sb, s, o, g, []string{"USER", "SYSTEM", "TOTAL", "UTILIZATION"}, func(m *Measurement) []string {
+				return []string{statCell(m, metric.CPUUser, median), statCell(m, metric.CPUSystem, median), statCell(m, metric.CPUTotal, median), statCell(m, metric.CPUUtilization, median)}
+			})
+			sb.WriteString(cpuFootnote + "\n")
+		case metric.GroupMemory:
+			sb.WriteString("\nmemory\n")
+			groupRunTable(sb, s, o, g, []string{"PEAK RSS", "MAX"}, func(m *Measurement) []string {
+				return []string{statCell(m, metric.PeakRSS, median), statCell(m, metric.PeakRSS, maxOf)}
+			})
+			sb.WriteString("PEAK RSS is the median over runs of the largest resident set size of any process in the tree; MAX is the highest run.\n")
+		}
+	}
+	if hasBudgets(s) {
+		sb.WriteString("\nbudgets\n")
+		budgetTable(sb, s, o)
+	}
+}
+
+func latencyRunTable(sb *strings.Builder, s Suite, o TerminalOptions) {
 	t := &table{
 		header: []string{"BENCHMARK", "COMMAND", "MEDIAN", "MEAN", "STDDEV", "RELATIVE", "RESULT"},
 		right:  []bool{false, false, true, true, true, true, false},
 	}
-	var results []Result
+	var results []cellResult
 	for _, b := range s.Benchmarks {
 		if len(b.Commands) == 0 {
 			t.add(b.Name, "-", "-", "-", "-", "-", "")
-			results = append(results, ResultError)
+			results = append(results, benchmarkErrorCell(b))
 			continue
 		}
 		for _, c := range b.Commands {
@@ -92,70 +127,132 @@ func runTable(sb *strings.Builder, s Suite, o TerminalOptions) {
 				}
 			}
 			t.add(b.Name, c.Name, median, mean, stddev, rel, "")
-			results = append(results, c.Result)
+			label, r := groupLabel(c, metric.GroupLatency)
+			results = append(results, cellResult{label, r})
 		}
 	}
 	renderColored(sb, t, results, o.Color)
 	sb.WriteString("RELATIVE is the median divided by the baseline command's median, or by the fastest command's when no baseline is set.\n")
 }
 
-func compareTable(sb *strings.Builder, s Suite, o TerminalOptions) {
-	t := &table{
-		header: []string{"BENCHMARK", "BASE", "HEAD", "CHANGE", "CONFIDENCE", "BUDGET", "RESULT"},
-		right:  []bool{false, true, true, true, true, true, false},
+// groupRunTable renders one metric group of a plain run: benchmark and
+// command, the given value columns, and the group's result.
+func groupRunTable(sb *strings.Builder, s Suite, o TerminalOptions, g metric.Group, headers []string, cells func(*Measurement) []string) {
+	t := &table{header: append(append([]string{"BENCHMARK", "COMMAND"}, headers...), "RESULT")}
+	t.right = make([]bool, len(t.header))
+	for i := range headers {
+		t.right[i+2] = true
 	}
-	var results []Result
+	var results []cellResult
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			row := append(append([]string{b.Name, c.Name}, cells(c.Head)...), "")
+			t.add(row...)
+			label, r := groupLabel(c, g)
+			results = append(results, cellResult{label, r})
+		}
+	}
+	if len(t.rows) == 0 {
+		return
+	}
+	renderColored(sb, t, results, o.Color)
+}
+
+func budgetTable(sb *strings.Builder, s Suite, o TerminalOptions) {
+	t := &table{
+		header: []string{"BENCHMARK", "COMMAND", "METRIC", "BUDGET", "MEASURED", "RESULT"},
+		right:  []bool{false, false, false, true, true, false},
+	}
+	var results []cellResult
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			for _, bc := range c.Budgets {
+				row := budgetView(c, bc)
+				t.add(b.Name, c.Name, row.metric, row.limit, row.actual, "")
+				results = append(results, cellResult{row.label, row.result})
+			}
+		}
+	}
+	renderColored(sb, t, results, o.Color)
+}
+
+func compareTable(sb *strings.Builder, s Suite, o TerminalOptions) {
+	defs := comparedMetrics(s)
+	for i, def := range defs {
+		if len(defs) > 1 {
+			if i > 0 {
+				sb.WriteString("\n")
+			}
+			sb.WriteString(def.Label + "\n")
+		}
+		compareMetricTable(sb, s, o, def)
+	}
+	sb.WriteString("BASE and HEAD show the compared statistic; CONFIDENCE is the bootstrap probability that the change exceeds TOLERANCE in its direction.\n")
+	if hasBudgets(s) {
+		sb.WriteString("\nbudgets (head)\n")
+		budgetTable(sb, s, o)
+	}
+}
+
+func compareMetricTable(sb *strings.Builder, s Suite, o TerminalOptions, def metric.Def) {
+	t := &table{
+		header: []string{"BENCHMARK", "BASE", "HEAD", "DIFF", "CHANGE", "CONFIDENCE", "TOLERANCE", "RESULT"},
+		right:  []bool{false, true, true, true, true, true, true, false},
+	}
+	var results []cellResult
 	for _, b := range s.Benchmarks {
 		if len(b.Commands) == 0 {
-			t.add(b.Name, "-", "-", "-", "-", "-", "")
-			results = append(results, ResultError)
+			if def.Name == metric.Latency {
+				t.add(b.Name, "-", "-", "-", "-", "-", "-", "")
+				results = append(results, benchmarkErrorCell(b))
+			}
 			continue
 		}
 		for _, c := range b.Commands {
+			mc := c.Comparisons[string(def.Name)]
+			if mc == nil && def.Name != metric.Latency {
+				continue
+			}
 			name := b.Name
 			if len(b.Commands) > 1 {
 				name = fmt.Sprintf("%s (%s)", b.Name, c.Name)
 			}
-			base, head, change := "-", "-", "-"
-			metric := "median"
-			if c.Comparison != nil {
-				metric = c.Comparison.Metric
-				change = FormatChange(c.Comparison.ChangePercent)
-			}
-			if c.Base != nil && c.Base.Count > 0 {
-				base = FormatDuration(metricValue(c.Base, metric))
-			}
-			if c.Head != nil && c.Head.Count > 0 {
-				head = FormatDuration(metricValue(c.Head, metric))
-			}
-			t.add(name, base, head, change, FormatConfidence(c.Comparison), FormatTolerance(c.Comparison), "")
-			results = append(results, c.Result)
+			row := comparisonView(mc)
+			t.add(name, row.base, row.head, row.diff, row.change, row.confidence, row.tolerance, "")
+			label, r := comparisonLabel(c, mc, def.Name)
+			results = append(results, cellResult{label, r})
 		}
 	}
 	renderColored(sb, t, results, o.Color)
-	sb.WriteString("BASE and HEAD show the regression metric; CONFIDENCE is the bootstrap probability that the change exceeds BUDGET in its direction.\n")
 }
 
-func metricValue(m *Measurement, metric string) int64 {
-	if metric == "mean" {
-		return m.MeanNS
+// cellResult is the text of a RESULT cell and the result that colors it.
+type cellResult struct {
+	label  string
+	result Result
+}
+
+func benchmarkErrorCell(b Benchmark) cellResult {
+	r := ResultError
+	if b.Error != nil {
+		r = errorResult(runner.FailureKind(b.Error.Kind))
 	}
-	return m.MedianNS
+	return cellResult{verdictLabel(r), r}
 }
 
 // renderColored fills the RESULT column after alignment, so escape codes
 // never skew the column widths.
-func renderColored(sb *strings.Builder, t *table, results []Result, color bool) {
+func renderColored(sb *strings.Builder, t *table, results []cellResult, color bool) {
 	for i := range t.rows {
-		t.rows[i][len(t.rows[i])-1] = verdictLabel(results[i])
+		t.rows[i][len(t.rows[i])-1] = results[i].label
 	}
 	lines := t.lines()
 	sb.WriteString(lines[0] + "\n")
 	for i, line := range lines[1:] {
 		if color && i < len(results) {
-			label := verdictLabel(results[i])
+			label := results[i].label
 			if strings.HasSuffix(line, label) {
-				line = strings.TrimSuffix(line, label) + colorResult(results[i], true)
+				line = strings.TrimSuffix(line, label) + colorLabel(label, results[i].result)
 			}
 		}
 		sb.WriteString(line + "\n")
@@ -185,40 +282,6 @@ func details(sb *strings.Builder, mode Mode, s Suite) {
 	} else if note := GeometricMeanNote(s); note != "" {
 		fmt.Fprintf(sb, "no geometric mean: %s\n", note)
 	}
-}
-
-// commandNotes lists the failures, missed budgets and inconclusive reasons of
-// one command, one line each.
-func commandNotes(mode Mode, b Benchmark, c Command) []string {
-	var notes []string
-	label := fmt.Sprintf("%s / %s", b.Name, c.Name)
-	for _, side := range []sideMeasurement{{"base", c.Base}, {"head", c.Head}} {
-		if side.m == nil || side.m.Error == nil {
-			continue
-		}
-		l := label
-		if mode == ModeCompare {
-			l += " (" + side.name + ")"
-		}
-		notes = append(notes, l+": "+errorLine(side.m.Error))
-		if side.m.Error.Stderr != "" {
-			notes = append(notes, "  stderr: "+oneLine(lastLines(side.m.Error.Stderr, 3)))
-		}
-	}
-	for _, bc := range c.Budgets {
-		if bc.Pass {
-			continue
-		}
-		actual := "no successful run"
-		if bc.ActualNS != nil {
-			actual = FormatDuration(*bc.ActualNS)
-		}
-		notes = append(notes, fmt.Sprintf("%s: budget %s %s %s not met (measured %s)", label, bc.Metric, bc.Operator, FormatDuration(bc.LimitNS), actual))
-	}
-	if c.Comparison != nil && c.Comparison.Reason != "" {
-		notes = append(notes, fmt.Sprintf("%s: inconclusive: %s", label, c.Comparison.Reason))
-	}
-	return notes
 }
 
 func geoLabel(ref string) string {
@@ -256,7 +319,7 @@ func summaryLine(sb *strings.Builder, r *Report) {
 	for _, x := range []struct {
 		n     int
 		label string
-	}{{s.Improved, "improved"}, {s.Inconclusive, "inconclusive"}, {s.OverBudget, "over budget"}, {s.Regression, "regressed"}, {s.Error, "errored"}} {
+	}{{s.Improved, "improved"}, {s.Inconclusive, "inconclusive"}, {s.OverBudget, "over budget"}, {s.Regression, "regressed"}, {s.MetricError, "metric errors"}, {s.Error, "errored"}} {
 		if x.n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", x.n, x.label))
 		}

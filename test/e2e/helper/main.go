@@ -9,61 +9,37 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
+// subcommands maps a helper subcommand to its implementation.
+var subcommands = map[string]func([]string) error{
+	"sleep": sleep, "sleep-from": sleepFrom, "alternate": alternate, "copy": copyFile, "exit": exitWith,
+	"gen": gen, "count": count, "spawn": spawn, "counter": counter, "cache": cache, "write": write,
+	"remove": remove, "require": require, "replace": replace, "consume": consume, "event": event,
+	"interrupt": interrupt, "burn": burn, "alloc": alloc, "records": records, "tree": tree,
+	"print": printOut, "pad": pad,
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: helper <sleep|sleep-from|alternate|copy|exit|gen|count|spawn|counter|cache|write|remove|require|replace|consume|event|interrupt> ...")
+		fail("usage: helper <sleep|sleep-from|alternate|copy|exit|gen|count|spawn|counter|cache|write|remove|require|replace|consume|event|interrupt|burn|alloc|records|tree|print|pad> ...")
 	}
-	args := os.Args[2:]
-	var err error
-	switch os.Args[1] {
-	case "sleep":
-		err = sleep(args)
-	case "sleep-from":
-		err = sleepFrom(args)
-	case "alternate":
-		err = alternate(args)
-	case "copy":
-		err = copyFile(args)
-	case "exit":
-		err = exitWith(args)
-	case "gen":
-		err = gen(args)
-	case "count":
-		err = count(args)
-	case "spawn":
-		err = spawn(args)
-	case "counter":
-		err = counter(args)
-	case "cache":
-		err = cache(args)
-	case "write":
-		err = write(args)
-	case "remove":
-		err = remove(args)
-	case "require":
-		err = require(args)
-	case "replace":
-		err = replace(args)
-	case "consume":
-		err = consume(args)
-	case "event":
-		err = event(args)
-	case "interrupt":
-		err = interrupt(args)
-	default:
-		err = fmt.Errorf("unknown subcommand %q", os.Args[1])
+	run, ok := subcommands[os.Args[1]]
+	if !ok {
+		fail(fmt.Sprintf("unknown subcommand %q", os.Args[1]))
 	}
-	if err != nil {
+	if err := run(os.Args[2:]); err != nil {
 		fail(err.Error())
 	}
 }
@@ -379,4 +355,155 @@ func replace(args []string) error {
 		return fmt.Errorf("%q occurs %d times in %s, want exactly once", args[1], n, args[0])
 	}
 	return os.WriteFile(args[0], []byte(strings.Replace(string(data), args[1], args[2], 1)), 0o600)
+}
+
+// burn DURATION [THREADS]: keep THREADS goroutines (default 1) busy for
+// DURATION of wall-clock time, so the process uses about DURATION x THREADS
+// of CPU time.
+func burn(args []string) error {
+	if err := need(args, 1, "burn DURATION [THREADS]"); err != nil {
+		return err
+	}
+	d, err := time.ParseDuration(args[0])
+	if err != nil {
+		return err
+	}
+	threads := 1
+	if len(args) > 1 {
+		if threads, err = strconv.Atoi(args[1]); err != nil || threads < 1 {
+			return fmt.Errorf("invalid thread count %q", args[1])
+		}
+	}
+	runtime.GOMAXPROCS(threads + 1)
+	deadline := time.Now().Add(d)
+	var wg sync.WaitGroup
+	for range threads {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			x := uint64(0)
+			for time.Now().Before(deadline) {
+				for range 1000 {
+					x = x*6364136223846793005 + 1442695040888963407
+				}
+			}
+			_ = x
+		}()
+	}
+	wg.Wait()
+	return nil
+}
+
+// alloc MIB [HOLD]: allocate MIB mebibytes, write to every page so they are
+// resident, and keep them for HOLD (default 50ms).
+func alloc(args []string) error {
+	if err := need(args, 1, "alloc MIB [HOLD]"); err != nil {
+		return err
+	}
+	mib, err := strconv.Atoi(args[0])
+	if err != nil || mib < 0 {
+		return fmt.Errorf("invalid size %q", args[0])
+	}
+	hold := 50 * time.Millisecond
+	if len(args) > 1 {
+		if hold, err = time.ParseDuration(args[1]); err != nil {
+			return err
+		}
+	}
+	buf := make([]byte, mib<<20)
+	for i := 0; i < len(buf); i += 4096 {
+		buf[i] = byte(i)
+	}
+	time.Sleep(hold)
+	runtime.KeepAlive(buf)
+	return nil
+}
+
+// records N [DELAY]: process N records, hashing each one, and sleep DELAY
+// (default 0) in total; print how many were processed.
+func records(args []string) error {
+	if err := need(args, 1, "records N [DELAY]"); err != nil {
+		return err
+	}
+	n, err := strconv.Atoi(args[0])
+	if err != nil || n < 0 {
+		return fmt.Errorf("invalid record count %q", args[0])
+	}
+	if len(args) > 1 {
+		d, err := time.ParseDuration(args[1])
+		if err != nil {
+			return err
+		}
+		time.Sleep(d)
+	}
+	var sum [32]byte
+	for i := range n {
+		sum = sha256.Sum256(append(sum[:], strconv.Itoa(i)...))
+	}
+	fmt.Printf("processed %d records %x\n", n, sum[:4])
+	return nil
+}
+
+// tree CHILDREN -- SUBCOMMAND ARGS...: run CHILDREN copies of this helper
+// with SUBCOMMAND at the same time and wait for all of them, doing no work
+// itself. It proves that CPU time and memory are measured for the process
+// tree rather than only the process yahiko started.
+func tree(args []string) error {
+	if len(args) < 3 || args[1] != "--" {
+		return errors.New("usage: helper tree CHILDREN -- SUBCOMMAND ARGS")
+	}
+	n, err := strconv.Atoi(args[0])
+	if err != nil || n < 1 {
+		return fmt.Errorf("invalid child count %q", args[0])
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	cmds := make([]*exec.Cmd, n)
+	for i := range cmds {
+		cmds[i] = exec.Command(exe, args[2:]...)
+		cmds[i].Stdout, cmds[i].Stderr = os.Stdout, os.Stderr
+		if err := cmds[i].Start(); err != nil {
+			return err
+		}
+	}
+	var errs []error
+	for _, c := range cmds {
+		errs = append(errs, c.Wait())
+	}
+	return errors.Join(errs...)
+}
+
+// print STDOUT [STDERR]: write a line to standard output and, when given, one
+// to standard error.
+func printOut(args []string) error {
+	if err := need(args, 1, "print STDOUT [STDERR]"); err != nil {
+		return err
+	}
+	fmt.Println(args[0])
+	if len(args) > 1 {
+		fmt.Fprintln(os.Stderr, args[1])
+	}
+	return nil
+}
+
+// pad BYTES FILE: write a file of exactly BYTES bytes, as a throughput input.
+func pad(args []string) error {
+	if err := need(args, 2, "pad BYTES FILE"); err != nil {
+		return err
+	}
+	n, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil || n < 0 {
+		return fmt.Errorf("invalid size %q", args[0])
+	}
+	f, err := os.Create(args[1])
+	if err != nil {
+		return err
+	}
+	w := bufio.NewWriter(f)
+	for i := int64(0); i < n; i++ {
+		_ = w.WriteByte('x')
+	}
+	return errors.Join(w.Flush(), f.Close())
 }

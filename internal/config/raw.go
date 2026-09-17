@@ -34,6 +34,7 @@ type RawDefaults struct {
 	Stdout     *string           `yaml:"stdout"`
 	Stderr     *string           `yaml:"stderr"`
 	ExitCodes  []int             `yaml:"exit_codes"`
+	Metrics    *RawMetrics       `yaml:"metrics"`
 	Regression *RawRegression    `yaml:"regression"`
 }
 
@@ -68,6 +69,7 @@ type RawBenchmark struct {
 	Cleanup     []RawExec            `yaml:"cleanup"`
 	Baseline    string               `yaml:"baseline"`
 	Commands    Commands             `yaml:"commands"`
+	Metrics     *RawMetrics          `yaml:"metrics"`
 	Budget      map[string]RawBudget `yaml:"budget"`
 	Regression  *RawRegression       `yaml:"regression"`
 }
@@ -84,22 +86,84 @@ type RawCommand struct {
 	ExitCodes []int             `yaml:"exit_codes"`
 }
 
-// RawBudget is the absolute budget of one command.
-type RawBudget struct {
-	Mean   *BudgetExpr `yaml:"mean"`
-	Median *BudgetExpr `yaml:"median"`
-	Min    *BudgetExpr `yaml:"min"`
-	Max    *BudgetExpr `yaml:"max"`
+// RawMetrics selects what a benchmark measures besides latency. In defaults
+// it holds everything but throughput, whose work belongs to one benchmark.
+type RawMetrics struct {
+	// Latency is always measured; `latency: true` only says so.
+	Latency     *bool          `yaml:"latency"`
+	Throughput  *RawThroughput `yaml:"throughput"`
+	CPU         *RawCollector  `yaml:"cpu"`
+	Memory      *RawCollector  `yaml:"memory"`
+	Unsupported *string        `yaml:"unsupported"`
 }
 
-// RawRegression configures how a base revision and the working tree are compared.
+// RawThroughput declares the work one run of the benchmark does.
+type RawThroughput struct {
+	Work RawWork `yaml:"work"`
+}
+
+// RawWork is the amount of work of one run: a number, or the size of a file.
+type RawWork struct {
+	Value    *float64 `yaml:"value"`
+	FileSize *string  `yaml:"file_size"`
+	Unit     *string  `yaml:"unit"`
+}
+
+// RawCollector enables a group of process-tree metrics: true, false, or a
+// mapping that names the scope.
+type RawCollector struct {
+	Scope   string `yaml:"scope"`
+	enabled bool
+}
+
+// RawBudget is the absolute budget of one command. mean, median, min and max
+// are shorthands for the same keys under latency.
+type RawBudget struct {
+	Mean       *string           `yaml:"mean"`
+	Median     *string           `yaml:"median"`
+	Min        *string           `yaml:"min"`
+	Max        *string           `yaml:"max"`
+	Latency    map[string]string `yaml:"latency"`
+	Throughput map[string]string `yaml:"throughput"`
+	CPU        *RawCPUBudget     `yaml:"cpu"`
+	Memory     *RawMemoryBudget  `yaml:"memory"`
+}
+
+// RawCPUBudget holds the budgets of the CPU metrics, each keyed by
+// aggregation.
+type RawCPUBudget struct {
+	User        map[string]string `yaml:"user"`
+	System      map[string]string `yaml:"system"`
+	Total       map[string]string `yaml:"total"`
+	Utilization map[string]string `yaml:"utilization"`
+}
+
+// RawMemoryBudget holds the budgets of the memory metrics.
+type RawMemoryBudget struct {
+	PeakRSS map[string]string `yaml:"peak_rss"`
+}
+
+// RawRegression configures how a base revision and the working tree are
+// compared. The top-level metric, max_percent and min_difference apply to
+// latency; throughput, cpu and memory carry their own.
 type RawRegression struct {
-	Metric     *string  `yaml:"metric"`
-	MaxPercent *Percent `yaml:"max_percent"`
-	Confidence *float64 `yaml:"confidence"`
-	MinSamples *int     `yaml:"min_samples"`
-	MaxCV      *float64 `yaml:"max_cv"`
-	Commands   []string `yaml:"commands"`
+	Metric        *string              `yaml:"metric"`
+	MaxPercent    *Percent             `yaml:"max_percent"`
+	MinDifference *string              `yaml:"min_difference"`
+	Confidence    *float64             `yaml:"confidence"`
+	MinSamples    *int                 `yaml:"min_samples"`
+	MaxCV         *float64             `yaml:"max_cv"`
+	Commands      []string             `yaml:"commands"`
+	Throughput    *RawMetricRegression `yaml:"throughput"`
+	CPU           *RawMetricRegression `yaml:"cpu"`
+	Memory        *RawMetricRegression `yaml:"memory"`
+}
+
+// RawMetricRegression is the tolerance of one metric in a comparison.
+type RawMetricRegression struct {
+	Metric        *string  `yaml:"metric"`
+	MaxPercent    *Percent `yaml:"max_percent"`
+	MinDifference *string  `yaml:"min_difference"`
 }
 
 // RawReport lists the report files written after every run.

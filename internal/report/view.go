@@ -1,0 +1,363 @@
+package report
+
+import (
+	"fmt"
+	"math"
+	"strings"
+
+	"github.com/nao1215/yahiko/internal/metric"
+)
+
+// The view helpers turn judged results into the text the terminal table,
+// Markdown and the job summary show. Judgement happens in build.go on the
+// stored values; nothing here decides a result, it only formats one.
+
+// Labels shown in a RESULT column besides the Result values.
+const (
+	labelUnsupported = "UNSUPPORTED"
+	labelSkipped     = "SKIPPED"
+	labelNoData      = "NO DATA"
+	labelFail        = "FAIL"
+)
+
+// groupsShown returns the metric groups any command of the suite measured,
+// or tried to, in report order. Latency is always first.
+func groupsShown(s Suite) []metric.Group {
+	shown := map[metric.Group]bool{metric.GroupLatency: true}
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			for _, m := range []*Measurement{c.Head, c.Base} {
+				if m == nil {
+					continue
+				}
+				for _, ms := range m.Metrics {
+					if ms.Status != StatusNotRequested {
+						shown[metric.Group(ms.Group)] = true
+					}
+				}
+			}
+		}
+	}
+	var out []metric.Group
+	for _, g := range metric.Groups() {
+		if shown[g] {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+func hasBudgets(s Suite) bool {
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			if len(c.Budgets) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// metricSummary returns a metric of a measurement, or nil.
+func metricSummary(m *Measurement, n metric.Name) *MetricSummary {
+	if m == nil || m.Metrics == nil {
+		return nil
+	}
+	return m.Metrics[string(n)]
+}
+
+// groupLabel is the RESULT cell of one command in the table of one metric
+// group: an error first, then UNSUPPORTED, then the worst of the group's
+// budgets and comparisons.
+func groupLabel(c Command, g metric.Group) (string, Result) {
+	if c.Result.isError() {
+		return verdictLabel(c.Result), c.Result
+	}
+	result := ResultPass
+	unsupported := false
+	for _, def := range metric.InGroup(g) {
+		for _, m := range []*Measurement{c.Head, c.Base} {
+			if ms := metricSummary(m, def.Name); ms != nil && ms.Status == StatusUnsupported {
+				unsupported = true
+			}
+		}
+		for _, bc := range c.Budgets {
+			if bc.Metric == string(def.Name) && bc.Status == BudgetFail {
+				result = worst(result, ResultOverBudget)
+			}
+		}
+		if mc := c.Comparisons[string(def.Name)]; mc != nil {
+			result = worst(result, verdictResult(mc.Verdict))
+		}
+	}
+	if unsupported && result == ResultPass {
+		return labelUnsupported, ResultInconclusive
+	}
+	return verdictLabel(result), result
+}
+
+func verdictResult(v string) Result {
+	switch v {
+	case string(ResultRegression):
+		return ResultRegression
+	case string(ResultImproved):
+		return ResultImproved
+	case string(ResultInconclusive):
+		return ResultInconclusive
+	}
+	return ResultPass
+}
+
+// statCell formats one statistic of a metric, or "-" when it has none.
+func statCell(m *Measurement, n metric.Name, pick func(*MetricStats) float64) string {
+	ms := metricSummary(m, n)
+	if ms == nil {
+		return "-"
+	}
+	switch ms.Status {
+	case StatusUnsupported:
+		return "unsupported"
+	case StatusFailed:
+		return "failed"
+	case StatusNotRequested:
+		return "-"
+	}
+	if ms.Stats == nil {
+		return "-"
+	}
+	def := metric.MustLookup(n)
+	return metric.Format(def.Kind, pick(ms.Stats), workUnitOf(ms))
+}
+
+func workUnitOf(ms *MetricSummary) string {
+	if ms == nil || ms.Work == nil {
+		return ""
+	}
+	return ms.Work.Unit
+}
+
+func median(st *MetricStats) float64 { return st.Median }
+func mean(st *MetricStats) float64   { return st.Mean }
+func maxOf(st *MetricStats) float64  { return st.Max }
+func minOf(st *MetricStats) float64  { return st.Min }
+
+func percentileOf(p string) func(*MetricStats) float64 {
+	return func(st *MetricStats) float64 {
+		if v, ok := st.Percentiles[p]; ok {
+			return v
+		}
+		return math.NaN()
+	}
+}
+
+// budgetRow is one budget as table cells.
+type budgetRow struct {
+	metric, limit, actual, label string
+	result                       Result
+}
+
+func budgetView(c Command, bc BudgetCheck) budgetRow {
+	def := metric.MustLookup(metric.Name(bc.Metric))
+	unit := workUnitFromUnit(bc.Unit)
+	row := budgetRow{
+		metric: def.Label + " " + bc.Aggregation,
+		limit:  bc.Operator + " " + metric.Format(def.Kind, bc.Limit, unit),
+		actual: "-",
+	}
+	if bc.Actual != nil {
+		row.actual = metric.Format(def.Kind, *bc.Actual, unit)
+	}
+	switch bc.Status {
+	case BudgetPass:
+		row.label, row.result = verdictLabel(ResultPass), ResultPass
+	case BudgetFail:
+		row.label, row.result = labelFail, ResultOverBudget
+	case BudgetSkipped:
+		row.label, row.result = labelSkipped, ResultInconclusive
+	default:
+		row.label, row.result = labelNoData, ResultError
+		if c.Result.isError() {
+			row.label, row.result = verdictLabel(c.Result), c.Result
+		}
+	}
+	return row
+}
+
+// workUnitFromUnit recovers the work unit from a rate unit such as
+// "records/s".
+func workUnitFromUnit(unit string) string {
+	return strings.TrimSuffix(unit, "/s")
+}
+
+// comparisonRow is one metric comparison as table cells.
+type comparisonRow struct {
+	base, head, diff, change, interval, confidence, tolerance string
+}
+
+func comparisonView(mc *MetricComparison) comparisonRow {
+	row := comparisonRow{base: "-", head: "-", diff: "-", change: "-", interval: "-", confidence: "-", tolerance: "-"}
+	if mc == nil {
+		return row
+	}
+	def := metric.MustLookup(metric.Name(mc.Metric))
+	unit := workUnitFromUnit(mc.Unit)
+	row.tolerance = FormatMetricTolerance(mc)
+	if mc.Verdict == VerdictSkipped {
+		return row
+	}
+	if mc.Base != nil && mc.Head != nil && mc.Difference != nil {
+		row.base = metric.Format(def.Kind, *mc.Base, unit)
+		row.head = metric.Format(def.Kind, *mc.Head, unit)
+		sign := "+"
+		if *mc.Difference < 0 {
+			sign = ""
+		}
+		row.diff = sign + metric.Format(def.Kind, *mc.Difference, unit)
+		row.change = FormatChange(mc.ChangePercent)
+		row.interval = fmt.Sprintf("%s … %s", FormatChange(mc.CILowPercent), FormatChange(mc.CIHighPercent))
+	}
+	row.confidence = formatMetricConfidence(mc)
+	return row
+}
+
+// FormatMetricTolerance renders the tolerated degradation in the direction
+// the metric degrades: +10% for latency, -8% for throughput.
+func FormatMetricTolerance(mc *MetricComparison) string {
+	if mc == nil {
+		return "-"
+	}
+	sign := "+"
+	if mc.Better == string(metric.HigherIsBetter) {
+		sign = "-"
+	}
+	return sign + trimFloat(mc.MaxPercent) + "%"
+}
+
+// formatMetricConfidence renders the probability that the change is real in
+// the direction it was observed: worse or better.
+func formatMetricConfidence(mc *MetricComparison) string {
+	degrading := mc.ChangePercent > 0
+	if mc.Better == string(metric.HigherIsBetter) {
+		degrading = mc.ChangePercent < 0
+	}
+	p := mc.ProbImprovement
+	if degrading {
+		p = mc.ProbRegression
+	}
+	if p < 0.5 {
+		return "low"
+	}
+	return fmt.Sprintf("%.1f%%", p*100)
+}
+
+// comparedMetrics lists the metrics any command of the suite compared, in
+// report order.
+func comparedMetrics(s Suite) []metric.Def {
+	seen := map[string]bool{}
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			for name := range c.Comparisons {
+				seen[name] = true
+			}
+		}
+	}
+	var out []metric.Def
+	for _, def := range metric.Defs() {
+		if seen[string(def.Name)] || def.Name == metric.Latency {
+			out = append(out, def)
+		}
+	}
+	return out
+}
+
+// comparisonLabel is the RESULT cell of one metric comparison.
+func comparisonLabel(c Command, mc *MetricComparison, name metric.Name) (string, Result) {
+	if c.Result.isError() {
+		return verdictLabel(c.Result), c.Result
+	}
+	if mc == nil {
+		return "-", ResultPass
+	}
+	if mc.Verdict == VerdictSkipped {
+		return labelSkipped, ResultInconclusive
+	}
+	result := verdictResult(mc.Verdict)
+	for _, bc := range c.Budgets {
+		if bc.Metric == string(name) && bc.Status == BudgetFail {
+			result = worst(result, ResultOverBudget)
+		}
+	}
+	return verdictLabel(result), result
+}
+
+// commandNotes lists the failures, missed or skipped budgets, unmeasured
+// metrics and inconclusive reasons of one command, one line each.
+func commandNotes(mode Mode, b Benchmark, c Command) []string {
+	var notes []string
+	label := fmt.Sprintf("%s / %s", b.Name, c.Name)
+	for _, side := range []sideMeasurement{{"base", c.Base}, {"head", c.Head}} {
+		if side.m == nil {
+			continue
+		}
+		l := label
+		if mode == ModeCompare {
+			l += " (" + side.name + ")"
+		}
+		if side.m.Error != nil {
+			notes = append(notes, l+": "+errorLine(side.m.Error))
+			if side.m.Error.Stderr != "" {
+				notes = append(notes, "  stderr: "+oneLine(lastLines(side.m.Error.Stderr, 3)))
+			}
+		}
+		for _, g := range metric.Groups() {
+			if reason := unsupportedReason(side.m, g); reason != "" {
+				notes = append(notes, fmt.Sprintf("%s: %s not measured: %s", l, g, reason))
+			}
+		}
+	}
+	for _, bc := range c.Budgets {
+		switch bc.Status {
+		case BudgetPass:
+		case BudgetFail:
+			row := budgetView(c, bc)
+			notes = append(notes, fmt.Sprintf("%s: budget %s %s not met (measured %s)", label, budgetName(bc), row.limit, row.actual))
+		case BudgetSkipped:
+			notes = append(notes, fmt.Sprintf("%s: budget %s skipped: the metric is unsupported here", label, budgetName(bc)))
+		}
+	}
+	for _, def := range metric.Defs() {
+		mc := c.Comparisons[string(def.Name)]
+		if mc == nil || mc.Verdict != string(ResultInconclusive) || mc.Reason == "" {
+			continue
+		}
+		if def.Name == metric.Latency {
+			notes = append(notes, fmt.Sprintf("%s: inconclusive: %s", label, mc.Reason))
+			continue
+		}
+		notes = append(notes, fmt.Sprintf("%s: %s inconclusive: %s", label, def.Label, mc.Reason))
+	}
+	return notes
+}
+
+// budgetName names a budget in a note: "median" for the latency budgets
+// suites have always had, "peak rss max" for the others.
+func budgetName(bc BudgetCheck) string {
+	if bc.Metric == string(metric.Latency) {
+		return bc.Aggregation
+	}
+	return metric.MustLookup(metric.Name(bc.Metric)).Label + " " + bc.Aggregation
+}
+
+// unsupportedReason returns the reason a group was not measured on a side,
+// once per group.
+func unsupportedReason(m *Measurement, g metric.Group) string {
+	for _, def := range metric.InGroup(g) {
+		if ms := metricSummary(m, def.Name); ms != nil && ms.Status == StatusUnsupported {
+			return ms.Reason
+		}
+	}
+	return ""
+}
+
+// cpuFootnote explains utilization above 100%.
+const cpuFootnote = "CPU values are medians over runs of the process tree. Utilization is CPU time divided by wall-clock time; above 100% means more than one CPU was busy."

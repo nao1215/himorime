@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/nao1215/yahiko/internal/config"
+	"github.com/nao1215/yahiko/internal/metric"
 	"github.com/nao1215/yahiko/internal/proc"
 	"github.com/nao1215/yahiko/internal/redact"
 )
@@ -53,6 +54,51 @@ type Runner struct {
 	Environ func() []string
 	// Redactor masks secrets in failure messages.
 	Redactor *redact.Redactor
+	// Exec starts one process; proc.Run when nil. Tests replace it to
+	// simulate what a platform's collector reports.
+	Exec func(ctx context.Context, s proc.Spec, now proc.Clock) (proc.Result, error)
+	// Capabilities reports what the platform can measure;
+	// proc.Capabilities when nil.
+	Capabilities func() (cpu, memory error)
+}
+
+func (r *Runner) exec(ctx context.Context, s proc.Spec) (proc.Result, error) {
+	if r.Exec != nil {
+		return r.Exec(ctx, s, r.Clock)
+	}
+	return proc.Run(ctx, s, r.Clock)
+}
+
+// MetricProblem is a requested metric group the platform cannot measure.
+type MetricProblem struct {
+	Benchmark string
+	Group     metric.Group
+	Reason    string
+	// Skip is true when the benchmark's unsupported policy skips the group.
+	Skip bool
+}
+
+// UnsupportedMetrics lists the metric groups the benchmarks request that this
+// platform cannot measure at all. It runs nothing, so a suite whose policy is
+// fail can be stopped before any build or setup.
+func (r *Runner) UnsupportedMetrics(benchmarks []config.Benchmark) []MetricProblem {
+	capabilities := proc.Capabilities
+	if r.Capabilities != nil {
+		capabilities = r.Capabilities
+	}
+	cpuErr, memErr := capabilities()
+	var out []MetricProblem
+	for _, b := range benchmarks {
+		for _, x := range []struct {
+			group metric.Group
+			err   error
+		}{{metric.GroupCPU, cpuErr}, {metric.GroupMemory, memErr}} {
+			if x.err != nil && b.Metrics.Collects(x.group) {
+				out = append(out, MetricProblem{Benchmark: b.Name, Group: x.group, Reason: x.err.Error(), Skip: b.Metrics.Unsupported == config.UnsupportedSkip})
+			}
+		}
+	}
+	return out
 }
 
 func (r *Runner) logf(format string, args ...any) {
@@ -136,6 +182,8 @@ type sideState struct {
 	vars    config.Vars
 	stdin   string
 	setupOK bool
+	// suiteDir is the directory relative paths of the suite resolve from.
+	suiteDir string
 }
 
 // Measure runs one benchmark across the given sides. With more than one side
@@ -158,6 +206,20 @@ func (r *Runner) Measure(ctx context.Context, s *config.Suite, b config.Benchmar
 	}
 	defer r.teardown(ctx, s, b, states, &res)
 
+	skipped := map[metric.Group]string{}
+	for _, p := range r.UnsupportedMetrics([]config.Benchmark{b}) {
+		if !p.Skip {
+			res.Failure = &Failure{
+				Kind:    FailMetricUnsupported,
+				Metric:  p.Group,
+				Message: fmt.Sprintf("metrics.%s was requested, but %s; set metrics.unsupported: skip to measure the rest without it", p.Group, p.Reason),
+			}
+			return res
+		}
+		skipped[p.Group] = p.Reason
+		r.logf("benchmark %q: skipping %s metrics: %s", b.Name, p.Group, p.Reason)
+	}
+
 	for _, st := range states {
 		if f := r.prepareSide(ctx, s, b, st); f != nil {
 			res.Failure = f
@@ -166,6 +228,11 @@ func (r *Runner) Measure(ctx context.Context, s *config.Suite, b config.Benchmar
 	}
 
 	units := commandUnits(b, sides, &res)
+	for _, u := range units {
+		for g, reason := range skipped {
+			u.m.skip(g, reason)
+		}
+	}
 	mode := fmt.Sprintf("%d runs", runs)
 	if runs == 0 {
 		mode = fmt.Sprintf("adaptive runs (min %d, max %d, min time %s)", b.MinRuns, b.MaxRuns, b.MinTime)
@@ -288,6 +355,7 @@ func (r *Runner) prepareSide(ctx context.Context, s *config.Suite, b config.Benc
 		return &Failure{Kind: FailInternal, Message: fmt.Sprintf("create workdir: %v", err)}
 	}
 	st.workdir = wd
+	st.suiteDir = s.Dir
 	st.vars = config.Vars{Artifact: st.side.Artifact, Root: st.side.Root, Workdir: wd, Exe: exeSuffix(), LookupEnv: r.lookupEnv}
 
 	if b.Stdin.Kind == config.StdinContent {
@@ -392,7 +460,7 @@ func (r *Runner) runHook(ctx context.Context, e config.Exec, vars config.Vars, d
 	spec.Stdout = nil
 	spec.Stderr = errFile
 	spec.Timeout = e.Timeout
-	res, err := proc.Run(ctx, spec, r.Clock)
+	res, err := r.exec(ctx, spec)
 	if res.Canceled {
 		return &Failure{Kind: FailInterrupted, Message: label + ": interrupted"}
 	}
@@ -428,46 +496,24 @@ func (r *Runner) runOnce(ctx context.Context, s *config.Suite, b config.Benchmar
 	if f != nil {
 		return f
 	}
+	work, f := r.work(b, st)
+	if f != nil {
+		return f
+	}
+	_, cpuSkipped := u.m.Skipped(metric.GroupCPU)
+	_, memSkipped := u.m.Skipped(metric.GroupMemory)
+	wantCPU := b.Metrics.CPU && !cpuSkipped
+	wantMemory := b.Metrics.Memory && !memSkipped
+	spec.CollectUsage = wantCPU || wantMemory
 
-	var closers []io.Closer
-	defer func() {
-		for _, c := range closers {
-			_ = c.Close()
-		}
-	}()
-	if st.stdin != "" {
-		in, err := os.Open(st.stdin)
-		if err != nil {
-			return &Failure{Kind: FailSetup, Message: fmt.Sprintf("open stdin fixture: %v", redactErr(r.Redactor, err))}
-		}
-		closers = append(closers, in)
-		spec.Stdin = in
+	stderr, closeIO, f := r.openIO(&spec, c, st)
+	defer closeIO()
+	if f != nil {
+		return f
 	}
-	outPath, err := r.outputPath(c.Stdout, st, c.Name+".stdout", false)
-	if err != nil {
-		return &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
-	}
-	if outPath != "" {
-		stdout, err := openOutput(outPath)
-		if err != nil {
-			return &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
-		}
-		closers = append(closers, stdout)
-		spec.Stdout = stdout
-	}
-	errPath, err := r.outputPath(c.Stderr, st, c.Name+".stderr", true)
-	if err != nil {
-		return &Failure{Kind: FailPath, Message: fmt.Sprintf("stderr: %v", err)}
-	}
-	stderr, err := openOutput(errPath)
-	if err != nil {
-		return &Failure{Kind: FailPath, Message: fmt.Sprintf("stderr: %v", err)}
-	}
-	closers = append(closers, stderr)
-	spec.Stderr = stderr
 	spec.Timeout = c.Timeout
 
-	res, err := proc.Run(ctx, spec, r.Clock)
+	res, err := r.exec(ctx, spec)
 	if res.Canceled {
 		return &Failure{Kind: FailInterrupted, Message: "stopped before the benchmark completed"}
 	}
@@ -489,11 +535,126 @@ func (r *Runner) runOnce(ctx context.Context, s *config.Suite, b config.Benchmar
 			Stderr:   r.tail(stderr.Name()),
 		}
 	}
-	if record {
-		u.m.Samples = append(u.m.Samples, res.Elapsed)
-		u.total += res.Elapsed
+	return recordRun(u, b, res, work, wantCPU, wantMemory, record)
+}
+
+// recordRun checks the usage of a successful run and, for a measured run,
+// appends its samples. Every collected slice grows together with Samples.
+func recordRun(u *unit, b config.Benchmark, res proc.Result, work float64, wantCPU, wantMemory, record bool) *Failure {
+	if wantCPU {
+		if f := usageFailure(u.m, metric.GroupCPU, res.Usage.CPUErr, b.Metrics.Unsupported); f != nil {
+			return f
+		}
+	}
+	if wantMemory {
+		if f := usageFailure(u.m, metric.GroupMemory, res.Usage.MemoryErr, b.Metrics.Unsupported); f != nil {
+			return f
+		}
+	}
+	if !record {
+		return nil
+	}
+	u.m.Samples = append(u.m.Samples, res.Elapsed)
+	u.total += res.Elapsed
+	if _, skipped := u.m.Skipped(metric.GroupCPU); wantCPU && !skipped {
+		u.m.CPUUser = append(u.m.CPUUser, res.Usage.UserCPU)
+		u.m.CPUSystem = append(u.m.CPUSystem, res.Usage.SystemCPU)
+	}
+	if _, skipped := u.m.Skipped(metric.GroupMemory); wantMemory && !skipped {
+		u.m.PeakRSS = append(u.m.PeakRSS, res.Usage.PeakRSS)
+	}
+	if b.Metrics.Throughput != nil {
+		u.m.Work = append(u.m.Work, work)
 	}
 	return nil
+}
+
+// usageFailure classifies a missing usage value. An unsupported value under
+// the skip policy marks the group skipped for this measurement and is not a
+// failure; under the fail policy it is. Any other error is a failed
+// collection, which no policy skips: the platform claimed to support it.
+func usageFailure(m *Measurement, g metric.Group, err error, policy string) *Failure {
+	if err == nil {
+		return nil
+	}
+	if proc.IsUnsupported(err) {
+		if policy == config.UnsupportedSkip {
+			m.skip(g, err.Error())
+			return nil
+		}
+		return &Failure{Kind: FailMetricUnsupported, Metric: g, Message: fmt.Sprintf("metrics.%s: %v; set metrics.unsupported: skip to measure the rest without it", g, err)}
+	}
+	return &Failure{Kind: FailMetricCollection, Metric: g, Message: fmt.Sprintf("metrics.%s: %v", g, err)}
+}
+
+// work returns the declared work of the next run. A file_size is read now,
+// after prepare_each and before the process starts, so producing or reading
+// the file is never part of the measured time.
+func (r *Runner) work(b config.Benchmark, st *sideState) (float64, *Failure) {
+	w := b.Metrics.Throughput
+	if w == nil {
+		return 0, nil
+	}
+	if w.FileSize == "" {
+		return w.Value, nil
+	}
+	p, f := r.resolvePath(w.FileSize, st.vars, st.suiteDir, st.side.ProjectRoot, st.workdir)
+	if f != nil {
+		return 0, &Failure{Kind: FailMetricCollection, Metric: metric.GroupThroughput, Message: "throughput work file_size: " + f.Message}
+	}
+	info, err := os.Stat(p)
+	switch {
+	case err != nil:
+		return 0, &Failure{Kind: FailMetricCollection, Metric: metric.GroupThroughput, Message: fmt.Sprintf("throughput work file_size %s: %v", w.FileSize, redactErr(r.Redactor, err))}
+	case info.IsDir():
+		return 0, &Failure{Kind: FailMetricCollection, Metric: metric.GroupThroughput, Message: fmt.Sprintf("throughput work file_size %s is a directory", w.FileSize)}
+	case info.Size() == 0:
+		return 0, &Failure{Kind: FailMetricCollection, Metric: metric.GroupThroughput, Message: fmt.Sprintf("throughput work file_size %s is empty; throughput needs work greater than zero", w.FileSize)}
+	}
+	return float64(info.Size()), nil
+}
+
+// openIO connects the stdin fixture and the stdout and stderr files of one
+// run to spec. It returns the stderr file, whose tail a failure shows, and a
+// function that closes everything opened, to be called in every case.
+func (r *Runner) openIO(spec *proc.Spec, c config.Command, st *sideState) (*os.File, func(), *Failure) {
+	var closers []io.Closer
+	closeAll := func() {
+		for _, c := range closers {
+			_ = c.Close()
+		}
+	}
+	if st.stdin != "" {
+		in, err := os.Open(st.stdin)
+		if err != nil {
+			return nil, closeAll, &Failure{Kind: FailSetup, Message: fmt.Sprintf("open stdin fixture: %v", redactErr(r.Redactor, err))}
+		}
+		closers = append(closers, in)
+		spec.Stdin = in
+	}
+	outPath, err := r.outputPath(c.Stdout, st, c.Name+".stdout", false)
+	if err != nil {
+		return nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
+	}
+	if outPath != "" {
+		stdout, err := openOutput(outPath)
+		if err != nil {
+			return nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
+		}
+		closers = append(closers, stdout)
+		spec.Stdout = stdout
+	}
+	errPath, err := r.outputPath(c.Stderr, st, c.Name+".stderr", true)
+	if err != nil {
+		return nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stderr: %v", err)}
+	}
+	stderr, err := openOutput(errPath)
+	if err != nil {
+		return nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stderr: %v", err)}
+	}
+	closers = append(closers, stderr)
+	spec.Stderr = stderr
+	return stderr, closeAll, nil
 }
 
 // outputPath decides where a command's stdout or stderr goes for one run.

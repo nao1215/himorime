@@ -61,7 +61,7 @@ Builds the suite's artifact when a build section exists, then measures every sel
 | Flag | Description |
 |---|---|
 | `--filter REGEXP` | select benchmarks whose name matches this regexp |
-| `--format FORMAT` | report format written to stdout or --output: table, json, csv, markdown, github (default table) |
+| `--format FORMAT` | report format written to stdout or --output: table, json, csv, markdown, github, samples-csv (default table) |
 | `--no-color` | disable colors in the table (also honored: NO_COLOR) |
 | `--output FILE` | write the report to this file instead of stdout |
 | `--quiet` | do not print progress to stderr |
@@ -85,7 +85,7 @@ Checks REF out into a temporary Git worktree, builds both REF and the current wo
 | `--against REVISION` | the Git revision to compare the working tree with (required) |
 | `--fail-on-inconclusive` | exit 1 when a comparison is inconclusive |
 | `--filter REGEXP` | select benchmarks whose name matches this regexp |
-| `--format FORMAT` | report format written to stdout or --output: table, json, csv, markdown, github (default table) |
+| `--format FORMAT` | report format written to stdout or --output: table, json, csv, markdown, github, samples-csv (default table) |
 | `--no-color` | disable colors in the table (also honored: NO_COLOR) |
 | `--output FILE` | write the report to this file instead of stdout |
 | `--quiet` | do not print progress to stderr |
@@ -109,7 +109,7 @@ Like compare, with CI defaults: no colors, and a Markdown summary appended to $G
 | `--against REVISION` | the base revision; defaults to $YAHIKO_BASE_REF, then the GitHub Actions event |
 | `--fail-on-inconclusive` | exit 1 when a comparison is inconclusive |
 | `--filter REGEXP` | select benchmarks whose name matches this regexp |
-| `--format FORMAT` | report format written to stdout or --output: table, json, csv, markdown, github (default table) |
+| `--format FORMAT` | report format written to stdout or --output: table, json, csv, markdown, github, samples-csv (default table) |
 | `--no-color` | disable colors in the table (also honored: NO_COLOR) |
 | `--output FILE` | write the report to this file instead of stdout |
 | `--quiet` | do not print progress to stderr |

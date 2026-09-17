@@ -13,6 +13,7 @@ import (
 
 	"github.com/nao1215/yahiko/internal/config"
 	"github.com/nao1215/yahiko/internal/exitcode"
+	"github.com/nao1215/yahiko/internal/metric"
 	"github.com/nao1215/yahiko/internal/runner"
 	"github.com/nao1215/yahiko/schema"
 )
@@ -66,8 +67,8 @@ func TestJudgeRunRelativeAndBudgets(t *testing.T) {
 		"jc":      samples(30*time.Millisecond, 20, 0),
 	}, "jsonize", "jc")
 	b.Benchmark.Budgets = []config.Budget{
-		{Command: "jsonize", Metric: config.MetricMedian, Expr: mustBudget(t, "< 20ms")},
-		{Command: "jc", Metric: config.MetricMedian, Expr: mustBudget(t, "< 20ms")},
+		latencyBudget(t, "jsonize", metric.AggMedian, "< 20ms"),
+		latencyBudget(t, "jc", metric.AggMedian, "< 20ms"),
 	}
 	r := judge(ModeRun, false, b)
 	cs := r.Suites[0].Benchmarks[0].Commands
@@ -77,7 +78,7 @@ func TestJudgeRunRelativeAndBudgets(t *testing.T) {
 	if *cs[0].Relative.VsBaseline != 1 || math.Abs(*cs[1].Relative.VsBaseline-15) > 1e-9 || math.Abs(*cs[1].Relative.VsFastest-15) > 1e-9 {
 		t.Fatalf("relative = %+v %+v", *cs[1].Relative.VsBaseline, *cs[1].Relative.VsFastest)
 	}
-	if !cs[0].Budgets[0].Pass || cs[1].Budgets[0].Pass || *cs[1].Budgets[0].ActualNS != int64(30*time.Millisecond) {
+	if !cs[0].Budgets[0].Pass || cs[1].Budgets[0].Pass || *cs[1].Budgets[0].Actual != float64(30*time.Millisecond) || cs[1].Budgets[0].Status != BudgetFail || cs[1].Budgets[0].Unit != "ns" {
 		t.Fatalf("budgets = %+v %+v", cs[0].Budgets, cs[1].Budgets)
 	}
 	if r.Summary.ExitCode != exitcode.Failed || r.Summary.OverBudget != 1 || r.Summary.Pass != 1 {
@@ -88,13 +89,20 @@ func TestJudgeRunRelativeAndBudgets(t *testing.T) {
 	}
 }
 
-func mustBudget(t *testing.T, s string) config.BudgetExpr {
+// latencyBudget builds a latency budget such as "< 20ms" on an aggregation.
+func latencyBudget(t *testing.T, command string, agg metric.Aggregation, s string) config.Budget {
 	t.Helper()
-	b, err := config.ParseBudget(s)
+	return budget(t, command, metric.Latency, agg, s)
+}
+
+func budget(t *testing.T, command string, name metric.Name, agg metric.Aggregation, s string) config.Budget {
+	t.Helper()
+	def := metric.MustLookup(name)
+	th, err := metric.ParseThreshold(def.Kind, def.Better, s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return b
+	return config.Budget{Command: command, Metric: name, Aggregation: agg, Threshold: th}
 }
 
 func TestJudgeRunWithoutBaselineUsesFastest(t *testing.T) {
@@ -182,7 +190,7 @@ func TestJudgeCompareVerdictsAndExitCodes(t *testing.T) {
 	}
 
 	budgeted := compareResult("budget", samples(30*time.Millisecond, 20, 0.02), samples(20*time.Millisecond, 20, 0.02))
-	budgeted.Benchmark.Budgets = []config.Budget{{Command: "tool", Metric: config.MetricMedian, Expr: mustBudget(t, "< 15ms")}}
+	budgeted.Benchmark.Budgets = []config.Budget{latencyBudget(t, "tool", metric.AggMedian, "< 15ms")}
 	r = judge(ModeCompare, false, budgeted)
 	if got := r.Suites[0].Benchmarks[0].Commands[0].Result; got != ResultOverBudget {
 		t.Fatalf("an improvement over budget = %s, want over_budget", got)
@@ -267,17 +275,23 @@ func TestFormatHelpers(t *testing.T) {
 	if FormatChange(2.74) != "+2.7%" || FormatChange(-12) != "-12.0%" || FormatChange(0.01) != "+0.0%" {
 		t.Error("FormatChange")
 	}
-	c := &Comparison{ChangePercent: 15.6, ProbRegression: 0.981, MaxPercent: 10}
-	if FormatConfidence(c) != "98.1%" || FormatTolerance(c) != "+10%" {
-		t.Errorf("confidence/tolerance = %s %s", FormatConfidence(c), FormatTolerance(c))
+	c := &MetricComparison{Better: "lower", ChangePercent: 15.6, ProbRegression: 0.981, MaxPercent: 10}
+	if formatMetricConfidence(c) != "98.1%" || FormatMetricTolerance(c) != "+10%" {
+		t.Errorf("confidence/tolerance = %s %s", formatMetricConfidence(c), FormatMetricTolerance(c))
 	}
-	c = &Comparison{ChangePercent: 2.7, ProbRegression: 0.1, MaxPercent: 7.5}
-	if FormatConfidence(c) != "low" || FormatTolerance(c) != "+7.5%" || FormatConfidence(nil) != "-" {
+	c = &MetricComparison{Better: "lower", ChangePercent: 2.7, ProbRegression: 0.1, MaxPercent: 7.5}
+	if formatMetricConfidence(c) != "low" || FormatMetricTolerance(c) != "+7.5%" || FormatMetricTolerance(nil) != "-" {
 		t.Error("low confidence")
 	}
-	c = &Comparison{ChangePercent: -30, ProbImprovement: 0.99}
-	if FormatConfidence(c) != "99.0%" {
+	c = &MetricComparison{Better: "lower", ChangePercent: -30, ProbImprovement: 0.99}
+	if formatMetricConfidence(c) != "99.0%" {
 		t.Error("improvement confidence")
+	}
+	// Throughput degrades when it drops: the tolerance points down, and a
+	// drop is judged by the probability of a regression.
+	c = &MetricComparison{Better: "higher", ChangePercent: -20, ProbRegression: 0.97, ProbImprovement: 0, MaxPercent: 8}
+	if formatMetricConfidence(c) != "97.0%" || FormatMetricTolerance(c) != "-8%" {
+		t.Errorf("throughput confidence/tolerance = %s %s", formatMetricConfidence(c), FormatMetricTolerance(c))
 	}
 }
 
@@ -324,9 +338,9 @@ func TestTerminalCompareTable(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		"BENCHMARK     BASE     HEAD  CHANGE  CONFIDENCE  BUDGET  RESULT",
-		"df small    1.84ms   1.89ms   +2.7%         low    +10%  PASS",
-		"df large   14.20ms  16.41ms  +15.6%      100.0%    +10%  REGRESSION",
+		"BENCHMARK     BASE     HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT",
+		"df small    1.84ms   1.89ms  +50.00µs   +2.7%         low       +10%  PASS",
+		"df large   14.20ms  16.41ms   +2.21ms  +15.6%      100.0%       +10%  REGRESSION",
 		"geometric mean over 2 cases (head relative to base): head/base 1.09x",
 		"1 passed, 1 regressed",
 	} {
@@ -363,6 +377,7 @@ func TestMarkdownEscaping(t *testing.T) {
 func TestCSV(t *testing.T) {
 	t.Parallel()
 	b := runResult("comma, \"quoted\"\nname", "", map[string][]time.Duration{"x": samples(time.Millisecond, 10, 0)}, "x")
+	b.Benchmark.Budgets = []config.Budget{latencyBudget(t, "x", "p95", "<= 1s")}
 	r := judge(ModeRun, false, b)
 	var out bytes.Buffer
 	if err := WriteCSV(&out, r); err != nil {
@@ -372,8 +387,42 @@ func TestCSV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the CSV does not parse back: %v", err)
 	}
-	if len(rows) != 2 || len(rows[0]) != len(CSVHeader) || rows[1][1] != "comma, \"quoted\"\nname" || rows[1][7] != "1000000" {
+	if len(rows[0]) != len(CSVHeader) || rows[1][csvCol("benchmark")] != "comma, \"quoted\"\nname" {
 		t.Fatalf("rows = %q", rows)
+	}
+	find := func(rows [][]string, want map[string]string) []string {
+		for _, row := range rows[1:] {
+			match := true
+			for col, v := range want {
+				if row[csvCol(col)] != v {
+					match = false
+				}
+			}
+			if match {
+				return row
+			}
+		}
+		t.Fatalf("no row matches %v in %q", want, rows)
+		return nil
+	}
+	median := find(rows, map[string]string{"record": "stat", "side": "head", "metric": "latency", "statistic": "median"})
+	if median[csvCol("value")] != "1000000" || median[csvCol("unit")] != "ns" || median[csvCol("status")] != "measured" {
+		t.Fatalf("median row = %q", median)
+	}
+	find(rows, map[string]string{"record": "stat", "metric": "latency", "statistic": "p99"})
+	bud := find(rows, map[string]string{"record": "budget", "metric": "latency", "statistic": "p95"})
+	if bud[csvCol("operator")] != "<=" || bud[csvCol("limit")] != "1000000000" || bud[csvCol("verdict")] != "pass" {
+		t.Fatalf("budget row = %q", bud)
+	}
+	for _, row := range rows {
+		if len(row) != len(CSVHeader) {
+			t.Fatalf("ragged row %q", row)
+		}
+		for _, cell := range row {
+			if strings.HasPrefix(cell, "{") || strings.HasPrefix(cell, "[") {
+				t.Fatalf("a cell holds structured data: %q", cell)
+			}
+		}
 	}
 
 	cr := judge(ModeCompare, false, compareResult("c", samples(time.Millisecond, 20, 0), samples(time.Millisecond, 20, 0)))
@@ -382,8 +431,45 @@ func TestCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, _ = csv.NewReader(&out).ReadAll()
-	if len(rows) != 3 || rows[1][3] != "base" || rows[2][3] != "head" || rows[2][14] == "" {
-		t.Fatalf("compare rows = %q", rows)
+	find(rows, map[string]string{"record": "stat", "side": "base", "metric": "latency", "statistic": "median"})
+	cmp := find(rows, map[string]string{"record": "comparison", "metric": "latency"})
+	if cmp[csvCol("base")] != "1000000" || cmp[csvCol("difference")] != "0" || cmp[csvCol("change_percent")] == "" || cmp[csvCol("verdict")] != "pass" {
+		t.Fatalf("comparison row = %q", cmp)
+	}
+}
+
+func TestSamplesCSV(t *testing.T) {
+	t.Parallel()
+	b := runResult("s", "", map[string][]time.Duration{"x": {time.Millisecond, 2 * time.Millisecond}}, "x")
+	b.Benchmark.Metrics = config.Metrics{Memory: true, Throughput: &config.Work{Value: 10, Unit: "records"}}
+	m := b.Commands[0].Sides[runner.SideHead]
+	m.PeakRSS = []int64{1 << 20, 2 << 20}
+	m.Work = []float64{10, 10}
+	r := judge(ModeRun, false, b)
+	var out bytes.Buffer
+	if err := WriteSamplesCSV(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(&out).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		SamplesCSVHeader,
+		{"suite | one", "s", "x", "head", "1", "latency", "ns", "1000000"},
+		{"suite | one", "s", "x", "head", "2", "latency", "ns", "2000000"},
+		{"suite | one", "s", "x", "head", "1", "throughput", "records/s", "10000"},
+		{"suite | one", "s", "x", "head", "2", "throughput", "records/s", "5000"},
+		{"suite | one", "s", "x", "head", "1", "peak_rss", "bytes", "1048576"},
+		{"suite | one", "s", "x", "head", "2", "peak_rss", "bytes", "2097152"},
+	}
+	if len(rows) != len(want) {
+		t.Fatalf("rows = %q", rows)
+	}
+	for i := range want {
+		if strings.Join(rows[i], ",") != strings.Join(want[i], ",") {
+			t.Errorf("row %d = %q, want %q", i, rows[i], want[i])
+		}
 	}
 }
 
@@ -433,7 +519,7 @@ func TestJSONMatchesReportSchema(t *testing.T) {
 	failing := runResult("fails", "a", map[string][]time.Duration{"a": samples(time.Millisecond, 10, 0), "b": nil}, "a", "b")
 	failing.Commands[1].Sides[runner.SideHead].Failure = &runner.Failure{Kind: runner.FailExitCode, ExitCode: 1, Message: "exited"}
 	budgeted := runResult("budget", "", map[string][]time.Duration{"a": samples(time.Millisecond, 10, 0)}, "a")
-	budgeted.Benchmark.Budgets = []config.Budget{{Command: "a", Metric: config.MetricMean, Expr: mustBudget(t, "<= 1s")}}
+	budgeted.Benchmark.Budgets = []config.Budget{latencyBudget(t, "a", metric.AggMean, "<= 1s")}
 	reports := map[string]*Report{
 		"run":     judge(ModeRun, false, failing, budgeted),
 		"compare": judge(ModeCompare, true, compareResult("c", samples(time.Millisecond, 20, 0.1), samples(time.Millisecond, 20, 0.1))),

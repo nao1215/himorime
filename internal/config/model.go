@@ -10,6 +10,8 @@ package config
 
 import (
 	"time"
+
+	"github.com/nao1215/yahiko/internal/metric"
 )
 
 // SupportedVersion is the only suite format version this build understands.
@@ -44,10 +46,10 @@ const (
 	MinSamplesLowerBound = 2
 )
 
-// Metric names a statistic used by budgets and regression checks.
+// Metric names the statistic a regression check compares.
 type Metric string
 
-// Metrics a budget or a regression check can use.
+// Statistics a regression check can use.
 const (
 	MetricMean   Metric = "mean"
 	MetricMedian Metric = "median"
@@ -65,11 +67,13 @@ const (
 	FormatCSV      Format = "csv"
 	FormatMarkdown Format = "markdown"
 	FormatGitHub   Format = "github"
+	// FormatSamplesCSV is CSV with one row per measured value of every run.
+	FormatSamplesCSV Format = "samples-csv"
 )
 
 // Formats lists every report format in documentation order.
 func Formats() []Format {
-	return []Format{FormatTable, FormatJSON, FormatCSV, FormatMarkdown, FormatGitHub}
+	return []Format{FormatTable, FormatJSON, FormatCSV, FormatMarkdown, FormatGitHub, FormatSamplesCSV}
 }
 
 // Suite is a fully resolved suite file.
@@ -129,6 +133,7 @@ type Benchmark struct {
 	Cleanup     []Exec
 	Baseline    string
 	Commands    []Command
+	Metrics     Metrics
 	Budgets     []Budget
 	Regression  Regression
 }
@@ -179,23 +184,117 @@ type Command struct {
 	ExitCodes []int
 }
 
+// Unsupported policies decide what happens when a requested metric cannot be
+// measured on this platform.
+const (
+	// UnsupportedFail stops before measuring: a budget or regression check
+	// that silently vanished would read as a pass.
+	UnsupportedFail = "fail"
+	// UnsupportedSkip measures the rest and reports the metric as
+	// unsupported, with its budgets and comparisons skipped.
+	UnsupportedSkip = "skip"
+)
+
+// Metrics is what a benchmark measures. Latency is always measured.
+type Metrics struct {
+	CPU    bool
+	Memory bool
+	// Throughput is nil unless work is declared.
+	Throughput *Work
+	// Unsupported is UnsupportedFail or UnsupportedSkip.
+	Unsupported string
+}
+
+// Collects reports whether the benchmark measures a group of metrics.
+func (m Metrics) Collects(g metric.Group) bool {
+	switch g {
+	case metric.GroupLatency:
+		return true
+	case metric.GroupThroughput:
+		return m.Throughput != nil
+	case metric.GroupCPU:
+		return m.CPU
+	case metric.GroupMemory:
+		return m.Memory
+	}
+	return false
+}
+
+// NeedsUsage reports whether runs must collect resource usage.
+func (m Metrics) NeedsUsage() bool { return m.CPU || m.Memory }
+
+// WorkUnit is the unit throughput is expressed in, or "".
+func (m Metrics) WorkUnit() string {
+	if m.Throughput == nil {
+		return ""
+	}
+	return m.Throughput.Unit
+}
+
+// Work is the amount of work one run does, declared so that throughput can be
+// computed as work divided by latency.
+type Work struct {
+	// Value is a fixed amount; 0 when FileSize is used.
+	Value float64
+	// FileSize is a path whose size in bytes is the work of each run. It is
+	// read after prepare_each, outside the measured interval.
+	FileSize string
+	Unit     string
+}
+
 // Budget is one absolute budget of one command.
 type Budget struct {
-	Command string
-	Metric  Metric
-	Expr    BudgetExpr
+	Command     string
+	Metric      metric.Name
+	Aggregation metric.Aggregation
+	Threshold   metric.Threshold
 }
 
 // Regression configures the comparison between a base revision and the
-// working tree.
+// working tree. Metric, MaxPercent and MinDifference apply to latency.
 type Regression struct {
 	Metric     Metric
 	MaxPercent float64
-	Confidence float64
-	MinSamples int
-	MaxCV      float64
+	// MinDifference is the smallest latency difference, in nanoseconds, that
+	// can be a regression; 0 disables it.
+	MinDifference float64
+	Confidence    float64
+	MinSamples    int
+	MaxCV         float64
 	// Commands limits the comparison to these commands; all when empty.
-	Commands []string
+	Commands   []string
+	Throughput MetricRegression
+	CPU        MetricRegression
+	Memory     MetricRegression
+}
+
+// MetricRegression is the tolerance of one metric in a comparison.
+type MetricRegression struct {
+	Metric     Metric
+	MaxPercent float64
+	// MinDifference is in the metric's canonical unit; 0 disables it.
+	MinDifference float64
+	// unit and unitPath remember the work unit a throughput min_difference
+	// was written in, so a benchmark can check it against its work.
+	unit     string
+	unitPath path
+}
+
+// For returns the tolerance of a comparable metric: latency, throughput,
+// cpu_total or peak_rss.
+func (r Regression) For(n metric.Name) (MetricRegression, bool) {
+	switch n {
+	case metric.Latency:
+		return MetricRegression{Metric: r.Metric, MaxPercent: r.MaxPercent, MinDifference: r.MinDifference}, true
+	case metric.Throughput:
+		return r.Throughput, true
+	case metric.CPUTotal:
+		return r.CPU, true
+	case metric.PeakRSS:
+		return r.Memory, true
+	case metric.CPUUser, metric.CPUSystem, metric.CPUUtilization:
+	}
+	return MetricRegression{}, false
 }
 
 // Compares reports whether a command takes part in revision comparisons.

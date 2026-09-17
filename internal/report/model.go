@@ -30,12 +30,15 @@ const (
 	ResultInconclusive Result = "inconclusive"
 	ResultOverBudget   Result = "over_budget"
 	ResultRegression   Result = "regression"
-	ResultError        Result = "error"
+	// ResultMetricError: a requested metric could not be collected, so the
+	// command's performance could not be judged.
+	ResultMetricError Result = "metric_error"
+	ResultError       Result = "error"
 )
 
 // Results lists every result in severity order.
 func Results() []Result {
-	return []Result{ResultPass, ResultImproved, ResultInconclusive, ResultOverBudget, ResultRegression, ResultError}
+	return []Result{ResultPass, ResultImproved, ResultInconclusive, ResultOverBudget, ResultRegression, ResultMetricError, ResultError}
 }
 
 func (r Result) severity() int {
@@ -119,17 +122,21 @@ type Command struct {
 	Name string `json:"name"`
 	// Command is the command as written in the suite, before variables were
 	// substituted, so no secret passed through ${env:NAME} appears.
-	Command    string        `json:"command"`
-	Result     Result        `json:"result"`
-	Head       *Measurement  `json:"head"`
-	Base       *Measurement  `json:"base"`
-	Relative   *Relative     `json:"relative"`
-	Comparison *Comparison   `json:"comparison"`
-	Budgets    []BudgetCheck `json:"budgets"`
+	Command  string       `json:"command"`
+	Result   Result       `json:"result"`
+	Head     *Measurement `json:"head"`
+	Base     *Measurement `json:"base"`
+	Relative *Relative    `json:"relative"`
+	// Comparison is the latency comparison, kept in its original shape.
+	// Comparisons holds every compared metric, latency included.
+	Comparison  *Comparison                  `json:"comparison"`
+	Comparisons map[string]*MetricComparison `json:"comparisons"`
+	Budgets     []BudgetCheck                `json:"budgets"`
 }
 
-// Measurement is the statistics of one command on one side. Durations are
-// integer nanoseconds; SamplesNS holds every measured run in execution order.
+// Measurement is the statistics of one command on one side. The *_ns fields
+// and samples_ns describe latency in integer nanoseconds; Metrics describes
+// every metric, latency included, in its canonical unit.
 type Measurement struct {
 	Count     int     `json:"count"`
 	Warmups   int     `json:"warmups"`
@@ -140,7 +147,61 @@ type Measurement struct {
 	MaxNS     int64   `json:"max_ns"`
 	CV        float64 `json:"cv"`
 	SamplesNS []int64 `json:"samples_ns"`
-	Error     *Error  `json:"error"`
+	// Metrics is keyed by metric name and holds every metric yahiko knows,
+	// with a status saying whether it was measured.
+	Metrics map[string]*MetricSummary `json:"metrics"`
+	Error   *Error                    `json:"error"`
+}
+
+// Metric statuses. The strings are part of the JSON report contract.
+const (
+	StatusMeasured     = "measured"
+	StatusNotRequested = "not_requested"
+	StatusUnsupported  = "unsupported"
+	StatusFailed       = "failed"
+)
+
+// MetricSummary is one metric of one measurement.
+type MetricSummary struct {
+	Name   string `json:"name"`
+	Group  string `json:"group"`
+	Unit   string `json:"unit"`
+	Better string `json:"better"`
+	Scope  string `json:"scope"`
+	// Status is measured, not_requested, unsupported or failed. Only a
+	// measured metric has Stats and Samples; the others never carry zeros
+	// that could be mistaken for a value.
+	Status string `json:"status"`
+	Reason string `json:"reason"`
+	// Stats is null unless the metric was measured with at least one sample.
+	Stats *MetricStats `json:"stats"`
+	// Samples holds one value per measured run, in execution order.
+	Samples []float64 `json:"samples"`
+	// Work is the declared work of throughput; null for other metrics.
+	Work *Work `json:"work"`
+}
+
+// MetricStats summarizes the samples of one metric.
+type MetricStats struct {
+	Count  int     `json:"count"`
+	Min    float64 `json:"min"`
+	Max    float64 `json:"max"`
+	Mean   float64 `json:"mean"`
+	Median float64 `json:"median"`
+	Stddev float64 `json:"stddev"`
+	CV     float64 `json:"cv"`
+	// Percentiles is keyed by pNN: p90, p95 and p99, plus any percentile a
+	// budget of the command uses.
+	Percentiles map[string]float64 `json:"percentiles"`
+}
+
+// Work is the work of one run that throughput divides by latency.
+type Work struct {
+	// Value is the declared amount; null when the work is a file's size.
+	Value *float64 `json:"value"`
+	// FileSize is the path whose size was used, as written in the suite.
+	FileSize string `json:"file_size"`
+	Unit     string `json:"unit"`
 }
 
 // Relative compares medians within one benchmark of a plain run.
@@ -167,13 +228,62 @@ type Comparison struct {
 	Reason             string  `json:"reason"`
 }
 
+// MetricComparison is the base/head judgement of one metric of one command.
+type MetricComparison struct {
+	Metric string `json:"metric"`
+	// Statistic is the compared statistic: median or mean.
+	Statistic string `json:"statistic"`
+	Unit      string `json:"unit"`
+	Better    string `json:"better"`
+	// Base, Head and Difference (head - base) are in Unit; null when the
+	// metric was not measured on both sides.
+	Base       *float64 `json:"base"`
+	Head       *float64 `json:"head"`
+	Difference *float64 `json:"difference"`
+	// ChangePercent is (head - base) / base * 100: its sign is the direction
+	// the value moved, not whether that is better.
+	ChangePercent   float64 `json:"change_percent"`
+	CILowPercent    float64 `json:"ci_low_percent"`
+	CIHighPercent   float64 `json:"ci_high_percent"`
+	ProbRegression  float64 `json:"probability_regression"`
+	ProbImprovement float64 `json:"probability_improvement"`
+	// MaxPercent is the tolerated degradation: an increase for a
+	// lower-is-better metric, a decrease for a higher-is-better one.
+	MaxPercent         float64 `json:"max_percent"`
+	MinDifference      float64 `json:"min_difference"`
+	RequiredConfidence float64 `json:"required_confidence"`
+	MinSamples         int     `json:"min_samples"`
+	MaxCV              float64 `json:"max_cv"`
+	// Verdict is pass, improved, regression, inconclusive or skipped.
+	Verdict string `json:"verdict"`
+	Reason  string `json:"reason"`
+}
+
+// VerdictSkipped marks a comparison of a metric that was not measured.
+const VerdictSkipped = "skipped"
+
+// Budget statuses. The strings are part of the JSON report contract.
+const (
+	BudgetPass    = "pass"
+	BudgetFail    = "fail"
+	BudgetSkipped = "skipped"
+	BudgetNoData  = "no_data"
+)
+
 // BudgetCheck is one absolute budget.
 type BudgetCheck struct {
-	Metric   string `json:"metric"`
-	Operator string `json:"operator"`
-	LimitNS  int64  `json:"limit_ns"`
-	ActualNS *int64 `json:"actual_ns"`
-	Pass     bool   `json:"pass"`
+	Metric      string `json:"metric"`
+	Aggregation string `json:"aggregation"`
+	Operator    string `json:"operator"`
+	// Limit and Actual are in Unit. Actual is null without a value.
+	Limit  float64  `json:"limit"`
+	Actual *float64 `json:"actual"`
+	Unit   string   `json:"unit"`
+	// Status is pass, fail, skipped (the metric was unsupported) or no_data
+	// (the command produced no successful run).
+	Status string `json:"status"`
+	Pass   bool   `json:"pass"`
+	Reason string `json:"reason"`
 }
 
 // Error describes a failure.
@@ -182,6 +292,9 @@ type Error struct {
 	Message  string `json:"message"`
 	ExitCode *int   `json:"exit_code"`
 	Stderr   string `json:"stderr"`
+	// Metric is the metric group a metric_unsupported or
+	// metric_collection_failed error is about; empty for other kinds.
+	Metric string `json:"metric"`
 }
 
 // Summary counts results over every command of every suite.
@@ -194,6 +307,7 @@ type Summary struct {
 	Inconclusive       int  `json:"inconclusive"`
 	OverBudget         int  `json:"over_budget"`
 	Regression         int  `json:"regression"`
+	MetricError        int  `json:"metric_error"`
 	Error              int  `json:"error"`
 	FailOnInconclusive bool `json:"fail_on_inconclusive"`
 	ExitCode           int  `json:"exit_code"`

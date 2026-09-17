@@ -11,46 +11,18 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
+
+	"github.com/nao1215/yahiko/internal/metric"
 )
-
-// durationPattern is the only duration spelling a suite accepts. It is
-// deliberately narrower than time.ParseDuration: no sign, no bare number, and
-// every component carries a unit, so "10" (ten what?) and "-1s" are refused.
-// schema/yahiko.schema.json repeats this pattern; TestSchemaPatternsMatchGo
-// keeps the two identical.
-const durationPattern = `^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`
-
-// budgetPattern is a performance budget: a comparison operator followed by a
-// duration, such as "< 20ms" or "<=1.5s".
-const budgetPattern = `^\s*(<=|<)\s*(([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)\s*$`
 
 // percentPattern is a percentage written as a string, such as "10%".
 const percentPattern = `^([0-9]+(\.[0-9]+)?)%$`
 
-var (
-	durationRE = regexp.MustCompile(durationPattern)
-	budgetRE   = regexp.MustCompile(budgetPattern)
-	percentRE  = regexp.MustCompile(percentPattern)
-)
-
-// maxDuration bounds every duration a suite may declare. A day is far beyond
-// any sensible benchmark and keeps arithmetic on sums of samples clear of
-// overflow.
-const maxDuration = 24 * time.Hour
+var percentRE = regexp.MustCompile(percentPattern)
 
 // ParseDuration parses a suite duration such as "250ms" or "1m30s".
 func ParseDuration(s string) (time.Duration, error) {
-	if !durationRE.MatchString(s) {
-		return 0, fmt.Errorf("invalid duration %q: write a number with a unit, such as 500ms, 2s or 1m30s", s)
-	}
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return 0, fmt.Errorf("invalid duration %q: %w", s, err)
-	}
-	if d > maxDuration {
-		return 0, fmt.Errorf("duration %q exceeds the maximum of 24h", s)
-	}
-	return d, nil
+	return metric.ParseDuration(s)
 }
 
 // nodeError is a decoding error that knows where in the file it happened.
@@ -169,58 +141,28 @@ func (p *Percent) UnmarshalYAML(_ context.Context, node ast.Node) error {
 	return nil
 }
 
-// BudgetExpr is an absolute performance budget such as "< 20ms".
-type BudgetExpr struct {
-	Inclusive bool
-	Limit     time.Duration
-	Raw       string
-}
-
-// ParseBudget parses a budget expression such as "< 20ms" or "<= 1s".
-func ParseBudget(s string) (BudgetExpr, error) {
-	m := budgetRE.FindStringSubmatch(s)
-	if m == nil {
-		return BudgetExpr{}, fmt.Errorf("invalid budget %q: write an operator and a duration, such as \"< 20ms\" or \"<= 1s\"", s)
+// UnmarshalYAML accepts true, false, or a mapping with scope.
+func (c *RawCollector) UnmarshalYAML(_ context.Context, node ast.Node) error {
+	if b, ok := unwrap(node).(*ast.BoolNode); ok {
+		c.enabled = b.Value
+		c.Scope = ""
+		return nil
 	}
-	d, err := ParseDuration(m[2])
-	if err != nil {
-		return BudgetExpr{}, err
+	if _, ok := unwrap(node).(*ast.MappingNode); !ok {
+		return errAt(node, "expected true, false or a mapping with scope, got %s", kindOf(node))
 	}
-	if d <= 0 {
-		return BudgetExpr{}, fmt.Errorf("invalid budget %q: the limit must be greater than zero", s)
+	type plain RawCollector
+	var p plain
+	if err := yaml.NodeToValue(node, &p, yaml.DisallowUnknownField()); err != nil {
+		return err
 	}
-	return BudgetExpr{Inclusive: m[1] == "<=", Limit: d, Raw: strings.TrimSpace(s)}, nil
-}
-
-// Allows reports whether a measured value satisfies the budget.
-func (b BudgetExpr) Allows(v time.Duration) bool {
-	if b.Inclusive {
-		return v <= b.Limit
-	}
-	return v < b.Limit
-}
-
-// Operator returns "<" or "<=".
-func (b BudgetExpr) Operator() string {
-	if b.Inclusive {
-		return "<="
-	}
-	return "<"
-}
-
-// UnmarshalYAML accepts a budget string.
-func (b *BudgetExpr) UnmarshalYAML(_ context.Context, node ast.Node) error {
-	s, ok := scalarString(node)
-	if !ok {
-		return errAt(node, "expected a budget string such as \"< 20ms\", got %s", kindOf(node))
-	}
-	parsed, err := ParseBudget(s)
-	if err != nil {
-		return errAt(node, "%v", err)
-	}
-	*b = parsed
+	*c = RawCollector(p)
+	c.enabled = true
 	return nil
 }
+
+// Enabled reports whether the collector is switched on.
+func (c RawCollector) Enabled() bool { return c.enabled }
 
 // Argv is a command: either a list of arguments executed without a shell, or a
 // single string, which is only valid together with `shell: true`.

@@ -32,6 +32,8 @@ func Write(w io.Writer, format config.Format, r *Report, color bool) error {
 		return WriteMarkdown(w, r)
 	case config.FormatGitHub:
 		return WriteGitHubSummary(w, r)
+	case config.FormatSamplesCSV:
+		return WriteSamplesCSV(w, r)
 	}
 	return fmt.Errorf("unknown report format %q", format)
 }

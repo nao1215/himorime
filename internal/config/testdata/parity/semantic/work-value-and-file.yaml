@@ -1,0 +1,7 @@
+# expect: work declares both value and file_size
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    metrics: {throughput: {work: {value: 100, file_size: in.json}}}
+    commands: {a: {command: [a]}}

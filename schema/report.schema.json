@@ -151,6 +151,7 @@
         "inconclusive",
         "over_budget",
         "regression",
+        "metric_error",
         "error"
       ]
     },
@@ -164,7 +165,8 @@
         "kind",
         "message",
         "exit_code",
-        "stderr"
+        "stderr",
+        "metric"
       ],
       "additionalProperties": false,
       "properties": {
@@ -181,7 +183,9 @@
             "start_failed",
             "interrupted",
             "invalid_path",
-            "internal"
+            "internal",
+            "metric_unsupported",
+            "metric_collection_failed"
           ]
         },
         "message": {
@@ -198,6 +202,17 @@
         "stderr": {
           "description": "Tail of the failed process's standard error, with secrets masked.",
           "type": "string"
+        },
+        "metric": {
+          "description": "The metric group (throughput, cpu, memory) a metric_unsupported or metric_collection_failed error is about; empty otherwise.",
+          "type": "string",
+          "enum": [
+            "",
+            "latency",
+            "throughput",
+            "cpu",
+            "memory"
+          ]
         }
       }
     },
@@ -315,6 +330,7 @@
         "base",
         "relative",
         "comparison",
+        "comparisons",
         "budgets"
       ],
       "additionalProperties": false,
@@ -381,7 +397,7 @@
           }
         },
         "comparison": {
-          "description": "Base/head judgement; null in a plain run or when a side failed.",
+          "description": "The latency base/head judgement in its original shape; null in a plain run or when a side failed. See comparisons for every metric.",
           "type": [
             "object",
             "null"
@@ -466,61 +482,27 @@
             }
           }
         },
+        "comparisons": {
+          "description": "Base/head judgement of every compared metric keyed by name (latency, throughput, cpu_total, peak_rss); null in a plain run or when a side failed.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/metricComparison"
+          }
+        },
         "budgets": {
-          "description": "Absolute budget checks of the head measurement.",
+          "description": "Absolute budgets of the command, checked on the head.",
           "type": "array",
           "items": {
-            "description": "One budget.",
-            "type": "object",
-            "required": [
-              "metric",
-              "operator",
-              "limit_ns",
-              "actual_ns",
-              "pass"
-            ],
-            "additionalProperties": false,
-            "properties": {
-              "metric": {
-                "description": "Statistic.",
-                "type": "string",
-                "enum": [
-                  "mean",
-                  "median",
-                  "min",
-                  "max"
-                ]
-              },
-              "operator": {
-                "description": "Comparison.",
-                "type": "string",
-                "enum": [
-                  "<",
-                  "<="
-                ]
-              },
-              "limit_ns": {
-                "description": "Limit in nanoseconds.",
-                "type": "integer"
-              },
-              "actual_ns": {
-                "description": "Measured value; null without successful runs.",
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "pass": {
-                "description": "Whether the budget was met.",
-                "type": "boolean"
-              }
-            }
+            "$ref": "#/definitions/budgetCheck"
           }
         }
       }
     },
     "measurement": {
-      "description": "Statistics of one command on one side, in integer nanoseconds.",
+      "description": "Statistics of one command on one side. The *_ns fields and samples_ns describe latency in integer nanoseconds; metrics describes every metric in its canonical unit.",
       "type": "object",
       "required": [
         "count",
@@ -532,6 +514,7 @@
         "max_ns",
         "cv",
         "samples_ns",
+        "metrics",
         "error"
       ],
       "additionalProperties": false,
@@ -576,6 +559,43 @@
           "items": {
             "type": "integer",
             "minimum": 0
+          }
+        },
+        "metrics": {
+          "description": "Every metric keyed by name, each with a status.",
+          "type": "object",
+          "required": [
+            "latency",
+            "throughput",
+            "cpu_user",
+            "cpu_system",
+            "cpu_total",
+            "cpu_utilization",
+            "peak_rss"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "latency": {
+              "$ref": "#/definitions/metricSummary"
+            },
+            "throughput": {
+              "$ref": "#/definitions/metricSummary"
+            },
+            "cpu_user": {
+              "$ref": "#/definitions/metricSummary"
+            },
+            "cpu_system": {
+              "$ref": "#/definitions/metricSummary"
+            },
+            "cpu_total": {
+              "$ref": "#/definitions/metricSummary"
+            },
+            "cpu_utilization": {
+              "$ref": "#/definitions/metricSummary"
+            },
+            "peak_rss": {
+              "$ref": "#/definitions/metricSummary"
+            }
           }
         },
         "error": {
@@ -648,6 +668,7 @@
         "inconclusive",
         "over_budget",
         "regression",
+        "metric_error",
         "error",
         "fail_on_inconclusive",
         "exit_code"
@@ -694,6 +715,11 @@
           "type": "integer",
           "minimum": 0
         },
+        "metric_error": {
+          "description": "Commands and benchmarks whose requested metrics could not be measured.",
+          "type": "integer",
+          "minimum": 0
+        },
         "error": {
           "description": "Failed commands, benchmarks and builds.",
           "type": "integer",
@@ -712,8 +738,376 @@
             2,
             3,
             4,
-            5
+            5,
+            6
           ]
+        }
+      }
+    },
+    "metricSummary": {
+      "description": "One metric of one measurement.",
+      "type": "object",
+      "required": [
+        "name",
+        "group",
+        "unit",
+        "better",
+        "scope",
+        "status",
+        "reason",
+        "stats",
+        "samples",
+        "work"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Metric name.",
+          "enum": [
+            "latency",
+            "throughput",
+            "cpu_user",
+            "cpu_system",
+            "cpu_total",
+            "cpu_utilization",
+            "peak_rss"
+          ]
+        },
+        "group": {
+          "description": "The setting that enables the metric.",
+          "enum": [
+            "latency",
+            "throughput",
+            "cpu",
+            "memory"
+          ]
+        },
+        "unit": {
+          "description": "Canonical unit: ns for durations, bytes for memory, <work unit>/s for throughput, percent for CPU utilization.",
+          "type": "string"
+        },
+        "better": {
+          "description": "Which direction is an improvement; neutral metrics are never judged as regressions.",
+          "enum": [
+            "lower",
+            "higher",
+            "neutral"
+          ]
+        },
+        "scope": {
+          "description": "wall_clock for latency and throughput; process_tree for CPU and memory.",
+          "enum": [
+            "wall_clock",
+            "process_tree"
+          ]
+        },
+        "status": {
+          "description": "measured, not_requested, unsupported (the platform cannot measure it and metrics.unsupported is skip) or failed. Only a measured metric has stats and samples.",
+          "enum": [
+            "measured",
+            "not_requested",
+            "unsupported",
+            "failed"
+          ]
+        },
+        "reason": {
+          "description": "Why the metric is unsupported or failed.",
+          "type": "string"
+        },
+        "stats": {
+          "description": "Summary of the samples; null unless measured.",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/metricStats"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "samples": {
+          "description": "One value per measured run in execution order, in unit.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "work": {
+          "description": "The declared work of throughput; null for other metrics or without throughput.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "value",
+            "file_size",
+            "unit"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "description": "Declared work per run; null when file_size is used.",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "file_size": {
+              "description": "Path whose size in bytes is the work, as written in the suite.",
+              "type": "string"
+            },
+            "unit": {
+              "description": "Unit of work.",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "metricStats": {
+      "description": "Statistics of one metric in its unit.",
+      "type": "object",
+      "required": [
+        "count",
+        "min",
+        "max",
+        "mean",
+        "median",
+        "stddev",
+        "cv",
+        "percentiles"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "mean": {
+          "type": "number"
+        },
+        "median": {
+          "type": "number"
+        },
+        "stddev": {
+          "description": "Sample standard deviation.",
+          "type": "number"
+        },
+        "cv": {
+          "description": "Coefficient of variation: stddev / mean.",
+          "type": "number"
+        },
+        "percentiles": {
+          "description": "Linear-interpolated percentiles keyed by pNN: p90, p95, p99 and any percentile a budget uses.",
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^p([1-9][0-9]?)(\\.[0-9]+)?$"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "metricComparison": {
+      "description": "Base/head judgement of one metric.",
+      "type": "object",
+      "required": [
+        "metric",
+        "statistic",
+        "unit",
+        "better",
+        "base",
+        "head",
+        "difference",
+        "change_percent",
+        "ci_low_percent",
+        "ci_high_percent",
+        "probability_regression",
+        "probability_improvement",
+        "max_percent",
+        "min_difference",
+        "required_confidence",
+        "min_samples",
+        "max_cv",
+        "verdict",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "enum": [
+            "latency",
+            "throughput",
+            "cpu_total",
+            "peak_rss"
+          ]
+        },
+        "statistic": {
+          "description": "Compared statistic.",
+          "enum": [
+            "median",
+            "mean"
+          ]
+        },
+        "unit": {
+          "type": "string"
+        },
+        "better": {
+          "enum": [
+            "lower",
+            "higher"
+          ]
+        },
+        "base": {
+          "description": "Base value of the statistic; null when skipped.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "head": {
+          "description": "Head value of the statistic; null when skipped.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "difference": {
+          "description": "head - base; null when skipped.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "change_percent": {
+          "description": "(head - base) / base * 100. Its sign is the direction of the change, not whether it is better.",
+          "type": "number"
+        },
+        "ci_low_percent": {
+          "type": "number"
+        },
+        "ci_high_percent": {
+          "type": "number"
+        },
+        "probability_regression": {
+          "description": "Bootstrap probability of a degradation beyond max_percent in the worse direction.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "probability_improvement": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_percent": {
+          "description": "Tolerated degradation: an increase for lower-is-better metrics, a decrease for higher-is-better ones.",
+          "type": "number"
+        },
+        "min_difference": {
+          "description": "Smallest absolute difference that can be a regression; 0 when unset.",
+          "type": "number"
+        },
+        "required_confidence": {
+          "type": "number"
+        },
+        "min_samples": {
+          "type": "integer"
+        },
+        "max_cv": {
+          "type": "number"
+        },
+        "verdict": {
+          "enum": [
+            "pass",
+            "improved",
+            "regression",
+            "inconclusive",
+            "skipped"
+          ]
+        },
+        "reason": {
+          "description": "Why the verdict is inconclusive or skipped, or a pass decided by min_difference.",
+          "type": "string"
+        }
+      }
+    },
+    "budgetCheck": {
+      "description": "One absolute budget.",
+      "type": "object",
+      "required": [
+        "metric",
+        "aggregation",
+        "operator",
+        "limit",
+        "actual",
+        "unit",
+        "status",
+        "pass",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "enum": [
+            "latency",
+            "throughput",
+            "cpu_user",
+            "cpu_system",
+            "cpu_total",
+            "cpu_utilization",
+            "peak_rss"
+          ]
+        },
+        "aggregation": {
+          "description": "min, max, mean, median or pNN.",
+          "type": "string",
+          "pattern": "^(min|max|mean|median|p([1-9][0-9]?)(\\.[0-9]+)?)$"
+        },
+        "operator": {
+          "enum": [
+            "<",
+            "<=",
+            ">",
+            ">="
+          ]
+        },
+        "limit": {
+          "description": "The limit in unit.",
+          "type": "number"
+        },
+        "actual": {
+          "description": "The measured aggregation in unit; null without a value.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": "string"
+        },
+        "status": {
+          "description": "pass, fail, skipped (the metric is unsupported here) or no_data (no successful run).",
+          "enum": [
+            "pass",
+            "fail",
+            "skipped",
+            "no_data"
+          ]
+        },
+        "pass": {
+          "description": "Whether the budget was met.",
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
         }
       }
     }

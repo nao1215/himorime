@@ -104,10 +104,15 @@ type jobAccounting struct {
 	TotalTerminatedProcesses  uint32
 }
 
-func activeProcesses(job windows.Handle) uint32 {
+func jobAccountingInfo(job windows.Handle) (jobAccounting, error) {
 	var info jobAccounting
 	err := windows.QueryInformationJobObject(job, windows.JobObjectBasicAccountingInformation,
 		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), nil) //nolint:gosec // G103: the structure outlives the call
+	return info, err
+}
+
+func activeProcesses(job windows.Handle) uint32 {
+	info, err := jobAccountingInfo(job)
 	if err != nil {
 		return 0
 	}

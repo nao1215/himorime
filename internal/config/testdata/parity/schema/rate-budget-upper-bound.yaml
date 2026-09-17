@@ -1,0 +1,7 @@
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    metrics: {throughput: {work: {value: 10}}}
+    commands: {a: {command: [a]}}
+    budget: {a: {throughput: {median: "<= 5 operations/s"}}}

@@ -1,0 +1,7 @@
+# expect: file_size measures bytes, so its unit must be bytes
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    metrics: {throughput: {work: {file_size: in.json, unit: lines}}}
+    commands: {a: {command: [a]}}

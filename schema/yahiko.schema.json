@@ -95,6 +95,9 @@
           "description": "Exit statuses that count as success. Default [0].",
           "$ref": "#/definitions/exitCodes"
         },
+        "metrics": {
+          "$ref": "#/definitions/metricsDefaults"
+        },
         "regression": {
           "$ref": "#/definitions/regression"
         }
@@ -135,7 +138,8 @@
                   "json",
                   "csv",
                   "markdown",
-                  "github"
+                  "github",
+                  "samples-csv"
                 ]
               },
               "path": {
@@ -163,11 +167,80 @@
       }
     },
     "budget": {
-      "description": "A budget: < or <= followed by a duration, such as \"< 20ms\".",
+      "description": "An upper bound on a duration: < or <= followed by a duration greater than zero, such as \"< 20ms\".",
       "type": "string",
       "pattern": "^\\s*(<=|<)\\s*(([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
       "not": {
         "pattern": "^\\s*(<=|<)\\s*(0+(\\.0+)?(ns|us|µs|ms|s|m|h))+\\s*$"
+      }
+    },
+    "bytesBudget": {
+      "description": "An upper bound on a byte size: < or <= followed by a size greater than zero, such as \"<= 64MiB\". KB, MB, GB and TB are powers of 1000; KiB, MiB, GiB and TiB powers of 1024.",
+      "type": "string",
+      "pattern": "^\\s*(<=|<)\\s*([0-9]+(\\.[0-9]+)?)\\s*(B|bytes|KB|MB|GB|TB|KiB|MiB|GiB|TiB)\\s*$"
+    },
+    "rateBudget": {
+      "description": "A lower bound on throughput: > or >= followed by a rate greater than zero in the declared work unit per second, such as \">= 50MiB/s\" or \">= 1000 records/s\".",
+      "type": "string",
+      "pattern": "^\\s*(>=|>)\\s*([0-9]+(\\.[0-9]+)?)\\s*([A-Za-z][A-Za-z0-9_-]*)/s\\s*$"
+    },
+    "percentBudget": {
+      "description": "A bound on a percentage in either direction, such as \"<= 150%\".",
+      "type": "string",
+      "pattern": "^\\s*(<=|<|>=|>)\\s*([0-9]+(\\.[0-9]+)?)\\s*%\\s*$"
+    },
+    "bytes": {
+      "description": "A byte size such as 1MiB.",
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?\\s*(B|bytes|KB|MB|GB|TB|KiB|MiB|GiB|TiB)$"
+    },
+    "rate": {
+      "description": "A rate in the declared work unit per second, such as 1MiB/s or \"100 records/s\".",
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?\\s*[A-Za-z][A-Za-z0-9_-]*/s$"
+    },
+    "durationBudgets": {
+      "description": "Budgets of a duration keyed by aggregation: min, max, mean, median, or a percentile p1 to p99.9 such as p95.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^(min|max|mean|median|p([1-9][0-9]?)(\\.[0-9]+)?)$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/budget"
+      }
+    },
+    "bytesBudgets": {
+      "description": "Budgets of a byte size keyed by aggregation: min, max, mean, median, or a percentile p1 to p99.9 such as p95.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^(min|max|mean|median|p([1-9][0-9]?)(\\.[0-9]+)?)$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/bytesBudget"
+      }
+    },
+    "rateBudgets": {
+      "description": "Budgets of throughput keyed by aggregation: min, max, mean, median, or a percentile p1 to p99.9 such as p95.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^(min|max|mean|median|p([1-9][0-9]?)(\\.[0-9]+)?)$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/rateBudget"
+      }
+    },
+    "percentBudgets": {
+      "description": "Budgets of a percentage keyed by aggregation: min, max, mean, median, or a percentile p1 to p99.9 such as p95.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^(min|max|mean|median|p([1-9][0-9]?)(\\.[0-9]+)?)$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/percentBudget"
       }
     },
     "percent": {
@@ -364,25 +437,69 @@
       ]
     },
     "budgetSet": {
-      "description": "Absolute budgets of one command. Each value is an operator and a duration, such as \"< 20ms\".",
+      "description": "Absolute budgets of one command. mean, median, min and max are shorthands for latency budgets.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "mean": {
-          "description": "Budget on the mean duration.",
+          "description": "Budget on the mean latency (shorthand for latency.mean).",
           "$ref": "#/definitions/budget"
         },
         "median": {
-          "description": "Budget on the median duration.",
+          "description": "Budget on the median latency (shorthand for latency.median).",
           "$ref": "#/definitions/budget"
         },
         "min": {
-          "description": "Budget on the min duration.",
+          "description": "Budget on the min latency (shorthand for latency.min).",
           "$ref": "#/definitions/budget"
         },
         "max": {
-          "description": "Budget on the max duration.",
+          "description": "Budget on the max latency (shorthand for latency.max).",
           "$ref": "#/definitions/budget"
+        },
+        "latency": {
+          "description": "Latency budgets keyed by aggregation, such as {p95: \"<= 100ms\"}.",
+          "$ref": "#/definitions/durationBudgets"
+        },
+        "throughput": {
+          "description": "Throughput budgets keyed by aggregation, such as {median: \">= 50MiB/s\"}. Needs metrics.throughput.",
+          "$ref": "#/definitions/rateBudgets"
+        },
+        "cpu": {
+          "description": "CPU budgets. Needs metrics.cpu.",
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "user": {
+              "description": "User CPU time budgets keyed by aggregation.",
+              "$ref": "#/definitions/durationBudgets"
+            },
+            "system": {
+              "description": "System CPU time budgets keyed by aggregation.",
+              "$ref": "#/definitions/durationBudgets"
+            },
+            "total": {
+              "description": "Total (user + system) CPU time budgets keyed by aggregation.",
+              "$ref": "#/definitions/durationBudgets"
+            },
+            "utilization": {
+              "description": "CPU utilization budgets keyed by aggregation, in percent of one CPU; above 100% means more than one CPU was busy.",
+              "$ref": "#/definitions/percentBudgets"
+            }
+          }
+        },
+        "memory": {
+          "description": "Memory budgets. Needs metrics.memory.",
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "peak_rss": {
+              "description": "Peak resident set size budgets keyed by aggregation.",
+              "$ref": "#/definitions/bytesBudgets"
+            }
+          }
         }
       },
       "minProperties": 1
@@ -400,8 +517,12 @@
           ]
         },
         "max_percent": {
-          "description": "Tolerated slowdown in percent: a number such as 10, or a string such as \"10%\". Default 10.",
+          "description": "Tolerated latency slowdown in percent: a number such as 10, or a string such as \"10%\". Default 10.",
           "$ref": "#/definitions/percent"
+        },
+        "min_difference": {
+          "description": "The smallest latency difference that can be a regression or an improvement, such as 1ms; smaller differences pass. Default: none.",
+          "$ref": "#/definitions/duration"
         },
         "confidence": {
           "description": "Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95.",
@@ -420,6 +541,15 @@
           "type": "number",
           "minimum": 0,
           "maximum": 10
+        },
+        "throughput": {
+          "$ref": "#/definitions/throughputRegression"
+        },
+        "cpu": {
+          "$ref": "#/definitions/cpuRegression"
+        },
+        "memory": {
+          "$ref": "#/definitions/memoryRegression"
         }
       }
     },
@@ -436,8 +566,12 @@
           ]
         },
         "max_percent": {
-          "description": "Tolerated slowdown in percent: a number such as 10, or a string such as \"10%\". Default 10.",
+          "description": "Tolerated latency slowdown in percent: a number such as 10, or a string such as \"10%\". Default 10.",
           "$ref": "#/definitions/percent"
+        },
+        "min_difference": {
+          "description": "The smallest latency difference that can be a regression or an improvement, such as 1ms; smaller differences pass. Default: none.",
+          "$ref": "#/definitions/duration"
         },
         "confidence": {
           "description": "Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95.",
@@ -465,6 +599,15 @@
             "type": "string",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
           }
+        },
+        "throughput": {
+          "$ref": "#/definitions/throughputRegression"
+        },
+        "cpu": {
+          "$ref": "#/definitions/cpuRegression"
+        },
+        "memory": {
+          "$ref": "#/definitions/memoryRegression"
         }
       }
     },
@@ -610,6 +753,9 @@
             "$ref": "#/definitions/benchCommand"
           }
         },
+        "metrics": {
+          "$ref": "#/definitions/metrics"
+        },
         "budget": {
           "description": "Absolute budgets keyed by command name. A violation fails the run with exit status 1.",
           "type": "object",
@@ -622,6 +768,178 @@
         },
         "regression": {
           "$ref": "#/definitions/regressionBenchmark"
+        }
+      }
+    },
+    "collector": {
+      "description": "true to measure it (the process tree), false to turn off an inherited setting, or a mapping naming the scope.",
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scope": {
+              "description": "Which processes are measured. Only process_tree, the started process and its descendants, exists; see the Metrics page for what each OS includes.",
+              "enum": [
+                "process_tree"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "work": {
+      "description": "The work one run does. Throughput is this work divided by the run's latency. Declare exactly one of value and file_size.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "A fixed amount of work per run, greater than zero, such as 100000.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "file_size": {
+          "description": "A file whose size in bytes is the work of each run: relative to the suite file, or starting with ${root} or ${workdir}. Read before every run, outside the measured time.",
+          "$ref": "#/definitions/pathTemplate"
+        },
+        "unit": {
+          "description": "The unit of work, such as records, lines or bytes. Default: operations for value, bytes for file_size.",
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+        }
+      }
+    },
+    "metricsDefaults": {
+      "description": "Metrics every benchmark measures besides latency. Throughput is declared per benchmark.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "latency": {
+          "description": "Wall-clock time of each run. Always measured; true only says so.",
+          "const": true
+        },
+        "cpu": {
+          "description": "Measure user, system and total CPU time and CPU utilization of the process tree.",
+          "$ref": "#/definitions/collector"
+        },
+        "memory": {
+          "description": "Measure the peak resident set size (RSS) of the process tree.",
+          "$ref": "#/definitions/collector"
+        },
+        "unsupported": {
+          "description": "What to do when this platform cannot measure a requested metric: fail (default) stops before measuring, skip reports the metric as unsupported and skips its budgets and comparisons.",
+          "enum": [
+            "fail",
+            "skip"
+          ]
+        }
+      }
+    },
+    "metrics": {
+      "description": "What the benchmark measures besides latency.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "latency": {
+          "description": "Wall-clock time of each run. Always measured; true only says so.",
+          "const": true
+        },
+        "throughput": {
+          "description": "Compute throughput from declared work.",
+          "type": "object",
+          "required": [
+            "work"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "work": {
+              "$ref": "#/definitions/work"
+            }
+          }
+        },
+        "cpu": {
+          "description": "Measure user, system and total CPU time and CPU utilization of the process tree.",
+          "$ref": "#/definitions/collector"
+        },
+        "memory": {
+          "description": "Measure the peak resident set size (RSS) of the process tree.",
+          "$ref": "#/definitions/collector"
+        },
+        "unsupported": {
+          "description": "What to do when this platform cannot measure a requested metric: fail (default) stops before measuring, skip reports the metric as unsupported and skips its budgets and comparisons.",
+          "enum": [
+            "fail",
+            "skip"
+          ]
+        }
+      }
+    },
+    "throughputRegression": {
+      "description": "How throughput (higher is better, so a drop is a degradation) is compared.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "description": "Statistic compared: median (default) or mean.",
+          "enum": [
+            "median",
+            "mean"
+          ]
+        },
+        "max_percent": {
+          "description": "Tolerated degradation in percent. Default 10.",
+          "$ref": "#/definitions/percent"
+        },
+        "min_difference": {
+          "description": "The smallest absolute difference that can be a regression or an improvement, such as \"1000 records/s\". Default: none.",
+          "$ref": "#/definitions/rate"
+        }
+      }
+    },
+    "cpuRegression": {
+      "description": "How total CPU time is compared.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "description": "Statistic compared: median (default) or mean.",
+          "enum": [
+            "median",
+            "mean"
+          ]
+        },
+        "max_percent": {
+          "description": "Tolerated degradation in percent. Default 10.",
+          "$ref": "#/definitions/percent"
+        },
+        "min_difference": {
+          "description": "The smallest absolute difference that can be a regression or an improvement, such as 1ms. Default: none.",
+          "$ref": "#/definitions/duration"
+        }
+      }
+    },
+    "memoryRegression": {
+      "description": "How peak RSS is compared.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "description": "Statistic compared: median (default) or mean.",
+          "enum": [
+            "median",
+            "mean"
+          ]
+        },
+        "max_percent": {
+          "description": "Tolerated degradation in percent. Default 10.",
+          "$ref": "#/definitions/percent"
+        },
+        "min_difference": {
+          "description": "The smallest absolute difference that can be a regression or an improvement, such as 1MiB. Default: none.",
+          "$ref": "#/definitions/bytes"
         }
       }
     }

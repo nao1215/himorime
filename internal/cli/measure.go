@@ -133,6 +133,9 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 			}
 		}
 	}
+	if code := m.checkMetrics(suites); code != 0 {
+		return code
+	}
 
 	tempDir, err := os.MkdirTemp("", "yahiko-")
 	if err != nil {
@@ -182,14 +185,52 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 	if ctx.Err() != nil && rep.Summary.ExitCode == exitcode.OK {
 		rep.Summary.ExitCode = exitcode.Execution
 	}
+	return m.finish(ctx, rep, suites, gh)
+}
+
+// finish writes the reports and the GitHub Actions annotations, and ends
+// with a line that says why a non-zero status was returned.
+func (m *measurement) finish(ctx context.Context, rep *report.Report, suites []loadedSuite, gh ghactions.Env) int {
+	a := m.app
 	if code := m.writeReports(rep, suites, gh); code != 0 {
 		return code
+	}
+	if gh.Actions {
+		if err := report.WriteAnnotations(a.Stderr, rep); err != nil {
+			fmt.Fprintf(a.Stderr, "yahiko: write annotations: %v\n", err)
+		}
 	}
 	if ctx.Err() != nil {
 		fmt.Fprintln(a.Stderr, "yahiko: interrupted; cleanup has run")
 		return exitcode.Execution
 	}
+	if outcome := exitcode.Outcome(rep.Summary.ExitCode); outcome != "" {
+		fmt.Fprintf(a.Stderr, "yahiko: exit %d: %s\n", rep.Summary.ExitCode, outcome)
+	}
 	return rep.Summary.ExitCode
+}
+
+// checkMetrics stops before anything is built or run when a benchmark
+// requests a metric this platform cannot measure and its policy is fail. A
+// benchmark whose policy is skip is only reported.
+func (m *measurement) checkMetrics(suites []loadedSuite) int {
+	r := &runner.Runner{Capabilities: m.app.Capabilities}
+	code := 0
+	for _, ls := range suites {
+		for _, p := range r.UnsupportedMetrics(ls.suite.Benchmarks) {
+			if p.Skip {
+				m.logf("benchmark %q: metrics.%s will be reported as unsupported: %s", p.Benchmark, p.Group, p.Reason)
+				continue
+			}
+			fmt.Fprintf(m.app.Stderr, "%s: benchmark %q: metrics.%s cannot be measured on this platform: %s\n    hint: remove it, or set metrics.unsupported: skip to measure everything else and report it as unsupported\n",
+				ls.display, p.Benchmark, p.Group, p.Reason)
+			code = exitcode.Metric
+		}
+	}
+	if code != 0 {
+		fmt.Fprintf(m.app.Stderr, "yahiko: exit %d: %s\n", code, exitcode.Outcome(code))
+	}
+	return code
 }
 
 // cleanupFailed returns the exit status after a cleanup problem: an execution
@@ -238,6 +279,8 @@ func (m *measurement) newRunner(seed uint64) *runner.Runner {
 		Log:      m.logw,
 		Environ:  m.app.Environ,
 		Redactor: m.redact,
+
+		Capabilities: m.app.Capabilities,
 	}
 	if m.flags.runs > 0 {
 		r.RunsOverride = &m.flags.runs

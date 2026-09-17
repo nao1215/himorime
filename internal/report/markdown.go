@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/nao1215/yahiko/internal/metric"
 )
 
 // EscapeMarkdown makes s safe inside a Markdown table cell: pipes cannot split
@@ -48,73 +50,161 @@ func writeMarkdownBody(sb *strings.Builder, r *Report, level int) {
 			continue
 		}
 		if r.Mode == ModeCompare {
-			markdownCompare(sb, s)
+			markdownCompare(sb, s, level)
 		} else {
-			markdownRun(sb, s)
+			markdownRun(sb, s, level)
 		}
 		markdownNotes(sb, r.Mode, s)
 	}
 	markdownEnvironment(sb, r)
 }
 
-func markdownRun(sb *strings.Builder, s Suite) {
-	sb.WriteString("| Benchmark | Command | Median | Mean | Stddev | Min | Max | Runs | vs baseline | vs fastest | Result |\n")
+func markdownRun(sb *strings.Builder, s Suite, level int) {
+	groups := groupsShown(s)
+	titled := len(groups) > 1 || hasBudgets(s)
+	h := strings.Repeat("#", level+1)
+	for _, g := range groups {
+		if titled {
+			fmt.Fprintf(sb, "%s %s\n\n", h, groupTitle(g))
+		}
+		switch g {
+		case metric.GroupLatency:
+			markdownLatency(sb, s)
+		case metric.GroupThroughput:
+			markdownGroup(sb, s, g, []string{"Median", "Mean", "Min", "P95"}, func(m *Measurement) []string {
+				return []string{statCell(m, metric.Throughput, median), statCell(m, metric.Throughput, mean), statCell(m, metric.Throughput, minOf), statCell(m, metric.Throughput, percentileOf("p95"))}
+			})
+			sb.WriteString("Throughput is the declared work divided by the latency of each run.\n\n")
+		case metric.GroupCPU:
+			markdownGroup(sb, s, g, []string{"User", "System", "Total", "Total p95", "Utilization"}, func(m *Measurement) []string {
+				return []string{statCell(m, metric.CPUUser, median), statCell(m, metric.CPUSystem, median), statCell(m, metric.CPUTotal, median), statCell(m, metric.CPUTotal, percentileOf("p95")), statCell(m, metric.CPUUtilization, median)}
+			})
+			sb.WriteString(cpuFootnote + "\n\n")
+		case metric.GroupMemory:
+			markdownGroup(sb, s, g, []string{"Peak RSS (median)", "Peak RSS (max)"}, func(m *Measurement) []string {
+				return []string{statCell(m, metric.PeakRSS, median), statCell(m, metric.PeakRSS, maxOf)}
+			})
+			sb.WriteString("Peak RSS is the largest resident set size of any process in the tree. It is not the heap size of a language runtime.\n\n")
+		}
+	}
+	if hasBudgets(s) {
+		fmt.Fprintf(sb, "%s Budgets\n\n", h)
+		markdownBudgets(sb, s)
+	}
+}
+
+func groupTitle(g metric.Group) string {
+	switch g {
+	case metric.GroupLatency:
+		return "Latency"
+	case metric.GroupThroughput:
+		return "Throughput"
+	case metric.GroupCPU:
+		return "CPU"
+	case metric.GroupMemory:
+		return "Memory"
+	}
+	return string(g)
+}
+
+func markdownLatency(sb *strings.Builder, s Suite) {
+	sb.WriteString("| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative | Result |\n")
 	sb.WriteString("|---|---|--:|--:|--:|--:|--:|--:|--:|--:|---|\n")
 	for _, b := range s.Benchmarks {
 		if len(b.Commands) == 0 {
-			fmt.Fprintf(sb, "| %s | - | - | - | - | - | - | - | - | - | %s |\n", EscapeMarkdown(b.Name), verdictLabel(ResultError))
+			fmt.Fprintf(sb, "| %s | - | - | - | - | - | - | - | - | - | %s |\n", EscapeMarkdown(b.Name), benchmarkErrorCell(b).label)
 			continue
 		}
 		for _, c := range b.Commands {
 			cells := []string{"-", "-", "-", "-", "-", "-", "-", "-"}
 			if c.Head != nil && c.Head.Count > 0 {
 				cells = []string{
-					FormatDuration(c.Head.MedianNS), FormatDuration(c.Head.MeanNS), FormatDuration(c.Head.StddevNS),
-					FormatDuration(c.Head.MinNS), FormatDuration(c.Head.MaxNS), fmt.Sprint(c.Head.Count), "-", "-",
+					FormatDuration(c.Head.MedianNS), statCell(c.Head, metric.Latency, percentileOf("p95")), FormatDuration(c.Head.MeanNS),
+					FormatDuration(c.Head.StddevNS), FormatDuration(c.Head.MinNS), FormatDuration(c.Head.MaxNS), fmt.Sprint(c.Head.Count), "-",
 				}
 			}
 			if c.Relative != nil {
-				if c.Relative.VsBaseline != nil {
-					cells[6] = FormatRatio(*c.Relative.VsBaseline)
-				}
-				if c.Relative.VsFastest != nil {
+				switch {
+				case c.Relative.VsBaseline != nil:
+					cells[7] = FormatRatio(*c.Relative.VsBaseline)
+				case c.Relative.VsFastest != nil:
 					cells[7] = FormatRatio(*c.Relative.VsFastest)
 				}
 			}
-			fmt.Fprintf(sb, "| %s | %s | %s | %s |\n", EscapeMarkdown(b.Name), EscapeMarkdown(c.Name), strings.Join(cells, " | "), verdictLabel(c.Result))
+			label, _ := groupLabel(c, metric.GroupLatency)
+			fmt.Fprintf(sb, "| %s | %s | %s | %s |\n", EscapeMarkdown(b.Name), EscapeMarkdown(c.Name), strings.Join(cells, " | "), label)
+		}
+	}
+	sb.WriteString("\nRelative is the median divided by the baseline command's median, or by the fastest command's.\n\n")
+}
+
+func markdownGroup(sb *strings.Builder, s Suite, g metric.Group, headers []string, cells func(*Measurement) []string) {
+	sb.WriteString("| Benchmark | Command | " + strings.Join(headers, " | ") + " | Result |\n")
+	sb.WriteString("|---|---|" + strings.Repeat("--:|", len(headers)) + "---|\n")
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			label, _ := groupLabel(c, g)
+			fmt.Fprintf(sb, "| %s | %s | %s | %s |\n", EscapeMarkdown(b.Name), EscapeMarkdown(c.Name), strings.Join(cells(c.Head), " | "), label)
 		}
 	}
 	sb.WriteString("\n")
 }
 
-func markdownCompare(sb *strings.Builder, s Suite) {
-	sb.WriteString("| Benchmark | Command | Base | Head | Change | Interval | Confidence | Tolerance | Result |\n")
-	sb.WriteString("|---|---|--:|--:|--:|--:|--:|--:|---|\n")
+func markdownBudgets(sb *strings.Builder, s Suite) {
+	sb.WriteString("| Benchmark | Command | Metric | Budget | Measured | Result |\n")
+	sb.WriteString("|---|---|---|--:|--:|---|\n")
 	for _, b := range s.Benchmarks {
-		if len(b.Commands) == 0 {
-			fmt.Fprintf(sb, "| %s | - | - | - | - | - | - | - | %s |\n", EscapeMarkdown(b.Name), verdictLabel(ResultError))
-			continue
-		}
 		for _, c := range b.Commands {
-			base, head, change, interval := "-", "-", "-", "-"
-			metric := "median"
-			if c.Comparison != nil {
-				metric = c.Comparison.Metric
-				change = FormatChange(c.Comparison.ChangePercent)
-				interval = fmt.Sprintf("%s … %s", FormatChange(c.Comparison.CILowPercent), FormatChange(c.Comparison.CIHighPercent))
+			for _, bc := range c.Budgets {
+				row := budgetView(c, bc)
+				fmt.Fprintf(sb, "| %s | %s | %s | %s | %s | %s |\n", EscapeMarkdown(b.Name), EscapeMarkdown(c.Name), row.metric, EscapeMarkdown(row.limit), EscapeMarkdown(row.actual), row.label)
 			}
-			if c.Base != nil && c.Base.Count > 0 {
-				base = FormatDuration(metricValue(c.Base, metric))
-			}
-			if c.Head != nil && c.Head.Count > 0 {
-				head = FormatDuration(metricValue(c.Head, metric))
-			}
-			fmt.Fprintf(sb, "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
-				EscapeMarkdown(b.Name), EscapeMarkdown(c.Name), base, head, change, interval,
-				FormatConfidence(c.Comparison), FormatTolerance(c.Comparison), verdictLabel(c.Result))
 		}
 	}
 	sb.WriteString("\n")
+}
+
+func markdownCompare(sb *strings.Builder, s Suite, level int) {
+	defs := comparedMetrics(s)
+	h := strings.Repeat("#", level+1)
+	for _, def := range defs {
+		if len(defs) > 1 {
+			fmt.Fprintf(sb, "%s %s\n\n", h, capitalize(def.Label))
+		}
+		sb.WriteString("| Benchmark | Command | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result |\n")
+		sb.WriteString("|---|---|--:|--:|--:|--:|--:|--:|--:|---|\n")
+		for _, b := range s.Benchmarks {
+			if len(b.Commands) == 0 {
+				if def.Name == metric.Latency {
+					fmt.Fprintf(sb, "| %s | - | - | - | - | - | - | - | - | %s |\n", EscapeMarkdown(b.Name), benchmarkErrorCell(b).label)
+				}
+				continue
+			}
+			for _, c := range b.Commands {
+				mc := c.Comparisons[string(def.Name)]
+				if mc == nil && def.Name != metric.Latency {
+					continue
+				}
+				row := comparisonView(mc)
+				label, _ := comparisonLabel(c, mc, def.Name)
+				fmt.Fprintf(sb, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+					EscapeMarkdown(b.Name), EscapeMarkdown(c.Name), row.base, row.head, row.diff, row.change, row.interval,
+					row.confidence, row.tolerance, label)
+			}
+		}
+		sb.WriteString("\n")
+	}
+	if hasBudgets(s) {
+		fmt.Fprintf(sb, "%s Budgets (head)\n\n", h)
+		markdownBudgets(sb, s)
+	}
+}
+
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func markdownNotes(sb *strings.Builder, mode Mode, s Suite) {

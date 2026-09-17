@@ -15,12 +15,21 @@ defaults:
   stdout: discard
   stderr: logs/err.txt
   exit_codes: [0]
+  metrics:
+    latency: true
+    cpu: {scope: process_tree}
+    memory: false
+    unsupported: skip
   regression:
     metric: mean
     max_percent: "7.5%"
+    min_difference: 1ms
     confidence: 0.99
     min_samples: 10
     max_cv: 0.25
+    throughput: {metric: median, max_percent: 8}
+    cpu: {metric: mean, max_percent: "12%", min_difference: 2ms}
+    memory: {metric: median, max_percent: 5, min_difference: 1MiB}
 build:
   command: [go, build, -o, "${artifact}", ./cmd/tool]
   shell: false
@@ -70,15 +79,35 @@ benchmarks:
       other:
         command: "other --parse < ${workdir}/big.txt"
         shell: true
+    metrics:
+      latency: true
+      throughput:
+        work: {value: 1000, unit: records}
+      cpu: true
+      memory: {scope: process_tree}
+      unsupported: fail
     budget:
       tool:
         mean: "< 30ms"
         median: "<= 20ms"
         min: "< 1s"
         max: "< 2s"
+        latency: {p90: "<= 25ms", p99.9: "< 1s"}
+        throughput: {median: ">= 1000 records/s", min: "> 10 records/s"}
+        cpu:
+          user: {median: "<= 20ms"}
+          system: {p95: "<= 5ms"}
+          total: {mean: "< 30ms"}
+          utilization: {median: "<= 110%", min: ">= 50%"}
+        memory:
+          peak_rss: {max: "<= 64MiB", median: "< 60000KB"}
     regression:
       metric: median
       max_percent: 10
+      min_difference: 500us
+      throughput: {max_percent: 10, min_difference: "10 records/s"}
+      cpu: {max_percent: 15}
+      memory: {min_difference: 256KiB}
       confidence: 0.95
       min_samples: 12
       max_cv: 0
@@ -92,9 +121,15 @@ benchmarks:
   - name: file stdin
     stdin:
       file: "${root}/testdata/x.txt"
+    metrics:
+      throughput:
+        work: {file_size: "${root}/testdata/x.txt", unit: bytes}
     commands:
       cat:
         command: [cat]
+    budget:
+      cat:
+        throughput: {p95: ">= 1.5GiB/s"}
 report:
   outputs:
     - format: json
@@ -105,3 +140,5 @@ report:
       path: results/bench.csv
     - format: github
       path: results/summary.md
+    - format: samples-csv
+      path: results/samples.csv

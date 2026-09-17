@@ -4,14 +4,13 @@ import (
 	"encoding/binary"
 	"math"
 	"testing"
-	"time"
 )
 
-func decodeSamples(data []byte) []time.Duration {
-	var out []time.Duration
+func decodeSamples(data []byte) []float64 {
+	var out []float64
 	for len(data) >= 4 {
 		v := binary.LittleEndian.Uint32(data)
-		out = append(out, time.Duration(v))
+		out = append(out, float64(v))
 		data = data[4:]
 	}
 	return out
@@ -28,7 +27,7 @@ func FuzzCompare(f *testing.F) {
 		if math.IsNaN(maxPercent) || math.IsNaN(confidence) || len(a) > 400 || len(b) > 400 {
 			return
 		}
-		o := CompareOptions{Metric: Metric(int(seed % 4)), MaxPercent: math.Abs(maxPercent), Confidence: confidence, MinSamples: minSamples, MaxCV: 0.5, Resamples: 50, Seed: seed}
+		o := CompareOptions{Metric: Metric(int(seed % 4)), HigherIsBetter: seed%2 == 1, MaxPercent: math.Abs(maxPercent), Confidence: confidence, MinSamples: minSamples, MaxCV: 0.5, Resamples: 50, Seed: seed}
 		base, head := decodeSamples(a), decodeSamples(b)
 		c := Compare(base, head, o)
 		for _, p := range []float64{c.ProbRegression, c.ProbImprovement} {

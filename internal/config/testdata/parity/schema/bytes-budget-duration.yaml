@@ -1,0 +1,7 @@
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    metrics: {memory: true}
+    commands: {a: {command: [a]}}
+    budget: {a: {memory: {peak_rss: {max: "<= 20ms"}}}}

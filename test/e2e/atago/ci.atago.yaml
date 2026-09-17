@@ -62,7 +62,7 @@ scenarios:
             contains:
               - "output of an earlier step\n## "
               - "yahiko benchmark comparison: "
-              - "| Benchmark | Command | Base | Head | Change | Interval | Confidence | Tolerance | Result |"
+              - "| Benchmark | Command | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result |"
               - "| sleepy | app |"
 
   - name: a regression in a pull request exits 1 and says so in the summary

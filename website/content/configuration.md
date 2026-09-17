@@ -187,6 +187,12 @@ contain the environment, and command lines are shown as written, before
 | `regression.confidence` | `0.95` |
 | `regression.min_samples` | `10` |
 | `regression.max_cv` | `0.5` |
+| `regression.min_difference` | `unset (none)` |
+| `regression.throughput, cpu, memory: metric` | `median` |
+| `regression.throughput, cpu, memory: max_percent` | `10` |
+| `metrics.cpu, metrics.memory` | `false` |
+| `metrics.unsupported` | `fail` |
+| `metrics.throughput.work.unit` | `operations (value), bytes (file_size)` |
 <!-- END GENERATED: defaults -->
 
 A benchmark inherits `defaults`; a command inherits its benchmark. The most
@@ -255,6 +261,7 @@ could never be conclusive.
 | `stdout` |  | "discard" (default), or a path inside ${workdir} that receives the standard output of the latest run. |
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
 | `exit_codes` |  | Exit statuses that count as success. Default [0]. |
+| `metrics` |  | Metrics every benchmark measures besides latency. Throughput is declared per benchmark. |
 | `regression` |  | How a base revision and the working tree are compared (yahiko compare / yahiko ci). |
 
 ### build, setup, prepare_each, cleanup
@@ -291,6 +298,7 @@ could never be conclusive.
 | `cleanup` |  | Processes run after the benchmark whether it passed, failed or was interrupted. |
 | `baseline` |  | Command name that RELATIVE and vs_baseline are computed against. |
 | `commands` | yes | Named commands measured side by side. Names use letters, digits, '.', '_' and '-'. |
+| `metrics` |  | What the benchmark measures besides latency. |
 | `budget` |  | Absolute budgets keyed by command name. A violation fails the run with exit status 1. |
 | `regression` |  | How a base revision and the working tree are compared (yahiko compare / yahiko ci). |
 
@@ -307,25 +315,74 @@ could never be conclusive.
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
 | `exit_codes` |  | Exit statuses that count as success. Default [0]. |
 
+### benchmarks[].metrics
+
+| Key | Required | Description |
+|---|---|---|
+| `latency` |  | Wall-clock time of each run. Always measured; true only says so. |
+| `throughput` |  | Compute throughput from declared work. |
+| `cpu` |  | Measure user, system and total CPU time and CPU utilization of the process tree. |
+| `memory` |  | Measure the peak resident set size (RSS) of the process tree. |
+| `unsupported` |  | What to do when this platform cannot measure a requested metric: fail (default) stops before measuring, skip reports the metric as unsupported and skips its budgets and comparisons. |
+
+### benchmarks[].metrics.throughput.work
+
+| Key | Required | Description |
+|---|---|---|
+| `value` |  | A fixed amount of work per run, greater than zero, such as 100000. |
+| `file_size` |  | A file whose size in bytes is the work of each run: relative to the suite file, or starting with ${root} or ${workdir}. Read before every run, outside the measured time. |
+| `unit` |  | The unit of work, such as records, lines or bytes. Default: operations for value, bytes for file_size. |
+
 ### benchmarks[].budget.NAME
 
 | Key | Required | Description |
 |---|---|---|
-| `mean` |  | Budget on the mean duration. |
-| `median` |  | Budget on the median duration. |
-| `min` |  | Budget on the min duration. |
-| `max` |  | Budget on the max duration. |
+| `mean` |  | Budget on the mean latency (shorthand for latency.mean). |
+| `median` |  | Budget on the median latency (shorthand for latency.median). |
+| `min` |  | Budget on the min latency (shorthand for latency.min). |
+| `max` |  | Budget on the max latency (shorthand for latency.max). |
+| `latency` |  | Latency budgets keyed by aggregation, such as {p95: "<= 100ms"}. |
+| `throughput` |  | Throughput budgets keyed by aggregation, such as {median: ">= 50MiB/s"}. Needs metrics.throughput. |
+| `cpu` |  | CPU budgets. Needs metrics.cpu. |
+| `memory` |  | Memory budgets. Needs metrics.memory. |
+
+### benchmarks[].budget.NAME.cpu
+
+| Key | Required | Description |
+|---|---|---|
+| `user` |  | User CPU time budgets keyed by aggregation. |
+| `system` |  | System CPU time budgets keyed by aggregation. |
+| `total` |  | Total (user + system) CPU time budgets keyed by aggregation. |
+| `utilization` |  | CPU utilization budgets keyed by aggregation, in percent of one CPU; above 100% means more than one CPU was busy. |
+
+### benchmarks[].budget.NAME.memory
+
+| Key | Required | Description |
+|---|---|---|
+| `peak_rss` |  | Peak resident set size budgets keyed by aggregation. |
 
 ### regression
 
 | Key | Required | Description |
 |---|---|---|
 | `metric` |  | Statistic compared: median (default) or mean. |
-| `max_percent` |  | Tolerated slowdown in percent: a number such as 10, or a string such as "10%". Default 10. |
+| `max_percent` |  | Tolerated latency slowdown in percent: a number such as 10, or a string such as "10%". Default 10. |
+| `min_difference` |  | The smallest latency difference that can be a regression or an improvement, such as 1ms; smaller differences pass. Default: none. |
 | `confidence` |  | Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95. |
 | `min_samples` |  | Fewest samples per side for a verdict; fewer is inconclusive. Default 10. |
 | `max_cv` |  | A side whose coefficient of variation exceeds this is inconclusive; 0 disables the check. Default 0.5. |
 | `commands` |  | Compare only these commands. Default: every command. |
+| `throughput` |  | How throughput (higher is better, so a drop is a degradation) is compared. |
+| `cpu` |  | How total CPU time is compared. |
+| `memory` |  | How peak RSS is compared. |
+
+### regression.throughput, regression.cpu, regression.memory
+
+| Key | Required | Description |
+|---|---|---|
+| `metric` |  | Statistic compared: median (default) or mean. |
+| `max_percent` |  | Tolerated degradation in percent. Default 10. |
+| `min_difference` |  | The smallest absolute difference that can be a regression or an improvement, such as 1ms. Default: none. |
 
 ### report
 

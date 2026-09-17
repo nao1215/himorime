@@ -4,7 +4,6 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
-	"time"
 )
 
 // Verdict is the classification of one base/head comparison.
@@ -23,11 +22,28 @@ const (
 // comparison of two 100-sample sets still takes only milliseconds.
 const DefaultResamples = 2000
 
+// Reasons attached to a verdict. They are part of the JSON report.
+const (
+	ReasonNoSamples    = "no successful samples"
+	ReasonZeroBase     = "the base measurement is zero"
+	ReasonFewSamples   = "fewer samples than min_samples"
+	ReasonNoisy        = "measurements are noisier than max_cv"
+	ReasonTooClose     = "the change is too close to the tolerance to call"
+	ReasonBelowMinDiff = "the difference is smaller than min_difference"
+)
+
 // CompareOptions configures Compare.
 type CompareOptions struct {
 	Metric Metric
-	// MaxPercent is the tolerated slowdown in percent, such as 10.
+	// HigherIsBetter flips the direction of a regression: the metric degrades
+	// when it shrinks, as throughput does. The default is lower-is-better.
+	HigherIsBetter bool
+	// MaxPercent is the tolerated degradation in percent, such as 10.
 	MaxPercent float64
+	// MinDifference is the smallest absolute difference of the metric, in
+	// its canonical unit, that can be a regression or an improvement. 0
+	// disables the check.
+	MinDifference float64
 	// Confidence is the probability required to call a change, such as 0.95.
 	Confidence float64
 	// MinSamples is the smallest sample count on either side that can be judged.
@@ -45,53 +61,69 @@ type CompareOptions struct {
 type Comparison struct {
 	Base Summary
 	Head Summary
+	// BaseValue and HeadValue are the compared statistic of each side.
+	BaseValue float64
+	HeadValue float64
+	// Difference is HeadValue - BaseValue in the metric's unit.
+	Difference float64
 	// Change is the observed relative change of the metric in percent:
-	// (head - base) / base * 100. Positive means slower.
+	// (head - base) / base * 100. Its sign is the direction the value moved,
+	// not whether that is better or worse.
 	Change float64
 	// Low and High bound the central Confidence interval of the change in
 	// percent, taken from the bootstrap distribution.
 	Low  float64
 	High float64
-	// ProbRegression is the share of bootstrap resamples whose change exceeds
-	// +MaxPercent; ProbImprovement the share below -MaxPercent.
+	// ProbRegression is the share of bootstrap resamples that degrade beyond
+	// MaxPercent in the metric's worse direction; ProbImprovement the share
+	// that improve beyond it.
 	ProbRegression  float64
 	ProbImprovement float64
 	Verdict         Verdict
-	// Reason explains an inconclusive verdict in one short sentence.
+	// Reason explains an inconclusive verdict, or a pass decided by
+	// MinDifference, in one short sentence.
 	Reason string
 }
 
 // Compare classifies the change from base to head.
 //
 // The method is a percentile bootstrap of the relative change of the chosen
-// metric. Each of Resamples iterations draws len(base) values from base and
-// len(head) values from head with replacement, computes the metric of each
-// resample, and records (head/base - 1) * 100. From that distribution:
+// statistic. Each of Resamples iterations draws len(base) values from base and
+// len(head) values from head with replacement, computes the statistic of each
+// resample, and records (head/base - 1) * 100. The degradation of a change is
+// the change itself for a lower-is-better metric and its negation for a
+// higher-is-better metric. From that distribution:
 //
-//   - regression: P(change > +MaxPercent) >= Confidence
-//   - improved:   P(change < -MaxPercent) >= Confidence
-//   - pass:       P(change <= +MaxPercent) >= Confidence
+//   - regression: P(degradation > +MaxPercent) >= Confidence
+//   - improved:   P(degradation < -MaxPercent) >= Confidence
+//   - pass:       P(degradation <= +MaxPercent) >= Confidence
 //   - inconclusive: none of the above, or too few samples, or a side whose
 //     coefficient of variation exceeds MaxCV.
 //
-// A regression therefore needs both an observed slowdown beyond the tolerance
-// and enough evidence that it is not noise; a single slow sample cannot fail a
-// build.
-func Compare(base, head []time.Duration, o CompareOptions) Comparison {
+// An observed absolute difference below MinDifference is a pass whatever the
+// relative change. A regression therefore needs an observed degradation
+// beyond the tolerance and enough evidence that it is not noise; a single
+// slow sample cannot fail a build.
+func Compare(base, head []float64, o CompareOptions) Comparison {
 	c := Comparison{Base: Summarize(base), Head: Summarize(head)}
 	if c.Base.Count == 0 || c.Head.Count == 0 {
 		c.Verdict = VerdictInconclusive
-		c.Reason = "no successful samples"
+		c.Reason = ReasonNoSamples
 		return c
 	}
-	bv := float64(c.Base.Value(o.Metric))
-	hv := float64(c.Head.Value(o.Metric))
+	bv := c.Base.Value(o.Metric)
+	hv := c.Head.Value(o.Metric)
+	c.BaseValue, c.HeadValue, c.Difference = bv, hv, hv-bv
 	if bv <= 0 {
 		c.Verdict = VerdictInconclusive
-		c.Reason = "the base measurement is zero"
+		c.Reason = ReasonZeroBase
 		return c
 	}
 	c.Change = (hv/bv - 1) * 100
+	sign := 1.0
+	if o.HigherIsBetter {
+		sign = -1
+	}
 
 	resamples := o.Resamples
 	if resamples <= 0 {
@@ -104,44 +136,49 @@ func Compare(base, head []time.Duration, o CompareOptions) Comparison {
 	// epsilon absorbs floating point noise: 110/100 is not exactly 1.1, and a
 	// change of exactly the tolerance must not count as beyond it.
 	const epsilon = 1e-9
-	var above, below int
+	var worse, better int
 	for _, ch := range changes {
-		if ch > o.MaxPercent+epsilon {
-			above++
+		d := sign * ch
+		if d > o.MaxPercent+epsilon {
+			worse++
 		}
-		if ch < -o.MaxPercent-epsilon {
-			below++
+		if d < -o.MaxPercent-epsilon {
+			better++
 		}
 	}
-	c.ProbRegression = float64(above) / float64(len(changes))
-	c.ProbImprovement = float64(below) / float64(len(changes))
+	c.ProbRegression = float64(worse) / float64(len(changes))
+	c.ProbImprovement = float64(better) / float64(len(changes))
+	degradation := sign * c.Change
 
 	switch {
 	case c.Base.Count < o.MinSamples || c.Head.Count < o.MinSamples:
 		c.Verdict = VerdictInconclusive
-		c.Reason = "fewer samples than min_samples"
+		c.Reason = ReasonFewSamples
 	case o.MaxCV > 0 && (c.Base.CV > o.MaxCV || c.Head.CV > o.MaxCV):
 		c.Verdict = VerdictInconclusive
-		c.Reason = "measurements are noisier than max_cv"
-	case c.Change > o.MaxPercent+epsilon && c.ProbRegression >= o.Confidence:
+		c.Reason = ReasonNoisy
+	case o.MinDifference > 0 && math.Abs(c.Difference) < o.MinDifference:
+		c.Verdict = VerdictPass
+		c.Reason = ReasonBelowMinDiff
+	case degradation > o.MaxPercent+epsilon && c.ProbRegression >= o.Confidence:
 		c.Verdict = VerdictRegression
-	case c.Change < -o.MaxPercent-epsilon && c.ProbImprovement >= o.Confidence:
+	case degradation < -o.MaxPercent-epsilon && c.ProbImprovement >= o.Confidence:
 		c.Verdict = VerdictImproved
 	case 1-c.ProbRegression >= o.Confidence:
 		c.Verdict = VerdictPass
 	default:
 		c.Verdict = VerdictInconclusive
-		c.Reason = "the change is too close to the tolerance to call"
+		c.Reason = ReasonTooClose
 	}
 	return c
 }
 
-func bootstrapChanges(base, head []time.Duration, m Metric, resamples int, seed uint64) []float64 {
+func bootstrapChanges(base, head []float64, m Metric, resamples int, seed uint64) []float64 {
 	// Two PCG streams from one seed: the base and head draws are independent
 	// yet fully determined by the seed.
 	rng := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15)) //nolint:gosec // a reproducible bootstrap needs a seeded generator, not a secure one
-	bbuf := make([]time.Duration, len(base))
-	hbuf := make([]time.Duration, len(head))
+	bbuf := make([]float64, len(base))
+	hbuf := make([]float64, len(head))
 	out := make([]float64, 0, resamples)
 	for range resamples {
 		for i := range bbuf {
@@ -165,14 +202,14 @@ func bootstrapChanges(base, head []time.Duration, m Metric, resamples int, seed 
 }
 
 // metricOf computes the metric of buf, sorting it in place when needed.
-func metricOf(buf []time.Duration, m Metric) float64 {
+func metricOf(buf []float64, m Metric) float64 {
 	switch m {
 	case Mean:
 		return meanFloat(buf)
 	case Min:
-		return float64(slices.Min(buf))
+		return slices.Min(buf)
 	case Max:
-		return float64(slices.Max(buf))
+		return slices.Max(buf)
 	case Median:
 		slices.Sort(buf)
 		return medianSorted(buf)

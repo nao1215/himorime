@@ -152,7 +152,13 @@ var definitionMessages = []struct {
 	{"/definitions/command", "a list of arguments or a string", "expected a list of arguments whose first element is the program, or a non-empty string used with shell: true", "write the command as a list such as [git, --version]"},
 	{"/definitions/positiveDuration", "a duration string such as 500ms", "must be a duration greater than zero, such as 500ms or 2s", ""},
 	{"/definitions/duration", "a duration string such as 500ms", "invalid duration: write a number with a unit, such as 500ms, 2s or 1m30s (units: ns, us, µs, ms, s, m, h)", ""},
-	{"/definitions/budget", `a budget string such as "< 20ms"`, `invalid budget: write "<" or "<=" and a duration greater than zero, such as "< 20ms"`, ""},
+	{"/definitions/budget", `a budget string such as "< 20ms"`, `invalid budget: write "<" or "<=" and a duration greater than zero, such as "< 20ms"; latency and CPU time are better when lower`, ""},
+	{"/definitions/bytesBudget", `a budget string such as "<= 64MiB"`, `invalid budget: write "<" or "<=" and a byte size greater than zero, such as "<= 64MiB" (units: B, KB, MB, GB, TB, KiB, MiB, GiB, TiB); memory is better when lower`, ""},
+	{"/definitions/rateBudget", `a budget string such as ">= 50MiB/s"`, `invalid throughput budget: write ">" or ">=" and a rate in the declared work unit, such as ">= 50MiB/s" or ">= 1000 records/s"; throughput is better when higher`, ""},
+	{"/definitions/percentBudget", `a budget string such as "<= 150%"`, `invalid budget: write "<", "<=", ">" or ">=" and a percentage, such as "<= 150%"`, ""},
+	{"/definitions/bytes", "a byte size string such as 1MiB", "invalid byte size: write a number and a unit, such as 1MiB (units: B, KB, MB, GB, TB, KiB, MiB, GiB, TiB)", ""},
+	{"/definitions/rate", `a rate string such as "100 records/s"`, `invalid rate: write a number, the declared work unit and /s, such as 1MiB/s or "100 records/s"`, ""},
+	{"/definitions/collector", "true, false or a mapping with scope", "", ""},
 	{"/definitions/percent", `a percentage such as 10 or "10%"`, `expected a percentage greater than 0 and at most 1000, such as 10 or "10%"`, ""},
 	{"/definitions/relativePath", "a relative path", "must be a relative path that stays inside its base directory, without variables", ""},
 	{"/definitions/output", `"discard" or a relative path`, `must be "discard" or a relative path inside ${workdir}`, ""},
@@ -197,6 +203,9 @@ func walkSchemaError(e *jsonschema.ValidationError, parent path, emit func(path,
 }
 
 func propertyNameMessage(schemaURL, name string) string {
+	if strings.Contains(schemaURL, "Budgets/") || strings.HasSuffix(schemaURL, "Budgets") {
+		return fmt.Sprintf("unknown aggregation %q: use min, max, mean, median or a percentile from p1 to p99.9, such as p95", name)
+	}
 	if strings.Contains(schemaURL, "/definitions/env") {
 		return fmt.Sprintf("invalid environment variable name %q: use letters, digits and underscores, not starting with a digit", name)
 	}

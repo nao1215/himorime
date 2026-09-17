@@ -1,0 +1,7 @@
+# expect: regression.cpu is set but this benchmark does not measure cpu
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    commands: {a: {command: [a]}}
+    regression: {cpu: {max_percent: 5}}

@@ -44,12 +44,12 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^BENCHMARK +BASE +HEAD +CHANGE +CONFIDENCE +BUDGET +RESULT$"
+            matches: "(?m)^BENCHMARK +BASE +HEAD +DIFF +CHANGE +CONFIDENCE +TOLERANCE +RESULT$"
       - assert:
           stdout:
             # Identical builds: PASS, or INCONCLUSIVE on a noisy shared
             # runner, but never a regression.
-            matches: "(?m)^sleepy +[0-9.]+ms +[0-9.]+ms +[+-][0-9.]+% +\\S+ +\\+10% +(PASS|INCONCLUSIVE)$"
+            matches: "(?m)^sleepy +[0-9.]+ms +[0-9.]+ms +[+-]?[0-9.]+(ns|µs|ms) +[+-][0-9.]+% +\\S+ +\\+10% +(PASS|INCONCLUSIVE)$"
       - assert:
           stderr:
             contains: "with the working tree"

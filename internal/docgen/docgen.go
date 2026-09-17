@@ -137,6 +137,12 @@ func defaults() string {
 		{"regression.confidence", fmt.Sprint(config.DefaultConfidence)},
 		{"regression.min_samples", fmt.Sprint(config.DefaultMinSamples)},
 		{"regression.max_cv", fmt.Sprint(config.DefaultMaxCV)},
+		{"regression.min_difference", "unset (none)"},
+		{"regression.throughput, cpu, memory: metric", string(config.DefaultMetric)},
+		{"regression.throughput, cpu, memory: max_percent", fmt.Sprint(config.DefaultMaxPercent)},
+		{"metrics.cpu, metrics.memory", "false"},
+		{"metrics.unsupported", config.UnsupportedFail},
+		{"metrics.throughput.work.unit", "operations (value), bytes (file_size)"},
 	}
 	var sb strings.Builder
 	sb.WriteString("| Setting | Default |\n|---|---|\n")
@@ -188,8 +194,13 @@ func configReference() (string, error) {
 		{"build, setup, prepare_each, cleanup", []string{"definitions", "exec"}},
 		{"benchmarks[]", []string{"definitions", "benchmark"}},
 		{"benchmarks[].commands.NAME", []string{"definitions", "benchCommand"}},
+		{"benchmarks[].metrics", []string{"definitions", "metrics"}},
+		{"benchmarks[].metrics.throughput.work", []string{"definitions", "work"}},
 		{"benchmarks[].budget.NAME", []string{"definitions", "budgetSet"}},
+		{"benchmarks[].budget.NAME.cpu", []string{"definitions", "budgetSet", "properties", "cpu"}},
+		{"benchmarks[].budget.NAME.memory", []string{"definitions", "budgetSet", "properties", "memory"}},
 		{"regression", []string{"definitions", "regressionBenchmark"}},
+		{"regression.throughput, regression.cpu, regression.memory", []string{"definitions", "cpuRegression"}},
 		{"report", []string{"properties", "report"}},
 	}
 	var sb strings.Builder

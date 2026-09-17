@@ -1,0 +1,6 @@
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    metrics: {throughput: {work: {value: 0}}}
+    commands: {a: {command: [a]}}

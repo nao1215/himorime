@@ -4,29 +4,16 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"time"
 	"unicode/utf8"
+
+	"github.com/nao1215/yahiko/internal/metric"
 )
 
 // FormatDuration renders nanoseconds for humans with two decimals in the
 // largest unit that keeps the value at or above one: 850ns, 12.34µs, 1.82ms,
 // 3.40s. JSON reports carry the unrounded integer instead.
 func FormatDuration(ns int64) string {
-	d := time.Duration(ns)
-	abs := d
-	if abs < 0 {
-		abs = -abs
-	}
-	switch {
-	case abs < time.Microsecond:
-		return fmt.Sprintf("%dns", ns)
-	case abs < time.Millisecond:
-		return fmt.Sprintf("%.2fµs", float64(ns)/1e3)
-	case abs < time.Second:
-		return fmt.Sprintf("%.2fms", float64(ns)/1e6)
-	default:
-		return fmt.Sprintf("%.2fs", float64(ns)/1e9)
-	}
+	return metric.FormatDuration(float64(ns))
 }
 
 // FormatRatio renders a speed ratio such as 15.61x.
@@ -46,31 +33,6 @@ func FormatChange(p float64) string {
 		return "+0.0%"
 	}
 	return fmt.Sprintf("%+.1f%%", p)
-}
-
-// FormatConfidence renders the probability that a change is real in its
-// observed direction; "low" below one half, where calling it a percentage
-// would suggest more than it says.
-func FormatConfidence(c *Comparison) string {
-	if c == nil {
-		return "-"
-	}
-	p := c.ProbRegression
-	if c.ChangePercent < 0 {
-		p = c.ProbImprovement
-	}
-	if p < 0.5 {
-		return "low"
-	}
-	return fmt.Sprintf("%.1f%%", p*100)
-}
-
-// FormatTolerance renders the tolerated slowdown, such as +10%.
-func FormatTolerance(c *Comparison) string {
-	if c == nil {
-		return "-"
-	}
-	return "+" + trimFloat(c.MaxPercent) + "%"
 }
 
 func trimFloat(f float64) string {

@@ -55,6 +55,29 @@ func TestMain(m *testing.M) {
 			os.Exit(3)
 		}
 		os.Exit(0)
+	case "burn":
+		// Touch HELPER_ALLOC MiB, then spin for HELPER_BURN.
+		mib, _ := strconv.Atoi(os.Getenv("HELPER_ALLOC"))
+		buf := make([]byte, mib<<20)
+		for i := 0; i < len(buf); i += 4096 {
+			buf[i] = 1
+		}
+		d, _ := time.ParseDuration(os.Getenv("HELPER_BURN"))
+		x := 0
+		for start := time.Now(); time.Since(start) < d; {
+			x++
+		}
+		runtime.KeepAlive(buf)
+		os.Exit(0)
+	case "parent":
+		// Run the burn helper as a child and wait for it, doing nothing itself.
+		exe, _ := os.Executable()
+		cmd := exec.Command(exe)
+		cmd.Env = append(os.Environ(), "YAHIKO_PROC_HELPER=burn")
+		if err := cmd.Run(); err != nil {
+			os.Exit(3)
+		}
+		os.Exit(0)
 	case "marker":
 		time.Sleep(1500 * time.Millisecond)
 		_ = os.WriteFile(os.Getenv("HELPER_MARKER"), []byte("alive"), 0o600)
@@ -335,5 +358,113 @@ func TestLookPathResolvesRelativeEntriesAgainstTheWorkingDirectory(t *testing.T)
 	}
 	if res.ExitCode != 6 {
 		t.Fatalf("exit code = %d, want 6 from bin/ relative to the working directory", res.ExitCode)
+	}
+}
+
+// TestRunCollectsUsage checks the collected values against what the helper
+// did, with bounds wide enough for a loaded CI machine: the values must be
+// present, in the right unit, and move in the right direction.
+func TestRunCollectsUsage(t *testing.T) {
+	t.Parallel()
+	if cpuErr, memErr := Capabilities(); cpuErr != nil || memErr != nil {
+		t.Skipf("usage is not supported here: %v, %v", cpuErr, memErr)
+	}
+	s := helper(t, "burn", "HELPER_BURN=150ms", "HELPER_ALLOC=48")
+	s.CollectUsage = true
+	res, err := Run(context.Background(), s, nil)
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("run = %+v, %v", res, err)
+	}
+	u := res.Usage
+	if u.CPUErr != nil || u.MemoryErr != nil {
+		t.Fatalf("usage errors: cpu %v, memory %v", u.CPUErr, u.MemoryErr)
+	}
+	total := u.UserCPU + u.SystemCPU
+	if total < 50*time.Millisecond {
+		t.Errorf("a 150ms busy loop used only %v of CPU", total)
+	}
+	if total > res.Elapsed*time.Duration(runtime.NumCPU())+50*time.Millisecond {
+		t.Errorf("cpu time %v is impossible in %v on %d CPUs", total, res.Elapsed, runtime.NumCPU())
+	}
+	const allocated = 48 << 20
+	if u.PeakRSS < allocated || u.PeakRSS > 4<<30 {
+		t.Errorf("peak rss = %d bytes after touching %d bytes", u.PeakRSS, allocated)
+	}
+}
+
+func TestRunWithoutCollectUsageReportsNothing(t *testing.T) {
+	t.Parallel()
+	res, err := Run(context.Background(), helper(t, "exit"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Usage.CPUErr == nil || res.Usage.MemoryErr == nil || res.Usage.UserCPU != 0 || res.Usage.PeakRSS != 0 {
+		t.Fatalf("usage was reported without being requested: %+v", res.Usage)
+	}
+}
+
+// TestRunUsageCoversChildren runs a parent that waits for a child doing the
+// work. The CPU time and memory must include the child: a process-only
+// measurement would see an idle parent.
+func TestRunUsageCoversChildren(t *testing.T) {
+	t.Parallel()
+	if cpuErr, memErr := Capabilities(); cpuErr != nil || memErr != nil {
+		t.Skipf("usage is not supported here: %v, %v", cpuErr, memErr)
+	}
+	s := helper(t, "parent", "HELPER_BURN=150ms", "HELPER_ALLOC=64")
+	s.CollectUsage = true
+	res, err := Run(context.Background(), s, nil)
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("run = %+v, %v", res, err)
+	}
+	u := res.Usage
+	if u.CPUErr != nil {
+		t.Fatalf("cpu: %v", u.CPUErr)
+	}
+	if total := u.UserCPU + u.SystemCPU; total < 50*time.Millisecond {
+		t.Errorf("the child's 150ms busy loop is missing from the tree's CPU time %v", total)
+	}
+	if runtime.GOOS == "windows" {
+		if !IsUnsupported(u.MemoryErr) || u.Processes != 2 {
+			t.Fatalf("peak rss of a two-process tree on Windows = %d, %v (processes %d); want unsupported", u.PeakRSS, u.MemoryErr, u.Processes)
+		}
+		return
+	}
+	if u.MemoryErr != nil {
+		t.Fatalf("memory: %v", u.MemoryErr)
+	}
+	if u.PeakRSS < 64<<20 {
+		t.Errorf("peak rss %d misses the child's 64MiB", u.PeakRSS)
+	}
+}
+
+func TestUnsupportedError(t *testing.T) {
+	t.Parallel()
+	err := fmt.Errorf("wrapped: %w", &UnsupportedError{What: "peak rss", Reason: "because"})
+	if !IsUnsupported(err) || IsUnsupported(errNotCollected) {
+		t.Fatal("IsUnsupported")
+	}
+	if !strings.Contains(err.Error(), "peak rss is not supported: because") {
+		t.Fatal(err)
+	}
+}
+
+// BenchmarkRunUsage measures what collecting usage adds to starting and
+// reaping a process. The difference between the two sub-benchmarks is the
+// collector's overhead; it lies outside Result.Elapsed either way.
+func BenchmarkRunUsage(b *testing.B) {
+	exe, err := os.Executable()
+	if err != nil {
+		b.Fatal(err)
+	}
+	for _, collect := range []bool{false, true} {
+		b.Run(fmt.Sprintf("collect=%v", collect), func(b *testing.B) {
+			s := Spec{Path: exe, Env: append(os.Environ(), "YAHIKO_PROC_HELPER=exit"), CollectUsage: collect}
+			for b.Loop() {
+				if _, err := Run(context.Background(), s, nil); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }

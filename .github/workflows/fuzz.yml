@@ -23,7 +23,7 @@ jobs:
         target:
           - { pkg: ./internal/config, name: FuzzLoad }
           - { pkg: ./internal/config, name: FuzzParseDuration }
-          - { pkg: ./internal/config, name: FuzzParseBudget }
+          - { pkg: ./internal/metric, name: FuzzParseThreshold }
           - { pkg: ./internal/config, name: FuzzExpand }
           - { pkg: ./internal/stats, name: FuzzCompare }
           - { pkg: ./internal/report, name: FuzzReportFormats }

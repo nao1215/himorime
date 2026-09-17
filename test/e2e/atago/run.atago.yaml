@@ -96,8 +96,8 @@ scenarios:
           file:
             path: out/report.csv
             contains:
-              - "suite,benchmark,command,side,result,count,mean_ns,median_ns,stddev_ns,min_ns,max_ns,cv,vs_baseline,vs_fastest,change_percent,ci_low_percent,ci_high_percent,probability_regression,error_kind,error_message"
-              - '"commas, pipes | and quotes """,helper,head,pass,3,'
+              - "suite,benchmark,command,result,record,side,metric,unit,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,reason,error_kind,error_message"
+              - '"commas, pipes | and quotes """,helper,pass,stat,head,latency,ns,measured,count,3,'
       - assert:
           file:
             path: out/report.md

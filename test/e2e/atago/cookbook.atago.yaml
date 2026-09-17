@@ -117,7 +117,8 @@ scenarios:
           stdout:
             json:
               - {path: "$.suites[0].benchmarks[0].commands[0].budgets", length: 2}
-              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].metric", equals: "median"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].metric", equals: "latency"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].aggregation", equals: "median"}
               - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].pass", equals: true}
 
   - name: Compare main with your working tree
@@ -138,7 +139,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^count 50k lines +\\S+ +\\S+ +[+-][0-9.]+% +\\S+ +\\+10% +(PASS|INCONCLUSIVE)$"
+            matches: "(?m)^count 50k lines +\\S+ +\\S+ +\\S+ +[+-][0-9.]+% +\\S+ +\\+10% +(PASS|INCONCLUSIVE)$"
       - assert:
           stderr: {contains: "including uncommitted changes"}
       - run: {command: git status --porcelain, cwd: repo}
@@ -250,7 +251,7 @@ scenarios:
           stdout:
             contains:
               - "## reports"
-              - "| Benchmark | Command | Median | Mean | Stddev | Min | Max | Runs | vs baseline | vs fastest | Result |"
+              - "| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative | Result |"
               - "| count 20k lines | scanner |"
               - "Measured with yahiko"
 
@@ -280,7 +281,7 @@ scenarios:
       - assert:
           file:
             path: result.csv
-            contains: ["suite,benchmark,command,side,result,count,mean_ns", "reports,count 20k lines,scanner,head,pass,10,", "reports,count 20k lines,readall,head,pass,10,"]
+            contains: ["suite,benchmark,command,result,record,side,metric,unit,status,statistic,value", "reports,count 20k lines,scanner,pass,stat,head,latency,ns,measured,count,10,", "reports,count 20k lines,readall,pass,stat,head,latency,ns,measured,count,10,"]
 
   - name: Write a GitHub Actions job summary
     steps:

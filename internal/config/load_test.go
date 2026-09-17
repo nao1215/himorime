@@ -2,12 +2,15 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nao1215/yahiko/internal/metric"
 )
 
 func TestLoadAppliesDefaults(t *testing.T) {
@@ -24,7 +27,8 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if c.Timeout != DefaultTimeout || c.Stdout != OutputDiscard || c.Stderr != OutputDiscard || !reflect.DeepEqual(c.ExitCodes, []int{0}) {
 		t.Errorf("command defaults = %+v", c)
 	}
-	want := Regression{Metric: MetricMedian, MaxPercent: 10, Confidence: 0.95, MinSamples: 10, MaxCV: 0.5}
+	metricDefault := MetricRegression{Metric: MetricMedian, MaxPercent: 10}
+	want := Regression{Metric: MetricMedian, MaxPercent: 10, Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Throughput: metricDefault, CPU: metricDefault, Memory: metricDefault}
 	if !reflect.DeepEqual(b.Regression, want) {
 		t.Errorf("regression defaults = %+v, want %+v", b.Regression, want)
 	}
@@ -156,9 +160,9 @@ benchmarks:
 	}
 	var budgets []string
 	for _, bud := range b.Budgets {
-		budgets = append(budgets, bud.Command+"."+string(bud.Metric)+bud.Expr.Operator())
+		budgets = append(budgets, bud.Command+"."+string(bud.Metric)+"."+string(bud.Aggregation)+string(bud.Threshold.Op))
 	}
-	if !reflect.DeepEqual(budgets, []string{"zeta.mean<", "zeta.median<", "alpha.max<="}) {
+	if !reflect.DeepEqual(budgets, []string{"zeta.latency.median<", "zeta.latency.mean<", "alpha.latency.max<="}) {
 		t.Errorf("budgets = %v", budgets)
 	}
 	if _, ok := b.Command("mid"); !ok {
@@ -374,7 +378,7 @@ func TestLoadFileErrors(t *testing.T) {
 
 func TestFormatsAndHelpers(t *testing.T) {
 	t.Parallel()
-	if len(Formats()) != 5 {
+	if len(Formats()) != 6 {
 		t.Fatal("formats")
 	}
 	if got := joinArgv([]string{"a", "b c", `d"e`, ""}); got != `a "b c" "d\"e" ""` {
@@ -390,5 +394,191 @@ func TestFormatsAndHelpers(t *testing.T) {
 	b := Benchmark{Tags: []string{"smoke"}}
 	if !b.HasTag("smoke") || b.HasTag("slow") {
 		t.Fatal("HasTag")
+	}
+}
+
+func TestLoadMetrics(t *testing.T) {
+	t.Parallel()
+	src := `version: "1"
+suite: {name: metrics}
+defaults:
+  metrics:
+    cpu: true
+    unsupported: skip
+  regression:
+    cpu: {max_percent: 12}
+benchmarks:
+  - name: large json
+    metrics:
+      latency: true
+      throughput:
+        work: {file_size: "testdata/large file.json"}
+      memory: {scope: process_tree}
+    commands:
+      tool: {command: [tool]}
+      other: {command: [other]}
+    budget:
+      tool:
+        median: "< 100ms"
+        latency: {p95: "<= 120ms", p99.9: "<= 1s"}
+        throughput: {median: ">= 50MiB/s", p5: "> 10MiB/s"}
+        cpu:
+          total: {median: "<= 70ms"}
+          utilization: {max: "<= 180%"}
+        memory:
+          peak_rss: {max: "<= 64MiB"}
+    regression:
+      min_difference: 2ms
+      throughput: {metric: mean, max_percent: "8%", min_difference: 1MiB/s}
+      memory: {max_percent: 5, min_difference: 512KiB}
+  - name: records
+    metrics:
+      cpu: false
+      throughput:
+        work: {value: 100000, unit: records}
+    commands:
+      tool: {command: [tool]}
+    budget:
+      tool:
+        throughput: {median: ">= 1000 records/s"}
+  - name: plain
+    commands:
+      tool: {command: [tool]}
+`
+	s := mustParse(t, src)
+	large, records, plain := s.Benchmarks[0], s.Benchmarks[1], s.Benchmarks[2]
+	if !large.Metrics.CPU || !large.Metrics.Memory || large.Metrics.Unsupported != UnsupportedSkip {
+		t.Errorf("large metrics = %+v", large.Metrics)
+	}
+	if w := large.Metrics.Throughput; w == nil || w.FileSize != "testdata/large file.json" || w.Unit != "bytes" || w.Value != 0 {
+		t.Errorf("large work = %+v", w)
+	}
+	if records.Metrics.CPU || records.Metrics.Memory || records.Metrics.Throughput.Value != 100000 || records.Metrics.Throughput.Unit != "records" {
+		t.Errorf("records metrics = %+v", records.Metrics)
+	}
+	if !plain.Metrics.CPU || plain.Metrics.Memory || plain.Metrics.Throughput != nil || plain.Metrics.Collects(metric.GroupThroughput) {
+		t.Errorf("plain metrics = %+v", plain.Metrics)
+	}
+	var got []string
+	for _, b := range large.Budgets {
+		got = append(got, fmt.Sprintf("%s.%s.%s %s %g", b.Command, b.Metric, b.Aggregation, b.Threshold.Op, b.Threshold.Limit))
+	}
+	want := []string{
+		"tool.latency.median < 1e+08",
+		"tool.latency.p95 <= 1.2e+08",
+		"tool.latency.p99.9 <= 1e+09",
+		"tool.throughput.median >= 5.24288e+07",
+		"tool.throughput.p5 > 1.048576e+07",
+		"tool.cpu_total.median <= 7e+07",
+		"tool.cpu_utilization.max <= 180",
+		"tool.peak_rss.max <= 6.7108864e+07",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("budgets:\n got %v\nwant %v", got, want)
+	}
+	r := large.Regression
+	if r.MinDifference != 2e6 || r.Throughput.Metric != MetricMean || r.Throughput.MaxPercent != 8 || r.Throughput.MinDifference != 1<<20 {
+		t.Errorf("regression = %+v", r)
+	}
+	if r.CPU.MaxPercent != 12 || r.Memory.MaxPercent != 5 || r.Memory.MinDifference != 512<<10 || r.Memory.Metric != MetricMedian {
+		t.Errorf("inherited regression = %+v", r)
+	}
+	for name, wantPct := range map[metric.Name]float64{metric.Latency: 10, metric.Throughput: 8, metric.CPUTotal: 12, metric.PeakRSS: 5} {
+		if mr, ok := r.For(name); !ok || mr.MaxPercent != wantPct {
+			t.Errorf("For(%s) = %+v, %v", name, mr, ok)
+		}
+	}
+	if _, ok := r.For(metric.CPUUtilization); ok {
+		t.Error("cpu utilization must not be comparable")
+	}
+	if plain.Metrics.WorkUnit() != "" || records.Metrics.WorkUnit() != "records" || !large.Metrics.NeedsUsage() {
+		t.Error("metrics helpers")
+	}
+}
+
+// TestLoadRejectsMetrics covers the metric rules: names, units, work,
+// directions, value types, aggregations and the settings that need a metric
+// to be measured.
+func TestLoadRejectsMetrics(t *testing.T) {
+	t.Parallel()
+	withMetrics := func(metrics, budget, regression string) string {
+		src := minimal("")
+		if metrics != "" {
+			src += "    metrics:\n" + indent(metrics, "      ")
+		}
+		if budget != "" {
+			src += "    budget:\n      tool:\n" + indent(budget, "        ")
+		}
+		if regression != "" {
+			src += "    regression:\n" + indent(regression, "      ")
+		}
+		return src
+	}
+	tests := []struct {
+		name  string
+		src   string
+		want  string
+		field string
+	}{
+		{"unknown metric", withMetrics("gpu: true", "", ""), `unknown key "gpu"`, "benchmarks[0].metrics.gpu"},
+		{"latency cannot be disabled", withMetrics("latency: false", "", ""), "must be true", "benchmarks[0].metrics.latency"},
+		{"unknown scope", withMetrics("cpu: {scope: process}", "", ""), "must be one of: process_tree", "benchmarks[0].metrics.cpu.scope"},
+		{"collector type", withMetrics("memory: yes-please", "", ""), "expected true, false or a mapping with scope", "benchmarks[0].metrics.memory"},
+		{"unsupported policy", withMetrics("unsupported: ignore", "", ""), "must be one of: fail, skip", "benchmarks[0].metrics.unsupported"},
+		{"zero work", withMetrics("throughput: {work: {value: 0, unit: records}}", "", ""), "must be greater than 0, got 0", "benchmarks[0].metrics.throughput.work.value"},
+		{"negative work", withMetrics("throughput: {work: {value: -5}}", "", ""), "must be greater than 0, got -5", "benchmarks[0].metrics.throughput.work.value"},
+		{"string work", withMetrics("throughput: {work: {value: \"100\"}}", "", ""), "expected a number, got a string", "benchmarks[0].metrics.throughput.work.value"},
+		{"work without amount", withMetrics("throughput: {work: {unit: records}}", "", ""), "work needs a value or a file_size", "benchmarks[0].metrics.throughput.work"},
+		{"work with both", withMetrics("throughput: {work: {value: 1, file_size: in.json}}", "", ""), "declares both value and file_size", "benchmarks[0].metrics.throughput.work"},
+		{"file size in records", withMetrics("throughput: {work: {file_size: in.json, unit: records}}", "", ""), "its unit must be bytes", "benchmarks[0].metrics.throughput.work.unit"},
+		{"work in MiB", withMetrics("throughput: {work: {value: 2, unit: MiB}}", "", ""), `work unit "MiB" is a byte size multiple`, "benchmarks[0].metrics.throughput.work.unit"},
+		{"invalid work unit", withMetrics("throughput: {work: {value: 2, unit: \"records/s\"}}", "", ""), "does not match the expected format", "benchmarks[0].metrics.throughput.work.unit"},
+		{"absolute file size", withMetrics("throughput: {work: {file_size: /etc/passwd}}", "", ""), "absolute paths are not allowed", "benchmarks[0].metrics.throughput.work.file_size"},
+		{"throughput without work", withMetrics("throughput: {}", "", ""), "work is required", "benchmarks[0].metrics.throughput.work"},
+		{"throughput in defaults", "version: \"1\"\nsuite: {name: x}\ndefaults: {metrics: {throughput: {work: {value: 1}}}}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\n", `unknown key "throughput"`, "defaults.metrics.throughput"},
+		{"budget without metric", withMetrics("", "cpu: {total: {median: \"< 1s\"}}", ""), "a budget on cpu total needs the benchmark to measure cpu", "benchmarks[0].budget.tool.cpu.total.median"},
+		{"throughput budget without work", withMetrics("", "throughput: {median: \">= 1 ops/s\"}", ""), "needs the benchmark to measure throughput", "benchmarks[0].budget.tool.throughput.median"},
+		{"latency budget as upper bound", withMetrics("", "latency: {p95: \">= 10ms\"}", ""), `write "<" or "<="`, "benchmarks[0].budget.tool.latency.p95"},
+		{"throughput budget as upper bound", withMetrics("throughput: {work: {value: 10}}", "throughput: {median: \"<= 5 operations/s\"}", ""), `write ">" or ">="`, "benchmarks[0].budget.tool.throughput.median"},
+		{"memory budget as lower bound", withMetrics("memory: true", "memory: {peak_rss: {max: \">= 1MiB\"}}", ""), `write "<" or "<="`, "benchmarks[0].budget.tool.memory.peak_rss.max"},
+		{"memory budget with a duration", withMetrics("memory: true", "memory: {peak_rss: {max: \"<= 10ms\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.memory.peak_rss.max"},
+		{"cpu budget with bytes", withMetrics("cpu: true", "cpu: {total: {median: \"<= 1MiB\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.cpu.total.median"},
+		{"utilization without percent", withMetrics("cpu: true", "cpu: {utilization: {median: \"<= 150\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.cpu.utilization.median"},
+		{"invalid unit", withMetrics("memory: true", "memory: {peak_rss: {max: \"<= 64MB/s\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.memory.peak_rss.max"},
+		{"lowercase unit", withMetrics("memory: true", "memory: {peak_rss: {max: \"<= 64mib\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.memory.peak_rss.max"},
+		{"zero byte budget", withMetrics("memory: true", "memory: {peak_rss: {max: \"<= 0MiB\"}}", ""), "greater than zero", "benchmarks[0].budget.tool.memory.peak_rss.max"},
+		{"rate unit mismatch", withMetrics("throughput: {work: {value: 10, unit: records}}", "throughput: {median: \">= 5MiB/s\"}", ""), "the budget is in bytes/s but the declared work unit is records", "benchmarks[0].budget.tool.throughput.median"},
+		{"rate unit mismatch the other way", withMetrics("throughput: {work: {file_size: in.json}}", "throughput: {median: \">= 5 records/s\"}", ""), "the budget is in records/s but the declared work unit is bytes", "benchmarks[0].budget.tool.throughput.median"},
+		{"unsupported aggregation", withMetrics("", "latency: {stddev: \"< 1ms\"}", ""), `unknown aggregation "stddev"`, "benchmarks[0].budget.tool.latency.stddev"},
+		{"percentile 100", withMetrics("", "latency: {p100: \"< 1ms\"}", ""), `unknown aggregation "p100"`, "benchmarks[0].budget.tool.latency.p100"},
+		{"percentile 0", withMetrics("", "latency: {p0: \"< 1ms\"}", ""), `unknown aggregation "p0"`, "benchmarks[0].budget.tool.latency.p0"},
+		{"shorthand and latency", withMetrics("", "median: \"< 1s\"\nlatency: {median: \"< 2s\"}", ""), "the latency median budget is declared twice", "benchmarks[0].budget.tool.latency.median"},
+		{"empty cpu budget", withMetrics("cpu: true", "cpu: {}", ""), "must contain at least 1 entry", "benchmarks[0].budget.tool.cpu"},
+		{"regression for an unmeasured metric", withMetrics("", "", "memory: {max_percent: 5}"), "regression.memory is set but this benchmark does not measure memory", "benchmarks[0].regression.memory"},
+		{"regression percent threshold", withMetrics("cpu: true", "", "cpu: {max_percent: 0}"), "percentage greater than 0", "benchmarks[0].regression.cpu.max_percent"},
+		{"regression min_difference type", withMetrics("memory: true", "", "memory: {min_difference: 5ms}"), "invalid byte size", "benchmarks[0].regression.memory.min_difference"},
+		{"latency min_difference type", withMetrics("", "", "min_difference: 1MiB"), "invalid duration", "benchmarks[0].regression.min_difference"},
+		{"throughput min_difference unit", withMetrics("throughput: {work: {value: 5, unit: records}}", "", "throughput: {min_difference: 1MiB/s}"), "min_difference is in bytes/s but the declared work unit is records", "benchmarks[0].regression.throughput.min_difference"},
+		{"regression metric p95", withMetrics("cpu: true", "", "cpu: {metric: p95}"), "must be one of: median, mean", "benchmarks[0].regression.cpu.metric"},
+		{"samples format in report", "version: \"1\"\nsuite: {name: x}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\nreport: {outputs: [{format: samples, path: x.csv}]}\n", "must be one of", "report.outputs[0].format"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseString(t, tt.src)
+			var verr *ValidationError
+			if !errors.As(err, &verr) {
+				t.Fatalf("Load() error = %v, want a ValidationError\n%s", err, tt.src)
+			}
+			for _, is := range verr.Issues {
+				if strings.Contains(is.Message, tt.want) && is.Field == tt.field {
+					if is.Line == 0 {
+						t.Errorf("issue %q has no position", is.Message)
+					}
+					return
+				}
+			}
+			t.Fatalf("no issue with message %q at %q; issues:\n%v\nsource:\n%s", tt.want, tt.field, err, tt.src)
+		})
 	}
 }

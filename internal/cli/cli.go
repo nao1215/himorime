@@ -31,6 +31,9 @@ type App struct {
 	Now       func() time.Time
 	// StdoutIsTerminal reports whether stdout is an interactive terminal.
 	StdoutIsTerminal bool
+	// Capabilities reports what this platform can measure; the platform's
+	// own when nil. Tests replace it to exercise unsupported metrics.
+	Capabilities func() (cpu, memory error)
 }
 
 // Main is the process entry point. It installs interrupt handling and returns

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nao1215/yahiko/internal/metric"
 )
 
 func TestParseDuration(t *testing.T) {
@@ -48,60 +50,27 @@ func TestParsePercent(t *testing.T) {
 	}
 }
 
-func TestParseBudget(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		in        string
-		inclusive bool
-		limit     time.Duration
-	}{
-		{"< 20ms", false, 20 * time.Millisecond},
-		{"<20ms", false, 20 * time.Millisecond},
-		{"<= 1s", true, time.Second},
-		{"  <=1.5s  ", true, 1500 * time.Millisecond},
-	}
-	for _, tt := range tests {
-		b, err := ParseBudget(tt.in)
-		if err != nil {
-			t.Fatalf("ParseBudget(%q): %v", tt.in, err)
-		}
-		if b.Inclusive != tt.inclusive || b.Limit != tt.limit {
-			t.Errorf("ParseBudget(%q) = %+v", tt.in, b)
-		}
-	}
-	for _, in := range []string{"20ms", "> 20ms", "< 0s", "<", "< 20", "== 1s", "<< 1s", "< -1s"} {
-		if _, err := ParseBudget(in); err == nil {
-			t.Errorf("ParseBudget(%q) accepted an invalid budget", in)
-		}
-	}
-}
-
-func TestBudgetAllowsBoundary(t *testing.T) {
-	t.Parallel()
-	lt, _ := ParseBudget("< 20ms")
-	le, _ := ParseBudget("<= 20ms")
-	at := 20 * time.Millisecond
-	if lt.Allows(at) {
-		t.Error("< 20ms allowed exactly 20ms")
-	}
-	if !le.Allows(at) {
-		t.Error("<= 20ms rejected exactly 20ms")
-	}
-	if !lt.Allows(at-1) || le.Allows(at+1) {
-		t.Error("budget boundary off by one")
-	}
-	if lt.Operator() != "<" || le.Operator() != "<=" {
-		t.Error("Operator() mismatch")
-	}
-}
-
 func TestSchemaPatternsMatchGo(t *testing.T) {
 	t.Parallel()
 	src := string(mustSchema(t))
-	for name, pattern := range map[string]string{"duration": durationPattern, "budget": budgetPattern, "percent": percentPattern} {
+	for name, pattern := range map[string]string{
+		"duration":        metric.DurationPattern,
+		"duration budget": metric.DurationBudgetPattern,
+		"bytes budget":    metric.BytesBudgetPattern,
+		"rate budget":     metric.RateBudgetPattern,
+		"percent budget":  metric.PercentBudgetPattern,
+		"bytes":           metric.BytesPattern,
+		"rate":            metric.RatePattern,
+		"work unit":       metric.WorkUnitPattern,
+		"percent":         percentPattern,
+	} {
 		quoted := strings.ReplaceAll(pattern, `\`, `\\`)
 		if !strings.Contains(src, `"pattern": "`+quoted+`"`) {
 			t.Errorf("schema/yahiko.schema.json does not carry the Go %s pattern %s", name, pattern)
 		}
+	}
+	agg := strings.TrimSuffix(strings.TrimPrefix(metric.PercentilePattern, "^p"), "$")
+	if !strings.Contains(src, `"pattern": "^(min|max|mean|median|p`+strings.ReplaceAll(agg, `\`, `\\`)+`)$"`) {
+		t.Errorf("schema/yahiko.schema.json does not carry the aggregation pattern built from %s", metric.PercentilePattern)
 	}
 }

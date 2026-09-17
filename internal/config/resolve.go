@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/nao1215/yahiko/internal/metric"
 )
 
 // The validator applies the rules JSON Schema cannot express, and resolves
@@ -42,7 +44,7 @@ func (v *validator) resolve(raw *RawFile) *Suite {
 	}
 	dp := root.key("defaults")
 	v.checkSettings(dp, defaults.Cwd, defaults.Env)
-	baseRegression := applyRegression(defaultRegression(), defaults.Regression)
+	baseRegression := v.applyRegression(defaultRegression(), defaults.Regression, dp.key("regression"))
 
 	if raw.Build != nil {
 		b := v.resolveExec(root.key("build"), *raw.Build, DefaultBuildTimeout, scopeBuild)
@@ -68,16 +70,20 @@ func (v *validator) resolve(raw *RawFile) *Suite {
 }
 
 func defaultRegression() Regression {
+	metricDefault := MetricRegression{Metric: DefaultMetric, MaxPercent: DefaultMaxPercent}
 	return Regression{
 		Metric:     DefaultMetric,
 		MaxPercent: DefaultMaxPercent,
 		Confidence: DefaultConfidence,
 		MinSamples: DefaultMinSamples,
 		MaxCV:      DefaultMaxCV,
+		Throughput: metricDefault,
+		CPU:        metricDefault,
+		Memory:     metricDefault,
 	}
 }
 
-func applyRegression(base Regression, raw *RawRegression) Regression {
+func (v *validator) applyRegression(base Regression, raw *RawRegression, p path) Regression {
 	if raw == nil {
 		return base
 	}
@@ -87,6 +93,9 @@ func applyRegression(base Regression, raw *RawRegression) Regression {
 	}
 	if raw.MaxPercent != nil {
 		r.MaxPercent = raw.MaxPercent.Value
+	}
+	if raw.MinDifference != nil {
+		r.MinDifference, _ = v.quantity(p.key("min_difference"), metric.KindDuration, *raw.MinDifference)
 	}
 	if raw.Confidence != nil {
 		r.Confidence = *raw.Confidence
@@ -100,7 +109,38 @@ func applyRegression(base Regression, raw *RawRegression) Regression {
 	if raw.Commands != nil {
 		r.Commands = raw.Commands
 	}
+	r.Throughput = v.applyMetricRegression(r.Throughput, raw.Throughput, p.key("throughput"), metric.KindRate)
+	r.CPU = v.applyMetricRegression(r.CPU, raw.CPU, p.key("cpu"), metric.KindDuration)
+	r.Memory = v.applyMetricRegression(r.Memory, raw.Memory, p.key("memory"), metric.KindBytes)
 	return r
+}
+
+func (v *validator) applyMetricRegression(base MetricRegression, raw *RawMetricRegression, p path, k metric.Kind) MetricRegression {
+	if raw == nil {
+		return base
+	}
+	r := base
+	if raw.Metric != nil {
+		r.Metric = Metric(*raw.Metric)
+	}
+	if raw.MaxPercent != nil {
+		r.MaxPercent = raw.MaxPercent.Value
+	}
+	if raw.MinDifference != nil {
+		r.MinDifference, r.unit = v.quantity(p.key("min_difference"), k, *raw.MinDifference)
+		r.unitPath = p.key("min_difference")
+	}
+	return r
+}
+
+// quantity parses a typed quantity and records an issue when it is invalid.
+func (v *validator) quantity(p path, k metric.Kind, s string) (float64, string) {
+	val, unit, err := metric.ParseQuantity(k, s)
+	if err != nil {
+		v.add(p, "", "%v", err)
+		return 0, ""
+	}
+	return val, unit
 }
 
 // checkText rejects control characters in names shown in reports; JSON
@@ -254,17 +294,112 @@ func (v *validator) resolveBenchmark(p path, rb RawBenchmark, d *RawDefaults, ba
 			v.add(p.key("baseline"), "set baseline to one of: "+names, "baseline %q is not a command of this benchmark", rb.Baseline)
 		}
 	}
+	b.Metrics = v.resolveMetrics(p.key("metrics"), d.Metrics, rb.Metrics)
 	b.Budgets = v.resolveBudgets(p.key("budget"), rb, b, names)
 
-	b.Regression = applyRegression(baseRegression, rb.Regression)
+	b.Regression = v.applyRegression(baseRegression, rb.Regression, p.key("regression"))
 	if rb.Regression != nil {
 		for i, name := range rb.Regression.Commands {
 			if _, ok := b.Command(name); !ok {
 				v.add(p.key("regression").key("commands").index(i), "list command names of this benchmark: "+names, "%q is not a command of this benchmark", name)
 			}
 		}
+		v.checkRegressionMetrics(p.key("regression"), rb.Regression, b.Metrics)
+	}
+	if b.Metrics.Throughput != nil && b.Regression.Throughput.unit != "" && b.Regression.Throughput.unit != b.Metrics.Throughput.Unit {
+		v.add(b.Regression.Throughput.unitPath, "write min_difference in the declared work unit, such as \"1000 "+b.Metrics.Throughput.Unit+"/s\"",
+			"min_difference is in %s/s but the declared work unit is %s", b.Regression.Throughput.unit, b.Metrics.Throughput.Unit)
 	}
 	return b
+}
+
+// checkRegressionMetrics rejects a benchmark's tolerance for a metric the
+// benchmark does not measure: the setting would silently do nothing.
+func (v *validator) checkRegressionMetrics(p path, raw *RawRegression, m Metrics) {
+	for _, x := range []struct {
+		key   string
+		group metric.Group
+		set   bool
+	}{{"throughput", metric.GroupThroughput, raw.Throughput != nil}, {"cpu", metric.GroupCPU, raw.CPU != nil}, {"memory", metric.GroupMemory, raw.Memory != nil}} {
+		if x.set && !m.Collects(x.group) {
+			v.add(p.key(x.key), metricHint(x.group), "regression.%s is set but this benchmark does not measure %s", x.key, x.group)
+		}
+	}
+}
+
+func metricHint(g metric.Group) string {
+	if g == metric.GroupThroughput {
+		return "declare the work of one run under metrics.throughput.work, such as {value: 1000, unit: records}"
+	}
+	return fmt.Sprintf("enable it with metrics: {%s: true}", g)
+}
+
+// resolveMetrics merges the metrics of defaults and a benchmark. Only a
+// benchmark can declare throughput, because its work belongs to its input.
+func (v *validator) resolveMetrics(p path, d, rb *RawMetrics) Metrics {
+	m := Metrics{Unsupported: UnsupportedFail}
+	for _, raw := range []*RawMetrics{d, rb} {
+		if raw == nil {
+			continue
+		}
+		if raw.CPU != nil {
+			m.CPU = raw.CPU.Enabled()
+		}
+		if raw.Memory != nil {
+			m.Memory = raw.Memory.Enabled()
+		}
+		if raw.Unsupported != nil {
+			m.Unsupported = *raw.Unsupported
+		}
+	}
+	if rb != nil && rb.Throughput != nil {
+		m.Throughput = v.resolveWork(p.key("throughput").key("work"), rb.Throughput.Work)
+	}
+	return m
+}
+
+func (v *validator) resolveWork(p path, raw RawWork) *Work {
+	w := &Work{}
+	switch {
+	case raw.Value != nil && raw.FileSize != nil:
+		v.add(p, "keep either value or file_size", "work declares both value and file_size; declare exactly one")
+		return w
+	case raw.Value == nil && raw.FileSize == nil:
+		v.add(p, "write value: 1000 for a fixed amount, or file_size: path/to/input for the size of a file", "work needs a value or a file_size")
+		return w
+	}
+	unit := ""
+	if raw.Unit != nil {
+		unit = *raw.Unit
+	}
+	if raw.FileSize != nil {
+		v.checkPathTemplate(p.key("file_size"), *raw.FileSize, true)
+		w.FileSize = *raw.FileSize
+		if unit == "" {
+			unit = metric.BytesUnit
+		}
+		if unit != metric.BytesUnit {
+			v.add(p.key("unit"), "remove unit or write unit: bytes", "file_size measures bytes, so its unit must be bytes, not %q", unit)
+		}
+	} else {
+		w.Value = *raw.Value
+		if unit == "" {
+			unit = "operations"
+		}
+		if metric.IsByteUnit(unit) && unit != metric.BytesUnit {
+			v.add(p.key("unit"), "convert the value to bytes and write unit: bytes; throughput is then shown as KiB/s, MiB/s and so on", "work unit %q is a byte size multiple", unit)
+		}
+	}
+	w.Unit = unit
+	return w
+}
+
+// budgetEntry is one budget expression as written, before it is typed.
+type budgetEntry struct {
+	metric metric.Name
+	agg    string
+	expr   string
+	path   path
 }
 
 func (v *validator) resolveBudgets(p path, rb RawBenchmark, b Benchmark, names string) []Budget {
@@ -274,17 +409,84 @@ func (v *validator) resolveBudgets(p path, rb RawBenchmark, b Benchmark, names s
 			v.add(p.key(name), "budgets are keyed by command name: "+names, "budget refers to unknown command %q", name)
 			continue
 		}
-		rbud := rb.Budget[name]
-		for _, m := range []struct {
-			metric Metric
-			expr   *BudgetExpr
-		}{{MetricMean, rbud.Mean}, {MetricMedian, rbud.Median}, {MetricMin, rbud.Min}, {MetricMax, rbud.Max}} {
-			if m.expr != nil {
-				out = append(out, Budget{Command: name, Metric: m.metric, Expr: *m.expr})
+		for _, e := range v.budgetEntries(p.key(name), rb.Budget[name]) {
+			if bud, ok := v.resolveBudget(name, e, b.Metrics); ok {
+				out = append(out, bud)
 			}
 		}
 	}
 	return out
+}
+
+// budgetEntries flattens one command's budgets in report order: metric order,
+// then aggregation order.
+func (v *validator) budgetEntries(p path, rbud RawBudget) []budgetEntry {
+	var entries []budgetEntry
+	latency := map[string]string{}
+	shorthand := map[string]bool{}
+	for key, expr := range map[string]*string{"mean": rbud.Mean, "median": rbud.Median, "min": rbud.Min, "max": rbud.Max} {
+		if expr != nil {
+			latency[key] = *expr
+			shorthand[key] = true
+		}
+	}
+	for key, expr := range rbud.Latency {
+		if shorthand[key] {
+			v.add(p.key("latency").key(key), "keep only one of "+key+" and latency."+key, "the latency %s budget is declared twice", key)
+			continue
+		}
+		latency[key] = expr
+	}
+	add := func(n metric.Name, m map[string]string, base path, shorthandKeys map[string]bool) {
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool { return metric.Aggregation(keys[i]).Less(metric.Aggregation(keys[j])) })
+		for _, k := range keys {
+			ep := base.key(k)
+			if shorthandKeys[k] {
+				ep = p.key(k)
+			}
+			entries = append(entries, budgetEntry{metric: n, agg: k, expr: m[k], path: ep})
+		}
+	}
+	add(metric.Latency, latency, p.key("latency"), shorthand)
+	add(metric.Throughput, rbud.Throughput, p.key("throughput"), nil)
+	if rbud.CPU != nil {
+		add(metric.CPUUser, rbud.CPU.User, p.key("cpu").key("user"), nil)
+		add(metric.CPUSystem, rbud.CPU.System, p.key("cpu").key("system"), nil)
+		add(metric.CPUTotal, rbud.CPU.Total, p.key("cpu").key("total"), nil)
+		add(metric.CPUUtilization, rbud.CPU.Utilization, p.key("cpu").key("utilization"), nil)
+	}
+	if rbud.Memory != nil {
+		add(metric.PeakRSS, rbud.Memory.PeakRSS, p.key("memory").key("peak_rss"), nil)
+	}
+	return entries
+}
+
+func (v *validator) resolveBudget(command string, e budgetEntry, m Metrics) (Budget, bool) {
+	def := metric.MustLookup(e.metric)
+	agg, err := metric.ParseAggregation(e.agg)
+	if err != nil {
+		v.add(e.path, "", "%v", err)
+		return Budget{}, false
+	}
+	th, err := metric.ParseThreshold(def.Kind, def.Better, e.expr)
+	if err != nil {
+		v.add(e.path, "", "%v", err)
+		return Budget{}, false
+	}
+	if !m.Collects(def.Group) {
+		v.add(e.path, metricHint(def.Group), "a budget on %s needs the benchmark to measure %s", def.Label, def.Group)
+		return Budget{}, false
+	}
+	if e.metric == metric.Throughput && th.Unit != m.WorkUnit() {
+		v.add(e.path, "write the budget in the declared work unit, such as \">= 1000 "+m.WorkUnit()+"/s\"",
+			"the budget is in %s/s but the declared work unit is %s", th.Unit, m.WorkUnit())
+		return Budget{}, false
+	}
+	return Budget{Command: command, Metric: e.metric, Aggregation: agg, Threshold: th}, true
 }
 
 func (v *validator) resolveStdin(p path, s *StdinSpec) Stdin {

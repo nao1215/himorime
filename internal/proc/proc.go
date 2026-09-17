@@ -36,6 +36,9 @@ type Spec struct {
 	Stdout  io.Writer
 	Stderr  io.Writer
 	Timeout time.Duration
+	// CollectUsage reads the CPU time and peak RSS of the process tree after
+	// it exits. Without it, Result.Usage reports both as not collected.
+	CollectUsage bool
 }
 
 // Result is the outcome of Run.
@@ -48,6 +51,9 @@ type Result struct {
 	TimedOut bool
 	// Canceled is set when the context was canceled and the tree was killed.
 	Canceled bool
+	// Usage is the resource usage of the tree, read from the operating
+	// system after the process exited and outside Elapsed.
+	Usage Usage
 }
 
 // ErrStart wraps a failure to start the process at all (program not found,
@@ -95,6 +101,10 @@ func Run(ctx context.Context, s Spec, now Clock) (Result, error) {
 	// attached to its tree handle. That is not an error: the watcher falls
 	// back to killing the process itself, and there is nothing left to stop.
 	tree, _ := attach(cmd)
+	var probe *usageProbe
+	if s.CollectUsage {
+		probe = newUsageProbe(cmd, tree)
+	}
 
 	done := make(chan struct{})
 	watcherDone := make(chan struct{})
@@ -116,11 +126,18 @@ func Run(ctx context.Context, s Spec, now Clock) (Result, error) {
 	// The watcher may be killing the tree right now; the tree handle is only
 	// released after it has finished.
 	<-watcherDone
+	usage := notCollected()
+	if probe != nil {
+		// Read before the tree is closed: closing stops what the command left
+		// running and releases the handles the counters are read through.
+		usage = probe.collect(cmd, tree)
+		probe.close()
+	}
 	if tree != nil {
 		tree.close()
 	}
 
-	res := Result{Elapsed: elapsed, ExitCode: exitCode(cmd, waitErr)}
+	res := Result{Elapsed: elapsed, ExitCode: exitCode(cmd, waitErr), Usage: usage}
 	select {
 	case r := <-killed:
 		res.TimedOut = r == killTimeout

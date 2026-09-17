@@ -57,7 +57,7 @@ e2e: ## Build yahiko and run the atago end-to-end suite (needs atago on PATH)
 fuzz: ## Run every fuzz target for FUZZTIME (default 10s)
 	go test -run '^$$' -fuzz '^FuzzLoad$$' -fuzztime $(FUZZTIME) ./internal/config
 	go test -run '^$$' -fuzz '^FuzzParseDuration$$' -fuzztime $(FUZZTIME) ./internal/config
-	go test -run '^$$' -fuzz '^FuzzParseBudget$$' -fuzztime $(FUZZTIME) ./internal/config
+	go test -run '^$$' -fuzz '^FuzzParseThreshold$$' -fuzztime $(FUZZTIME) ./internal/metric
 	go test -run '^$$' -fuzz '^FuzzExpand$$' -fuzztime $(FUZZTIME) ./internal/config
 	go test -run '^$$' -fuzz '^FuzzCompare$$' -fuzztime $(FUZZTIME) ./internal/stats
 	go test -run '^$$' -fuzz '^FuzzReportFormats$$' -fuzztime $(FUZZTIME) ./internal/report

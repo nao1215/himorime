@@ -5,42 +5,46 @@ import (
 	"math/rand/v2"
 	"testing"
 	"time"
+
+	"github.com/nao1215/yahiko/internal/metric"
 )
 
-func ms(values ...float64) []time.Duration {
-	out := make([]time.Duration, len(values))
+func ms(values ...float64) []float64 {
+	out := make([]float64, len(values))
 	for i, v := range values {
-		out[i] = time.Duration(v * float64(time.Millisecond))
+		out[i] = v * float64(time.Millisecond)
 	}
 	return out
 }
+
+const msf = float64(time.Millisecond)
 
 func TestSummarize(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name    string
-		samples []time.Duration
+		samples []float64
 		want    Summary
 	}{
 		{name: "empty", samples: nil, want: Summary{}},
 		{
 			name:    "single sample has no spread",
 			samples: ms(5),
-			want:    Summary{Count: 1, Mean: 5 * time.Millisecond, Median: 5 * time.Millisecond, Min: 5 * time.Millisecond, Max: 5 * time.Millisecond},
+			want:    Summary{Count: 1, Mean: 5 * msf, Median: 5 * msf, Min: 5 * msf, Max: 5 * msf},
 		},
 		{
 			name:    "odd count median is the middle value",
 			samples: ms(3, 1, 2),
 			want: Summary{
-				Count: 3, Mean: 2 * time.Millisecond, Median: 2 * time.Millisecond,
-				Stddev: time.Millisecond, Min: time.Millisecond, Max: 3 * time.Millisecond, CV: 0.5,
+				Count: 3, Mean: 2 * msf, Median: 2 * msf,
+				Stddev: msf, Min: msf, Max: 3 * msf, CV: 0.5,
 			},
 		},
 		{
 			name:    "even count median averages the middle pair",
-			samples: []time.Duration{4, 1, 3, 2},
-			want:    Summary{Count: 4, Mean: 3, Median: 3, Stddev: 1, Min: 1, Max: 4, CV: math.Sqrt(5.0/3.0) / 2.5},
+			samples: []float64{4, 1, 3, 2},
+			want:    Summary{Count: 4, Mean: 2.5, Median: 2.5, Stddev: math.Sqrt(5.0 / 3.0), Min: 1, Max: 4, CV: math.Sqrt(5.0/3.0) / 2.5},
 		},
 	}
 	for _, tt := range tests {
@@ -48,7 +52,7 @@ func TestSummarize(t *testing.T) {
 			t.Parallel()
 			got := Summarize(tt.samples)
 			if got.Count != tt.want.Count || got.Mean != tt.want.Mean || got.Median != tt.want.Median ||
-				got.Min != tt.want.Min || got.Max != tt.want.Max || got.Stddev != tt.want.Stddev {
+				got.Min != tt.want.Min || got.Max != tt.want.Max || math.Abs(got.Stddev-tt.want.Stddev) > 1e-9 {
 				t.Fatalf("Summarize() = %+v, want %+v", got, tt.want)
 			}
 			if math.Abs(got.CV-tt.want.CV) > 1e-9 {
@@ -62,7 +66,7 @@ func TestSummarizeDoesNotReorderInput(t *testing.T) {
 	t.Parallel()
 	in := ms(3, 1, 2)
 	Summarize(in)
-	if in[0] != 3*time.Millisecond || in[1] != time.Millisecond {
+	if in[0] != 3*msf || in[1] != msf {
 		t.Fatalf("input was modified: %v", in)
 	}
 }
@@ -70,7 +74,7 @@ func TestSummarizeDoesNotReorderInput(t *testing.T) {
 func TestSummaryValue(t *testing.T) {
 	t.Parallel()
 	s := Summary{Mean: 1, Median: 2, Min: 3, Max: 4}
-	for m, want := range map[Metric]time.Duration{Mean: 1, Median: 2, Min: 3, Max: 4} {
+	for m, want := range map[Metric]float64{Mean: 1, Median: 2, Min: 3, Max: 4} {
 		if got := s.Value(m); got != want {
 			t.Errorf("Value(%v) = %v, want %v", m, got, want)
 		}
@@ -111,12 +115,12 @@ func TestPercentile(t *testing.T) {
 
 // noisy returns n samples around center with a relative jitter, generated from
 // seed so that the test data is fixed.
-func noisy(seed uint64, n int, center time.Duration, jitter float64) []time.Duration {
+func noisy(seed uint64, n int, center time.Duration, jitter float64) []float64 {
 	rng := rand.New(rand.NewPCG(seed, 1))
-	out := make([]time.Duration, n)
+	out := make([]float64, n)
 	for i := range out {
 		f := 1 + jitter*(rng.Float64()*2-1)
-		out[i] = time.Duration(float64(center) * f)
+		out[i] = math.Round(float64(center) * f)
 	}
 	return out
 }
@@ -130,8 +134,8 @@ func TestCompareVerdicts(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		base   []time.Duration
-		head   []time.Duration
+		base   []float64
+		head   []float64
 		opts   func(*CompareOptions)
 		want   Verdict
 		reason string
@@ -265,5 +269,71 @@ func TestCompareConfidenceBounds(t *testing.T) {
 	}
 	if c.ProbRegression < 0 || c.ProbRegression > 1 || c.ProbImprovement < 0 || c.ProbImprovement > 1 {
 		t.Fatalf("probabilities out of range: %+v", c)
+	}
+}
+
+func TestAggregate(t *testing.T) {
+	t.Parallel()
+	v := []float64{50, 10, 40, 20, 30}
+	for agg, want := range map[metric.Aggregation]float64{
+		metric.AggMin: 10, metric.AggMax: 50, metric.AggMean: 30, metric.AggMedian: 30,
+		"p50": 30, "p90": 46, "p95": 48, "p99": 49.6, "p25": 20, "p99.9": 49.96,
+	} {
+		got, ok := Aggregate(v, agg)
+		if !ok || math.Abs(got-want) > 1e-9 {
+			t.Errorf("Aggregate(%s) = %v, %v; want %v", agg, got, ok, want)
+		}
+	}
+	if v[0] != 50 {
+		t.Fatal("Aggregate reordered its input")
+	}
+	if _, ok := Aggregate(nil, metric.AggMedian); ok {
+		t.Error("Aggregate of no samples reported ok")
+	}
+	if _, ok := Aggregate(v, "p100"); ok {
+		t.Error("Aggregate accepted p100")
+	}
+}
+
+// TestCompareHigherIsBetter pins the direction: for a higher-is-better
+// metric such as throughput a drop is the regression and a rise the
+// improvement, with the same tolerance as a lower-is-better metric.
+func TestCompareHigherIsBetter(t *testing.T) {
+	t.Parallel()
+	base := noisy(1, 30, 100*time.Millisecond, 0.02)
+	slower := noisy(2, 30, 80*time.Millisecond, 0.02)
+	faster := noisy(2, 30, 120*time.Millisecond, 0.02)
+	o := defaultOptions()
+	o.HigherIsBetter = true
+	if c := Compare(base, slower, o); c.Verdict != VerdictRegression || c.Change >= 0 {
+		t.Fatalf("a 20%% drop of a higher-is-better metric = %s (change %.1f), want regression", c.Verdict, c.Change)
+	}
+	if c := Compare(base, faster, o); c.Verdict != VerdictImproved || c.Change <= 0 {
+		t.Fatalf("a 20%% rise of a higher-is-better metric = %s (change %.1f), want improved", c.Verdict, c.Change)
+	}
+	o.HigherIsBetter = false
+	if c := Compare(base, slower, o); c.Verdict != VerdictImproved {
+		t.Fatalf("a 20%% drop of a lower-is-better metric = %s, want improved", c.Verdict)
+	}
+	if c := Compare(base, faster, o); c.Verdict != VerdictRegression {
+		t.Fatalf("a 20%% rise of a lower-is-better metric = %s, want regression", c.Verdict)
+	}
+}
+
+func TestCompareMinDifference(t *testing.T) {
+	t.Parallel()
+	base := ms(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+	head := ms(1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5)
+	o := defaultOptions()
+	if v := Compare(base, head, o).Verdict; v != VerdictRegression {
+		t.Fatalf("+50%% without min_difference = %s, want regression", v)
+	}
+	o.MinDifference = 2 * msf
+	c := Compare(base, head, o)
+	if c.Verdict != VerdictPass || c.Reason != ReasonBelowMinDiff {
+		t.Fatalf("+0.5ms with min_difference 2ms = %s (%q), want pass", c.Verdict, c.Reason)
+	}
+	if c.Difference != 0.5*msf || c.BaseValue != msf || c.HeadValue != 1.5*msf {
+		t.Fatalf("values = %+v", c)
 	}
 }

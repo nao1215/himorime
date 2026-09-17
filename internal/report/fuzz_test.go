@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nao1215/yahiko/internal/config"
+	"github.com/nao1215/yahiko/internal/metric"
 	"github.com/nao1215/yahiko/internal/runner"
 )
 
@@ -38,15 +39,22 @@ func FuzzReportFormats(f *testing.F) {
 	f.Fuzz(func(t *testing.T, suiteName, benchName, cmdName, message string, s1, s2 int64, compare bool) {
 		c := config.Command{Name: cmdName, Exec: config.Exec{Argv: []string{cmdName}}}
 		samples := []time.Duration{time.Duration(s1), time.Duration(s2)}
-		sides := map[string]*runner.Measurement{runner.SideHead: {Samples: samples, Failure: &runner.Failure{Kind: runner.FailExitCode, Message: message, Stderr: message}}}
+		sides := map[string]*runner.Measurement{runner.SideHead: {
+			Samples: samples, CPUUser: samples, CPUSystem: samples, PeakRSS: []int64{s1, s2}, Work: []float64{float64(s1), float64(s2)},
+			Failure: &runner.Failure{Kind: runner.FailExitCode, Message: message, Stderr: message},
+		}}
 		mode := ModeRun
 		if compare {
 			mode = ModeCompare
-			sides[runner.SideBase] = &runner.Measurement{Samples: samples}
+			sides[runner.SideBase] = &runner.Measurement{Samples: samples, Unsupported: map[metric.Group]string{metric.GroupMemory: message}}
 		}
 		br := runner.BenchmarkResult{
-			Benchmark: config.Benchmark{Name: benchName, Commands: []config.Command{c}, Regression: config.Regression{Metric: config.MetricMedian, MaxPercent: 10, Confidence: 0.95, MinSamples: 2}},
-			Commands:  []runner.CommandResult{{Command: c, Sides: sides}},
+			Benchmark: config.Benchmark{
+				Name: benchName, Commands: []config.Command{c},
+				Metrics:    config.Metrics{CPU: s1%2 == 0, Memory: true, Throughput: &config.Work{Value: 1, Unit: "records"}},
+				Regression: config.Regression{Metric: config.MetricMedian, MaxPercent: 10, Confidence: 0.95, MinSamples: 2},
+			},
+			Commands: []runner.CommandResult{{Command: c, Sides: sides}},
 		}
 		r := &Report{Environment: Environment{LogicalCPUs: 1}}
 		Judge(r, []SuiteInput{{Suite: &config.Suite{Name: suiteName}, File: "f.yaml", Benchmarks: []runner.BenchmarkResult{br}}}, Options{Mode: mode, Seed: 1})
@@ -64,6 +72,10 @@ func FuzzReportFormats(f *testing.F) {
 			case config.FormatCSV:
 				if _, err := csv.NewReader(&buf).ReadAll(); err != nil {
 					t.Fatalf("invalid CSV: %v", err)
+				}
+			case config.FormatSamplesCSV:
+				if _, err := csv.NewReader(&buf).ReadAll(); err != nil {
+					t.Fatalf("invalid samples CSV: %v", err)
 				}
 			case config.FormatTable, config.FormatMarkdown, config.FormatGitHub:
 			}

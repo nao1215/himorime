@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/nao1215/yahiko/internal/config"
+	"github.com/nao1215/yahiko/internal/metric"
 )
 
 // Side names. A plain run measures only the head side.
@@ -28,7 +29,20 @@ const (
 	FailInterrupted FailureKind = "interrupted"
 	FailPath        FailureKind = "invalid_path"
 	FailInternal    FailureKind = "internal"
+	// FailMetricUnsupported: a requested metric cannot be measured on this
+	// platform (or for this process tree) and the suite's unsupported policy
+	// is fail.
+	FailMetricUnsupported FailureKind = "metric_unsupported"
+	// FailMetricCollection: the platform supports the metric but reading it
+	// failed, or the declared work could not be determined.
+	FailMetricCollection FailureKind = "metric_collection_failed"
 )
+
+// IsMetricFailure reports whether a failure is about collecting a metric
+// rather than running the command.
+func (k FailureKind) IsMetricFailure() bool {
+	return k == FailMetricUnsupported || k == FailMetricCollection
+}
 
 // Failure describes one failure.
 type Failure struct {
@@ -38,6 +52,8 @@ type Failure struct {
 	ExitCode int
 	// Stderr is the redacted tail of the process's standard error, when any.
 	Stderr string
+	// Metric is the metric group a metric failure is about; empty otherwise.
+	Metric metric.Group
 }
 
 // Side is one tree being measured.
@@ -52,11 +68,48 @@ type Side struct {
 	Artifact string
 }
 
-// Measurement holds the samples of one command on one side.
+// Measurement holds the samples of one command on one side. Every slice
+// holds one value per measured run, in execution order, and all collected
+// slices have the same length as Samples.
 type Measurement struct {
+	// Samples is the wall-clock latency of each run.
 	Samples []time.Duration
+	// CPUUser and CPUSystem are collected when the benchmark measures cpu.
+	CPUUser   []time.Duration
+	CPUSystem []time.Duration
+	// PeakRSS, in bytes, is collected when the benchmark measures memory.
+	PeakRSS []int64
+	// Work is the declared work of each run when the benchmark measures
+	// throughput.
+	Work    []float64
 	Warmups int
 	Failure *Failure
+	// Unsupported maps a requested metric group this side could not measure
+	// under the skip policy to the reason. Such a group has no samples.
+	Unsupported map[metric.Group]string
+}
+
+// Skipped reports why a group was not measured, if it was skipped.
+func (m *Measurement) Skipped(g metric.Group) (string, bool) {
+	if m == nil || m.Unsupported == nil {
+		return "", false
+	}
+	reason, ok := m.Unsupported[g]
+	return reason, ok
+}
+
+func (m *Measurement) skip(g metric.Group, reason string) {
+	if m.Unsupported == nil {
+		m.Unsupported = map[metric.Group]string{}
+	}
+	m.Unsupported[g] = reason
+	switch g {
+	case metric.GroupCPU:
+		m.CPUUser, m.CPUSystem = nil, nil
+	case metric.GroupMemory:
+		m.PeakRSS = nil
+	case metric.GroupLatency, metric.GroupThroughput:
+	}
 }
 
 // CommandResult is one command of a benchmark.
