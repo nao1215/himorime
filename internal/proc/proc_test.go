@@ -432,7 +432,7 @@ func TestRunCollectsUsage(t *testing.T) {
 	if cpuErr, memErr := Capabilities(); cpuErr != nil || memErr != nil {
 		t.Skipf("usage is not supported here: %v, %v", cpuErr, memErr)
 	}
-	s := helper(t, "burn", "HELPER_BURN=150ms", "HELPER_ALLOC=48")
+	s := helper(t, "burn", "HELPER_BURN=300ms", "HELPER_ALLOC=48")
 	s.CollectUsage = true
 	res, err := Run(context.Background(), s, nil)
 	if err != nil || res.ExitCode != 0 {
@@ -443,8 +443,11 @@ func TestRunCollectsUsage(t *testing.T) {
 		t.Fatalf("usage errors: cpu %v, memory %v", u.CPUErr, u.MemoryErr)
 	}
 	total := u.UserCPU + u.SystemCPU
-	if total < 50*time.Millisecond {
-		t.Errorf("a 150ms busy loop used only %v of CPU", total)
+	// The loop runs for 300ms of wall-clock time. Other tests run in
+	// parallel, and a shared macOS runner gave a 150ms loop 38ms of CPU, so
+	// only a tenth is required.
+	if total < 30*time.Millisecond {
+		t.Errorf("a 300ms busy loop used only %v of CPU", total)
 	}
 	if total > res.Elapsed*time.Duration(runtime.NumCPU())+50*time.Millisecond {
 		t.Errorf("cpu time %v is impossible in %v on %d CPUs", total, res.Elapsed, runtime.NumCPU())
