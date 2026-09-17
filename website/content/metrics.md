@@ -204,6 +204,20 @@ every metric. It runs on every pull request, and the table below is produced
 by `make bench-docs` on the machine named under it.
 
 <!-- himorime:begin overhead -->
+
+### himorime dogfood
+
+Start-up, validation and a small measured run of himorime itself.
+
+| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative |
+|---|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| collector overhead | latency-only | 22.25ms | 23.44ms | 22.02ms | 1.11ms | 19.56ms | 23.78ms | 15 | 1.01x |
+| collector overhead | all-metrics | 22.00ms | 23.12ms | 22.04ms | 752.02µs | 20.68ms | 23.68ms | 15 | 1.00x |
+
+Relative is the median divided by the baseline command's median, or by the fastest command's.
+
+Measured with himorime v0.1.1-9-g1ac04ac on linux/amd64, AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (32 logical CPUs), head 1ac04ac93cbf, seed 514079471157815.
+
 <!-- himorime:end overhead -->
 
 ## What himorime does not measure
