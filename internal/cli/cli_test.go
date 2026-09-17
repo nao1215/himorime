@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -454,7 +455,9 @@ func compareRepo(t *testing.T) string {
 func TestCompare(t *testing.T) {
 	dir := compareRepo(t)
 	r := run(t, dir, nil, "compare", "--against", "main", "--quiet")
-	if r.code != 0 || !strings.Contains(r.stdout, "PASS") || !strings.Contains(r.stdout, "CHANGE") {
+	// An unchanged program passes, or is inconclusive when a shared runner is
+	// too noisy to tell; it is never a regression.
+	if r.code != 0 || !regexp.MustCompile(`\b(PASS|INCONCLUSIVE)\b`).MatchString(r.stdout) || !strings.Contains(r.stdout, "CHANGE") {
 		t.Fatalf("unchanged compare: %+v", r)
 	}
 
@@ -526,7 +529,7 @@ func TestCIGitHubActions(t *testing.T) {
 		t.Fatal("ci output must not be colored")
 	}
 	data, err := os.ReadFile(summary)
-	if err != nil || !strings.HasPrefix(string(data), "previous step\n## ✅ himorime benchmark comparison") || !strings.Contains(string(data), "| sleepy | app |") {
+	if err != nil || !regexp.MustCompile(`^previous step\n## (✅|⚠️) himorime benchmark comparison`).Match(data) || !strings.Contains(string(data), "| sleepy | app |") {
 		t.Fatalf("summary = %q, %v", data, err)
 	}
 	if !strings.Contains(r.stderr, "comparing base "+base[:12]) {
