@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: run only the smoke benchmarks with tags and filters.
+# https://nao1215.github.io/yahiko/cookbook/#run-only-smoke-benchmarks
+#
+#   yahiko run examples/tags --tag smoke
+#   yahiko run examples/tags --skip-tag slow
+#   yahiko run examples/tags --filter '^startup'
+version: "1"
+
+suite:
+  name: tags
+  description: A quick smoke benchmark next to a slower one.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 5
+
+benchmarks:
+  - name: startup
+    tags: [smoke]
+    commands:
+      wordcount:
+        command: ["${artifact}", -version]
+
+  - name: large input
+    tags: [slow]
+    setup:
+      - command: ["${artifact}", -gen, "500000", -o, "${workdir}/input.txt"]
+    commands:
+      wordcount:
+        command: ["${artifact}", "${workdir}/input.txt"]

@@ -1,0 +1,131 @@
+version: "2"
+
+run:
+  go: "1.26"
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - dupl
+    - dupword
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    # exhaustive guards the enums that fan out through the code base: result
+    # classifications, failure kinds, report formats and metrics. A new value
+    # must be handled at every switch, not inherited from a default.
+    - exhaustive
+    - fatcontext
+    # forbidigo carries yahiko-specific rules; see settings.forbidigo.
+    - forbidigo
+    - gocheckcompilerdirectives
+    - gochecknoinits
+    - gocognit
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - musttag
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - predeclared
+    - reassign
+    - staticcheck
+    - tagliatelle
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+  settings:
+    dupl:
+      threshold: 150
+    errcheck:
+      check-type-assertions: true
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*strings.Builder).WriteString
+        - (*strings.Builder).WriteByte
+        - (*bytes.Buffer).WriteString
+    exhaustive:
+      # A default clause does not excuse a missing case.
+      default-signifies-exhaustive: false
+    forbidigo:
+      analyze-types: true
+      forbid:
+        # stdout carries machine-readable reports (--format json|csv). A stray
+        # Print would corrupt the document a CI job parses; every writer is
+        # injected through cli.App.
+        - pattern: '^fmt\.Print(f|ln)?$'
+          msg: "write through the injected io.Writer, never to os.Stdout directly"
+        # Measured commands run with their own environment; changing the
+        # process environment or directory would leak into every command.
+        - pattern: '^os\.(Chdir|Setenv|Unsetenv|Clearenv)$'
+          msg: "process-global state leaks into every measured command"
+        # time.Sleep in production code is a hidden, untestable delay.
+        - pattern: '^time\.Sleep$'
+          msg: "do not sleep in production code; wait on a channel or a context"
+    gocognit:
+      min-complexity: 30
+    gocyclo:
+      min-complexity: 25
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          yaml: snake
+  exclusions:
+    generated: lax
+    rules:
+      - linters: [errcheck]
+        source: "^\\s*defer "
+      - path: _test\.go
+        linters: [gosec, gocognit, gocyclo, dupl, dupword, forbidigo, errcheck, noctx, unparam]
+      # The E2E helper is a stand-in program: sleeping and printing are its job.
+      # The E2E helper and runner are test programs: they start processes,
+      # sleep and print by design.
+      - path: test/e2e/
+        linters: [forbidigo, gosec, noctx]
+      # Release and build scripts are developer programs: they print, run
+      # tools and read third-party formats (SPDX uses camelCase keys).
+      - path: scripts/
+        linters: [forbidigo, gosec, noctx, tagliatelle]
+      - path: examples/
+        linters: [forbidigo, gosec]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/nao1215/yahiko
+
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0

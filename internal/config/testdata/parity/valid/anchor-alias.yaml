@@ -1,0 +1,10 @@
+version: "1"
+suite: {name: anchors}
+benchmarks:
+  - name: a
+    commands:
+      git: &cmd
+        command: [git, --version]
+  - name: b
+    commands:
+      git: *cmd

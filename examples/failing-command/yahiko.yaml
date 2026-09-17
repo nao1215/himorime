@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: treat a failing command as an error, or allow expected exit codes.
+# The first benchmark fails on purpose (exit 4).
+# https://nao1215.github.io/yahiko/cookbook/#treat-a-non-zero-exit-as-an-error
+version: "1"
+
+suite:
+  name: failing command
+  description: A command that exits 3, and one whose exit 1 is expected.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/sleepy]
+
+defaults:
+  warmup: 0
+  runs: 3
+
+benchmarks:
+  - name: unexpected failure
+    commands:
+      sleepy:
+        command: ["${artifact}", -ms, "1", -exit, "3"]
+
+  - name: expected exit code
+    commands:
+      sleepy:
+        command: ["${artifact}", -ms, "1", -exit, "1"]
+        # Like grep without a match: exit 1 is part of normal operation.
+        exit_codes: [0, 1]

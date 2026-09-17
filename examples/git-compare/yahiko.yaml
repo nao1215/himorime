@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipes: compare a Git revision with the working tree, locally or in CI.
+# https://nao1215.github.io/yahiko/cookbook/#compare-main-with-your-working-tree
+#
+#   yahiko compare --against main examples/git-compare
+version: "1"
+
+suite:
+  name: git compare
+  description: The word counter built from a base revision and from the working tree.
+
+# In a comparison the build runs twice: once in a temporary worktree of the
+# base revision and once in your working tree, uncommitted changes included.
+# ${root} is this directory inside the tree being built.
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 2
+  runs: 20
+  regression:
+    metric: median
+    max_percent: 10
+    confidence: 0.95
+
+benchmarks:
+  - name: count 50k lines
+    setup:
+      - command: ["${artifact}", -gen, "50000", -o, "${workdir}/input.txt"]
+    stdin: "${workdir}/input.txt"
+    commands:
+      wordcount:
+        command: ["${artifact}"]

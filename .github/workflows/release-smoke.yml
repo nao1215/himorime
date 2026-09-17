@@ -1,0 +1,104 @@
+name: ReleaseSmoke
+
+# Builds the release exactly as a tag would, without publishing or signing,
+# and checks what it would publish: archives, packages, completions, SBOMs,
+# checksums and the Homebrew cask. The archives are then unpacked and run on
+# macOS and Windows, and the E2E suite runs against the released binary on
+# all three systems. release.yml calls this workflow before it publishes.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    name: snapshot build (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          check-latest: true
+          cache: false
+      - name: Install Syft (SBOM generator)
+        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      - name: Validate .goreleaser.yml
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: "v2.16.0"
+          args: check
+      - name: Build a snapshot release
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: "v2.16.0"
+          args: release --snapshot --clean --skip=publish,sign
+      - name: The build hooks leave the tree unchanged
+        run: git diff --exit-code
+      - name: Smoke-test every artifact
+        run: go run ./scripts/smoke dist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist-archives
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+
+  platforms:
+    name: release binary (${{ matrix.os }})
+    needs: snapshot
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      ATAGO_VERSION: v0.22.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-archives
+          path: dist
+      - name: Unpack and run this platform's archive
+        run: go run ./scripts/smoke -host-only dist
+      - name: Extract the binary for the E2E suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          goos="$(go env GOOS)"
+          goarch="$(go env GOARCH)"
+          mkdir -p "$RUNNER_TEMP/release"
+          if [ "$goos" = windows ]; then
+            unzip -q dist/yahiko_*_"${goos}_${goarch}".zip -d "$RUNNER_TEMP/release"
+            echo "YAHIKO_BINARY=$RUNNER_TEMP/release/yahiko.exe" >> "$GITHUB_ENV"
+          else
+            tar -xzf dist/yahiko_*_"${goos}_${goarch}".tar.gz -C "$RUNNER_TEMP/release"
+            echo "YAHIKO_BINARY=$RUNNER_TEMP/release/yahiko" >> "$GITHUB_ENV"
+          fi
+      # The prebuilt atago release, verified and put on PATH by its action.
+      - uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
+        with:
+          version: ${{ env.ATAGO_VERSION }}
+      - name: Run the E2E suite against the release binary
+        run: go run ./test/e2e/run

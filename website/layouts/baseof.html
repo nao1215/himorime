@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{{- $title := printf "%s · %s" .Title site.Title }}
+{{- if .IsHome }}{{ $title = printf "%s — %s" site.Title site.Params.tagline }}{{ end }}
+<title>{{ $title }}</title>
+{{- $desc := or .Params.description site.Params.description }}
+<meta name="description" content="{{ $desc }}">
+<link rel="canonical" href="{{ .Permalink }}">
+<link rel="icon" href="data:,">
+<meta property="og:title" content="{{ $title }}">
+<meta property="og:description" content="{{ $desc }}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ .Permalink }}">
+{{- $css := slice (resources.Get "css/site.css") (resources.Get "css/chroma.css") | resources.Concat "css/bundle.css" | minify | fingerprint }}
+<link rel="stylesheet" href="{{ $css.RelPermalink }}">
+<meta name="yahiko-build-commit" content="{{ or site.Params.buildCommit "dev" }}">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header>
+<nav>
+<a class="brand" href="{{ site.Home.RelPermalink }}"><strong>yahiko</strong></a>
+{{- range site.Menus.main }}
+<a{{ if or ($.IsMenuCurrent "main" .) ($.HasMenuCurrent "main" .) }} class="active"{{ end }} href="{{ .URL }}">{{ .Name }}</a>
+{{- end }}
+<a href="https://github.com/nao1215/yahiko">GitHub</a>
+</nav>
+</header>
+<main id="main">
+{{ block "main" . }}{{ end }}
+</main>
+<footer>
+<p><a href="https://github.com/nao1215/yahiko/blob/main/LICENSE">MIT license</a> · <a href="https://github.com/nao1215/yahiko">nao1215/yahiko</a> · <a href="{{ relURL "security/" }}">Security</a> · <a href="{{ relURL "troubleshooting/" }}">Troubleshooting</a> · <a href="{{ relURL "platforms/" }}">Platforms</a></p>
+</footer>
+<script>
+// Filter the cookbook: only the h2 sections whose text holds what was typed
+// stay visible. No-op on a page without a .toc-filter input.
+(function () {
+  var input = document.querySelector(".toc-filter");
+  if (!input) return;
+  var article = document.querySelector("#main article");
+  if (!article) return;
+  var groups = [], cur = null;
+  Array.prototype.forEach.call(article.children, function (node) {
+    if (node.tagName === "H2") {
+      cur = { nodes: [node], text: node.textContent.toLowerCase() };
+      groups.push(cur);
+    } else if (cur) {
+      cur.nodes.push(node);
+      cur.text += " " + node.textContent.toLowerCase();
+    }
+  });
+  input.addEventListener("input", function () {
+    var q = input.value.trim().toLowerCase();
+    groups.forEach(function (g) {
+      var show = !q || g.text.indexOf(q) !== -1;
+      g.nodes.forEach(function (n) { n.hidden = !show; });
+    });
+  });
+})();
+</script>
+</body>
+</html>

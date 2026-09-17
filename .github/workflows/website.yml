@@ -1,0 +1,50 @@
+name: Website
+
+# Builds the documentation site on every change so a broken page fails the
+# pull request. Publishing happens in release.yml, which is the only workflow
+# with write permissions: the site documents the latest release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HUGO_VERSION: 0.165.0
+      HUGO_SHA256: 5c3a37a5450b3e386e5b75a87a790fea2d04a796d75e171216c80ef48a32b432
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Pinned by version and checked against the published archive's digest.
+      - name: Install Hugo
+        run: |
+          curl -fsSL -o "${RUNNER_TEMP}/hugo.tar.gz" \
+            "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_${HUGO_VERSION}_linux-amd64.tar.gz"
+          echo "${HUGO_SHA256}  ${RUNNER_TEMP}/hugo.tar.gz" | sha256sum --check -
+          tar -C "${RUNNER_TEMP}" -xzf "${RUNNER_TEMP}/hugo.tar.gz" hugo
+          sudo install -m 0755 "${RUNNER_TEMP}/hugo" /usr/local/bin/hugo
+          hugo version
+      - name: Build the site
+        run: make website
+        env:
+          HUGO_PARAMS_BUILDCOMMIT: ${{ github.sha }}
+      - name: Every page exists
+        run: |
+          for page in getting-started install configuration commands reports regression-detection github-actions cookbook comparison platforms exit-codes troubleshooting security; do
+            test -s "website/public/${page}/index.html" || { echo "missing page: ${page}"; exit 1; }
+          done
+          test -s website/public/index.html
+          test -s website/public/schema/yahiko.schema.json
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: website/public

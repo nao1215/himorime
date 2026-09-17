@@ -1,0 +1,6 @@
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    stdin: /etc/passwd
+    commands: {a: {command: [a]}}

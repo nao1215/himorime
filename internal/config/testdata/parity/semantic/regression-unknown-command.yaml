@@ -1,0 +1,7 @@
+# expect: "b" is not a command of this benchmark
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    commands: {a: {command: [a]}}
+    regression: {commands: [b]}

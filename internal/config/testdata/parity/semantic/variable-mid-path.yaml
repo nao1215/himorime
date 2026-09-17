@@ -1,0 +1,7 @@
+# expect: ${workdir} may only start a path
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    cwd: "sub/${workdir}"
+    commands: {a: {command: [a]}}

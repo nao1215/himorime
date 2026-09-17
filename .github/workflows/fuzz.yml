@@ -1,0 +1,51 @@
+name: Fuzz
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Every event runs each target briefly; the nightly schedule runs each for
+  # five minutes. internal/docgen fails when a fuzz target in the tree is
+  # missing from this matrix.
+  fuzz:
+    name: fuzz (${{ matrix.target.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { pkg: ./internal/config, name: FuzzLoad }
+          - { pkg: ./internal/config, name: FuzzParseDuration }
+          - { pkg: ./internal/config, name: FuzzParseBudget }
+          - { pkg: ./internal/config, name: FuzzExpand }
+          - { pkg: ./internal/stats, name: FuzzCompare }
+          - { pkg: ./internal/report, name: FuzzReportFormats }
+          - { pkg: ./internal/report, name: FuzzEscapeMarkdown }
+          - { pkg: ./internal/ghactions, name: FuzzResolveBase }
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+      - name: fuzz
+        env:
+          FUZZTIME: ${{ github.event_name == 'schedule' && '5m' || '20s' }}
+          TARGET: ${{ matrix.target.name }}
+          PKG: ${{ matrix.target.pkg }}
+        run: go test -run '^$' -fuzz "^${TARGET}\$" -fuzztime "${FUZZTIME}" "${PKG}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: fuzz-crashers-${{ matrix.target.name }}
+          path: "**/testdata/fuzz/**"

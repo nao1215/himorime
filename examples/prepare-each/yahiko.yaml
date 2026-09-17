@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: reset state before every run with prepare_each.
+# https://nao1215.github.io/yahiko/cookbook/#reset-state-before-every-run
+version: "1"
+
+suite:
+  name: prepare each
+  description: Every run starts from a freshly generated output file.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 10
+
+benchmarks:
+  - name: regenerate then count
+    # prepare_each is not measured. It runs before every warmup and every
+    # measured run, in the same working directory as the command.
+    prepare_each:
+      - command: ["${artifact}", -gen, "5000", -o, "${workdir}/input.txt"]
+    commands:
+      wordcount:
+        command: ["${artifact}", "${workdir}/input.txt"]
+        # Keep the latest run's output for inspection instead of discarding it.
+        stdout: last-output.txt

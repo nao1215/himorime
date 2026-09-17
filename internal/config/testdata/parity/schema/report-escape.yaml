@@ -1,0 +1,7 @@
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    commands: {a: {command: [a]}}
+report:
+  outputs: [{format: json, path: ../out.json}]

@@ -1,0 +1,7 @@
+# expect: is not allowed in a path
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    cwd: "${env:HOME}"
+    commands: {a: {command: [a]}}

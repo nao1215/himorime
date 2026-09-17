@@ -1,0 +1,7 @@
+# expect: exceeds the maximum of 24h
+version: "1"
+suite: {name: x}
+defaults: {timeout: 25h}
+benchmarks:
+  - name: a
+    commands: {a: {command: [a]}}

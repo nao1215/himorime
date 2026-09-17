@@ -1,0 +1,7 @@
+# expect: baseline "b" is not a command of this benchmark
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    baseline: b
+    commands: {a: {command: [a]}}

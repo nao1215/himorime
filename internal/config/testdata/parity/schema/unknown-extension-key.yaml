@@ -1,0 +1,7 @@
+version: "1"
+suite: {name: x}
+x-cmd: &cmd
+  command: [a]
+benchmarks:
+  - name: a
+    commands: {a: *cmd}

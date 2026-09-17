@@ -1,0 +1,6 @@
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    stdin: {file: a.txt, content: b}
+    commands: {a: {command: [a]}}

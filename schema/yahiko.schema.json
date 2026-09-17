@@ -1,0 +1,629 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/nao1215/yahiko/main/schema/yahiko.schema.json",
+  "title": "yahiko benchmark suite",
+  "description": "A versioned yahiko benchmark suite. See https://nao1215.github.io/yahiko/configuration/.",
+  "type": "object",
+  "required": [
+    "version",
+    "suite",
+    "benchmarks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "Suite format version. Only \"1\" exists.",
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "suite": {
+      "description": "Names the suite.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Suite name shown in reports.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "description": {
+          "description": "What the suite is for.",
+          "type": "string"
+        }
+      }
+    },
+    "defaults": {
+      "description": "Settings every benchmark inherits.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "warmup": {
+          "description": "Unmeasured runs of every command before measuring starts. Default 1.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "runs": {
+          "description": "Measure exactly this many runs per command. When absent, runs are adaptive: at least min_runs and min_time, at most max_runs.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "min_runs": {
+          "description": "Adaptive runs: the fewest runs per command. Default 10.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "max_runs": {
+          "description": "Adaptive runs: the most runs per command. Default 100.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "min_time": {
+          "description": "Adaptive runs: keep measuring until each command has run for at least this long in total. Default 2s.",
+          "$ref": "#/definitions/duration"
+        },
+        "timeout": {
+          "description": "Per-run time limit. A run that exceeds it is stopped with its whole process tree and fails the benchmark. Default 1m.",
+          "$ref": "#/definitions/positiveDuration"
+        },
+        "cwd": {
+          "description": "Working directory: relative to the suite file, or starting with ${root} or ${workdir}. Default: the suite file's directory.",
+          "$ref": "#/definitions/pathTemplate"
+        },
+        "env": {
+          "description": "Environment variables added to the inherited environment. Values may use variables.",
+          "$ref": "#/definitions/env"
+        },
+        "stdout": {
+          "description": "\"discard\" (default), or a path inside ${workdir} that receives the standard output of the latest run.",
+          "$ref": "#/definitions/output"
+        },
+        "stderr": {
+          "description": "\"discard\" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way.",
+          "$ref": "#/definitions/output"
+        },
+        "exit_codes": {
+          "description": "Exit statuses that count as success. Default [0].",
+          "$ref": "#/definitions/exitCodes"
+        },
+        "regression": {
+          "$ref": "#/definitions/regression"
+        }
+      }
+    },
+    "build": {
+      "description": "Builds ${artifact} before measuring; in a comparison it runs once in each revision, with ${root} pointing into that revision.",
+      "$ref": "#/definitions/exec"
+    },
+    "benchmarks": {
+      "description": "The benchmark cases.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/benchmark"
+      }
+    },
+    "report": {
+      "description": "Report files written after every run, relative to the suite file.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "outputs": {
+          "description": "Report files.",
+          "type": "array",
+          "items": {
+            "description": "One report file.",
+            "type": "object",
+            "required": [
+              "format",
+              "path"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "description": "Report format.",
+                "enum": [
+                  "json",
+                  "csv",
+                  "markdown",
+                  "github"
+                ]
+              },
+              "path": {
+                "description": "Relative path of the file.",
+                "$ref": "#/definitions/relativePath"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "duration": {
+      "description": "A duration such as 500ms, 2s or 1m30s. Units: ns, us, µs, ms, s, m, h.",
+      "type": "string",
+      "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+    },
+    "positiveDuration": {
+      "description": "A duration greater than zero.",
+      "type": "string",
+      "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+      "not": {
+        "pattern": "^(0+(\\.0+)?(ns|us|µs|ms|s|m|h))+$"
+      }
+    },
+    "budget": {
+      "description": "A budget: < or <= followed by a duration, such as \"< 20ms\".",
+      "type": "string",
+      "pattern": "^\\s*(<=|<)\\s*(([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+      "not": {
+        "pattern": "^\\s*(<=|<)\\s*(0+(\\.0+)?(ns|us|µs|ms|s|m|h))+\\s*$"
+      }
+    },
+    "percent": {
+      "description": "A percentage greater than 0 and at most 1000.",
+      "oneOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1000
+        },
+        {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?)%$"
+        }
+      ]
+    },
+    "pathTemplate": {
+      "description": "A relative path, or a path starting with ${root} or ${workdir}. Absolute paths and '..' after a variable are rejected.",
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "^(/|\\\\|~|[A-Za-z]:)"
+      }
+    },
+    "relativePath": {
+      "description": "A relative path that stays below its base directory.",
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "(^(/|\\\\|~|[A-Za-z]:))|(^|[/\\\\])\\.\\.([/\\\\]|$)|\\$\\{"
+      }
+    },
+    "output": {
+      "description": "\"discard\" or a relative path inside ${workdir}.",
+      "$ref": "#/definitions/relativePath"
+    },
+    "env": {
+      "description": "Environment variables.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "exitCodes": {
+      "description": "Exit statuses that count as success.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "command": {
+      "description": "A list of arguments, or a string used with shell: true.",
+      "oneOf": [
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          ],
+          "additionalItems": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      ]
+    },
+    "shellRule": {
+      "description": "A string command requires shell: true; shell: true requires a string command.",
+      "oneOf": [
+        {
+          "properties": {
+            "command": {
+              "type": "array"
+            },
+            "shell": {
+              "const": false
+            }
+          }
+        },
+        {
+          "properties": {
+            "command": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "shell"
+          ],
+          "allOf": [
+            {
+              "properties": {
+                "shell": {
+                  "const": true
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "exec": {
+      "description": "A process yahiko starts: the build or a hook. `command` is a list of arguments run without a shell, or a string together with `shell: true`.",
+      "type": "object",
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "The command: a list of arguments (no shell), or a string when shell is true.",
+          "$ref": "#/definitions/command"
+        },
+        "shell": {
+          "description": "Run the command string through /bin/sh -c (cmd.exe /d /s /c on Windows). Variables substituted into the string are quoted for that shell.",
+          "type": "boolean"
+        },
+        "cwd": {
+          "description": "Working directory. For build, a relative path is relative to ${root} of the revision being built (the default); for hooks, to the suite file (the default). May start with ${root}, or ${workdir} in hooks.",
+          "$ref": "#/definitions/pathTemplate"
+        },
+        "env": {
+          "description": "Environment variables added to the inherited environment. Values may use variables.",
+          "$ref": "#/definitions/env"
+        },
+        "timeout": {
+          "description": "Time limit for this process. Default 10m for build, 5m for hooks.",
+          "$ref": "#/definitions/positiveDuration"
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/shellRule"
+        }
+      ]
+    },
+    "benchCommand": {
+      "description": "One named command of a benchmark.",
+      "type": "object",
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "The command: a list of arguments (no shell), or a string when shell is true.",
+          "$ref": "#/definitions/command"
+        },
+        "shell": {
+          "description": "Run the command string through /bin/sh -c (cmd.exe /d /s /c on Windows). Variables substituted into the string are quoted for that shell.",
+          "type": "boolean"
+        },
+        "cwd": {
+          "description": "Working directory: relative to the suite file, or starting with ${root} or ${workdir}. Default: the suite file's directory.",
+          "$ref": "#/definitions/pathTemplate"
+        },
+        "env": {
+          "description": "Environment variables added to the inherited environment. Values may use variables.",
+          "$ref": "#/definitions/env"
+        },
+        "timeout": {
+          "description": "Per-run time limit. A run that exceeds it is stopped with its whole process tree and fails the benchmark. Default 1m.",
+          "$ref": "#/definitions/positiveDuration"
+        },
+        "stdout": {
+          "description": "\"discard\" (default), or a path inside ${workdir} that receives the standard output of the latest run.",
+          "$ref": "#/definitions/output"
+        },
+        "stderr": {
+          "description": "\"discard\" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way.",
+          "$ref": "#/definitions/output"
+        },
+        "exit_codes": {
+          "description": "Exit statuses that count as success. Default [0].",
+          "$ref": "#/definitions/exitCodes"
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/shellRule"
+        }
+      ]
+    },
+    "budgetSet": {
+      "description": "Absolute budgets of one command. Each value is an operator and a duration, such as \"< 20ms\".",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mean": {
+          "description": "Budget on the mean duration.",
+          "$ref": "#/definitions/budget"
+        },
+        "median": {
+          "description": "Budget on the median duration.",
+          "$ref": "#/definitions/budget"
+        },
+        "min": {
+          "description": "Budget on the min duration.",
+          "$ref": "#/definitions/budget"
+        },
+        "max": {
+          "description": "Budget on the max duration.",
+          "$ref": "#/definitions/budget"
+        }
+      },
+      "minProperties": 1
+    },
+    "regression": {
+      "description": "How a base revision and the working tree are compared (yahiko compare / yahiko ci).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "description": "Statistic compared: median (default) or mean.",
+          "enum": [
+            "median",
+            "mean"
+          ]
+        },
+        "max_percent": {
+          "description": "Tolerated slowdown in percent: a number such as 10, or a string such as \"10%\". Default 10.",
+          "$ref": "#/definitions/percent"
+        },
+        "confidence": {
+          "description": "Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95.",
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 0.999
+        },
+        "min_samples": {
+          "description": "Fewest samples per side for a verdict; fewer is inconclusive. Default 10.",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 100000
+        },
+        "max_cv": {
+          "description": "A side whose coefficient of variation exceeds this is inconclusive; 0 disables the check. Default 0.5.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        }
+      }
+    },
+    "regressionBenchmark": {
+      "description": "How a base revision and the working tree are compared (yahiko compare / yahiko ci).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "description": "Statistic compared: median (default) or mean.",
+          "enum": [
+            "median",
+            "mean"
+          ]
+        },
+        "max_percent": {
+          "description": "Tolerated slowdown in percent: a number such as 10, or a string such as \"10%\". Default 10.",
+          "$ref": "#/definitions/percent"
+        },
+        "confidence": {
+          "description": "Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95.",
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 0.999
+        },
+        "min_samples": {
+          "description": "Fewest samples per side for a verdict; fewer is inconclusive. Default 10.",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 100000
+        },
+        "max_cv": {
+          "description": "A side whose coefficient of variation exceeds this is inconclusive; 0 disables the check. Default 0.5.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "commands": {
+          "description": "Compare only these commands. Default: every command.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+          }
+        }
+      }
+    },
+    "benchmark": {
+      "description": "One benchmark case.",
+      "type": "object",
+      "required": [
+        "name",
+        "commands"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Unique benchmark name shown in reports.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "description": {
+          "description": "What the benchmark measures.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Labels for --tag and --skip-tag.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+          }
+        },
+        "warmup": {
+          "description": "Unmeasured runs of every command before measuring starts. Default 1.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "runs": {
+          "description": "Measure exactly this many runs per command. When absent, runs are adaptive: at least min_runs and min_time, at most max_runs.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "min_runs": {
+          "description": "Adaptive runs: the fewest runs per command. Default 10.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "max_runs": {
+          "description": "Adaptive runs: the most runs per command. Default 100.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "min_time": {
+          "description": "Adaptive runs: keep measuring until each command has run for at least this long in total. Default 2s.",
+          "$ref": "#/definitions/duration"
+        },
+        "timeout": {
+          "description": "Per-run time limit. A run that exceeds it is stopped with its whole process tree and fails the benchmark. Default 1m.",
+          "$ref": "#/definitions/positiveDuration"
+        },
+        "cwd": {
+          "description": "Working directory: relative to the suite file, or starting with ${root} or ${workdir}. Default: the suite file's directory.",
+          "$ref": "#/definitions/pathTemplate"
+        },
+        "env": {
+          "description": "Environment variables added to the inherited environment. Values may use variables.",
+          "$ref": "#/definitions/env"
+        },
+        "stdout": {
+          "description": "\"discard\" (default), or a path inside ${workdir} that receives the standard output of the latest run.",
+          "$ref": "#/definitions/output"
+        },
+        "stderr": {
+          "description": "\"discard\" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way.",
+          "$ref": "#/definitions/output"
+        },
+        "exit_codes": {
+          "description": "Exit statuses that count as success. Default [0].",
+          "$ref": "#/definitions/exitCodes"
+        },
+        "stdin": {
+          "description": "Standard input of every run: a fixture path (reopened for each run), or a mapping with file or content.",
+          "oneOf": [
+            {
+              "description": "Fixture path: relative to the suite file, or starting with ${root} or ${workdir}.",
+              "$ref": "#/definitions/pathTemplate"
+            },
+            {
+              "description": "Standard input source.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "file": {
+                  "description": "Fixture path, as in the string form.",
+                  "$ref": "#/definitions/pathTemplate"
+                },
+                "content": {
+                  "description": "Inline text passed on standard input.",
+                  "type": "string"
+                }
+              },
+              "minProperties": 1,
+              "maxProperties": 1
+            }
+          ]
+        },
+        "setup": {
+          "description": "Processes run once per benchmark (per revision in a comparison) before any warmup. A failure fails the benchmark.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/exec"
+          }
+        },
+        "prepare_each": {
+          "description": "Processes run before every warmup and measured run, outside the measured time.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/exec"
+          }
+        },
+        "cleanup": {
+          "description": "Processes run after the benchmark whether it passed, failed or was interrupted.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/exec"
+          }
+        },
+        "baseline": {
+          "description": "Command name that RELATIVE and vs_baseline are computed against.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+        },
+        "commands": {
+          "description": "Named commands measured side by side. Names use letters, digits, '.', '_' and '-'.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/benchCommand"
+          }
+        },
+        "budget": {
+          "description": "Absolute budgets keyed by command name. A violation fails the run with exit status 1.",
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/budgetSet"
+          }
+        },
+        "regression": {
+          "$ref": "#/definitions/regressionBenchmark"
+        }
+      }
+    }
+  }
+}

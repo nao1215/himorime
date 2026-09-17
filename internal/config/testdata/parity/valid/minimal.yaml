@@ -1,0 +1,8 @@
+version: "1"
+suite:
+  name: minimal
+benchmarks:
+  - name: startup
+    commands:
+      git:
+        command: [git, --version]

@@ -1,0 +1,12 @@
+# Check every text file out with LF line endings on every OS. Generated
+# documentation, example suites embedded in the docs, golden expectations and
+# the E2E fixtures are compared byte for byte, so a CRLF checkout on Windows
+# would fail those checks without anything having changed.
+* text=auto eol=lf
+
+*.go text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.log text eol=lf

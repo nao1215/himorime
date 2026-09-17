@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: measure the startup time of one CLI.
+# https://nao1215.github.io/yahiko/cookbook/#measure-the-startup-time-of-one-cli
+version: "1"
+
+suite:
+  name: startup
+  description: How long git takes to start and print its version.
+
+defaults:
+  warmup: 2
+  runs: 10
+
+benchmarks:
+  - name: git version
+    tags: [smoke]
+    commands:
+      git:
+        # A list of arguments runs without a shell, the same way on Linux,
+        # macOS and Windows.
+        command: [git, --version]

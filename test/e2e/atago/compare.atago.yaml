@@ -1,0 +1,288 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/atago/main/schema/atago.schema.json
+version: "1"
+
+suite:
+  name: yahiko compare
+
+# Every scenario builds a throw-away Git repository in its workdir. The
+# "program" is a file holding a delay: the build copies it to ${artifact} and
+# the benchmark sleeps for that long, so each revision is as fast as its file
+# says. Differences are deliberately large (40ms against 250ms) so the
+# assertions are about classifications, never about noise.
+defaults:
+  scenario:
+    env:
+      GIT_AUTHOR_NAME: yahiko-e2e
+      GIT_AUTHOR_EMAIL: e2e@example.com
+      GIT_COMMITTER_NAME: yahiko-e2e
+      GIT_COMMITTER_EMAIL: e2e@example.com
+      GIT_CONFIG_NOSYSTEM: "1"
+
+scenarios:
+  - name: an unchanged working tree passes
+    steps:
+      - fixture: {file: repo/delay.txt, content: "40ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: compare}
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep-from, "$${artifact}"]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - assert: {exit_code: 0}
+      - run:
+          command: yahiko compare --against main
+          cwd: repo
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: "(?m)^BENCHMARK +BASE +HEAD +CHANGE +CONFIDENCE +BUDGET +RESULT$"
+      - assert:
+          stdout:
+            # Identical builds: PASS, or INCONCLUSIVE on a noisy shared
+            # runner, but never a regression.
+            matches: "(?m)^sleepy +[0-9.]+ms +[0-9.]+ms +[+-][0-9.]+% +\\S+ +\\+10% +(PASS|INCONCLUSIVE)$"
+      - assert:
+          stderr:
+            contains: "with the working tree"
+            not_contains: "uncommitted"
+
+  - name: a clear regression in uncommitted changes exits 1 and leaves the repository untouched
+    steps:
+      - fixture: {file: repo/delay.txt, content: "40ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: compare}
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep-from, "$${artifact}"]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - fixture: {file: repo/delay.txt, content: "250ms\n"}
+      - run:
+          command: yahiko compare --against main --format json
+          cwd: repo
+      - assert:
+          exit_code: 1
+          stdout:
+            json:
+              - {path: "$.mode", equals: "compare"}
+              - {path: "$.git.dirty", equals: true}
+              - {path: "$.git.base_ref", equals: "main"}
+              - {path: "$.git.base_source", equals: "--against"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparison.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparison.change_percent", gt: 100}
+              - {path: "$.suites[0].benchmarks[0].commands[0].base.samples_ns", length: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.samples_ns", length: 10}
+              - {path: "$.summary.regression", equals: 1}
+              - {path: "$.summary.exit_code", equals: 1}
+      - assert:
+          stderr: {contains: "including uncommitted changes"}
+      # The dirty change is still there, no branch appeared, and the
+      # temporary worktree is gone.
+      - run: {command: git status --porcelain, cwd: repo}
+      - assert:
+          stdout: {equals: " M delay.txt\n"}
+      - run: {command: git worktree list --porcelain, cwd: repo}
+      - assert:
+          stdout: {count: 1, contains: "worktree "}
+      - run: {command: git branch --list, cwd: repo}
+      - assert:
+          stdout: {equals: "* main\n"}
+      - assert:
+          file: {path: repo/delay.txt, equals: "250ms\n"}
+
+  - name: a committed speedup is an improvement and exits 0
+    steps:
+      - fixture: {file: repo/delay.txt, content: "250ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: compare}
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep-from, "$${artifact}"]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run: {command: git switch -q -c faster, cwd: repo}
+      - fixture: {file: repo/delay.txt, content: "40ms\n"}
+      - run: {command: git -c commit.gpgsign=false commit -q -am faster, cwd: repo}
+      - run:
+          command: yahiko compare --against main
+          cwd: repo
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: "(?m)^sleepy .* IMPROVED$"
+
+  - name: noisy measurements are inconclusive and fail only with --fail-on-inconclusive
+    steps:
+      - fixture: {file: repo/delay.txt, content: "unused\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: noisy}
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: bimodal
+                commands:
+                  app: {command: [e2ehelper, alternate, "$${workdir}/calls", 10ms, 150ms]}
+                regression: {max_cv: 0.3}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: yahiko compare --against main
+          cwd: repo
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: ["INCONCLUSIVE", "bimodal / app: inconclusive: measurements are noisier than max_cv", "1 inconclusive"]
+      - run:
+          command: yahiko compare --against main --fail-on-inconclusive --quiet
+          cwd: repo
+      - assert:
+          exit_code: 1
+          stdout: {contains: "INCONCLUSIVE"}
+
+  - name: an unknown revision is an execution error that leaves nothing behind
+    steps:
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: compare}
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep, 1ms]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: yahiko compare --against no-such-branch
+          cwd: repo
+      - assert:
+          exit_code: 4
+          stderr: {contains: 'revision "no-such-branch" is not a commit'}
+      - run: {command: git worktree list --porcelain, cwd: repo}
+      - assert:
+          stdout: {count: 1, contains: "worktree "}
+
+  - name: a build that fails in the base revision is an execution error and the worktree is removed
+    steps:
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: compare}
+            build:
+              command: [e2ehelper, copy, new-delay.txt, "$${artifact}"]
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep-from, "$${artifact}"]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      # Only the working tree has the file the build needs.
+      - fixture: {file: repo/new-delay.txt, content: "5ms\n"}
+      - run:
+          command: yahiko compare --against main
+          cwd: repo
+      - assert:
+          exit_code: 4
+          stdout: {contains: ["error: build failed: build (base) exited with status 2"]}
+      - run: {command: git worktree list --porcelain, cwd: repo}
+      - assert:
+          stdout: {count: 1, contains: "worktree "}
+
+  - name: an interrupted comparison removes the worktree and runs cleanup
+    skip: {os: windows}
+    steps:
+      - fixture: {file: repo/delay.txt, content: "100ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: interrupt}
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 0, runs: 500}
+            benchmarks:
+              - name: long
+                setup:
+                  - command: [e2ehelper, write, "$${root}/interrupt-started"]
+                commands:
+                  app: {command: [e2ehelper, sleep-from, "$${artifact}"]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: e2ehelper interrupt 60s ${workdir}/repo/interrupt-started -- yahiko compare --against main --quiet
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 0
+          stdout: {contains: ["exit=4", "ERROR"]}
+      - run: {command: git worktree list --porcelain, cwd: repo}
+      - assert:
+          stdout: {count: 1, contains: "worktree "}
+
+  - name: regression.commands limits a comparison to the commands built from the tree
+    steps:
+      - fixture: {file: repo/delay.txt, content: "20ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: partial}
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: mixed
+                commands:
+                  mine: {command: [e2ehelper, sleep-from, "$${artifact}"]}
+                  reference: {command: [e2ehelper, sleep, 1ms]}
+                regression:
+                  commands: [mine]
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: yahiko compare --against HEAD --format json --quiet
+          cwd: repo
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands", length: 1}
+              - {path: "$.suites[0].benchmarks[0].commands[0].name", equals: "mine"}

@@ -1,0 +1,7 @@
+# expect: must not contain ..
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    stdin: "${root}/../../etc/passwd"
+    commands: {a: {command: [a]}}

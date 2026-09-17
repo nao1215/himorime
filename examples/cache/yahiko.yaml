@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipes: benchmark with a warm cache, and reproduce a cold cache with
+# prepare_each.
+# https://nao1215.github.io/yahiko/cookbook/#benchmark-a-warm-cache
+version: "1"
+
+suite:
+  name: cache
+  description: The same count with a primed cache and with a cache wiped before every run.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 10
+
+benchmarks:
+  - name: warm cache
+    setup:
+      - command: ["${artifact}", -gen, "100000", -o, "${workdir}/input.txt"]
+      # Prime the cache once; every measured run then hits it.
+      - command: ["${artifact}", -cache, "${workdir}/cache", "${workdir}/input.txt"]
+    commands:
+      wordcount:
+        command: ["${artifact}", -cache, "${workdir}/cache", "${workdir}/input.txt"]
+
+  - name: cold cache
+    setup:
+      - command: ["${artifact}", -gen, "100000", -o, "${workdir}/input.txt"]
+    # prepare_each runs before every warmup and measured run, outside the
+    # measured time. Removing the cache makes every run a cold one.
+    prepare_each:
+      - command: ["${artifact}", -cache, "${workdir}/cache", -purge]
+    commands:
+      wordcount:
+        command: ["${artifact}", -cache, "${workdir}/cache", "${workdir}/input.txt"]

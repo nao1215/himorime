@@ -1,0 +1,39 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The same Go entry point on every OS: it builds yahiko and the portable
+  # helper, runs every atago spec under test/e2e/atago, and fails if the run
+  # modified the repository. Scenarios that need POSIX signals say so with
+  # skip: {os: windows}.
+  e2e:
+    name: e2e (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      ATAGO_VERSION: v0.22.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+      # The prebuilt atago release, verified and put on PATH by its action.
+      - uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
+        with:
+          version: ${{ env.ATAGO_VERSION }}
+      - name: run the E2E suite
+        run: go run ./test/e2e/run

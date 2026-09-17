@@ -1,0 +1,94 @@
+# Configuration for the documentation website (GitHub Pages).
+# The prose lives here; the README only introduces yahiko and links to it.
+# Sections marked "BEGIN GENERATED" are rewritten from the code by
+# `make docs` and checked by internal/docgen.
+baseURL = "https://nao1215.github.io/yahiko/"
+locale = "en"
+title = "yahiko"
+disableKinds = ["taxonomy", "term", "rss"]
+enableRobotsTXT = true
+timeZone = "UTC"
+
+[params]
+tagline = "Benchmark suites for command-line programs, in your repository and in CI"
+description = "yahiko measures CLI commands from a versioned YAML suite, compares them with each other or with a Git base revision, checks performance budgets, and fails CI on confirmed regressions."
+
+[markup.highlight]
+noClasses = false
+
+[markup.tableOfContents]
+startLevel = 2
+endLevel = 3
+
+[[menus.main]]
+name = "Getting started"
+pageRef = "/getting-started"
+weight = 10
+
+[[menus.main]]
+name = "Install"
+pageRef = "/install"
+weight = 15
+
+[[menus.main]]
+name = "Configuration"
+pageRef = "/configuration"
+weight = 20
+
+[[menus.main]]
+name = "Commands"
+pageRef = "/commands"
+weight = 25
+
+[[menus.main]]
+name = "Reports"
+pageRef = "/reports"
+weight = 30
+
+[[menus.main]]
+name = "Regressions"
+pageRef = "/regression-detection"
+weight = 35
+
+[[menus.main]]
+name = "GitHub Actions"
+pageRef = "/github-actions"
+weight = 40
+
+[[menus.main]]
+name = "Cookbook"
+pageRef = "/cookbook"
+weight = 45
+
+[[menus.main]]
+name = "Compared"
+pageRef = "/comparison"
+weight = 50
+
+[[menus.main]]
+name = "Reference"
+pageRef = "/exit-codes"
+weight = 55
+
+[module]
+[[module.mounts]]
+source = "content"
+target = "content"
+
+[[module.mounts]]
+source = "layouts"
+target = "layouts"
+
+[[module.mounts]]
+source = "assets"
+target = "assets"
+
+# The JSON Schemas are served from the site as well as from the repository,
+# so the Configuration and Reports pages can link to a stable address.
+[[module.mounts]]
+source = "../schema/yahiko.schema.json"
+target = "static/schema/yahiko.schema.json"
+
+[[module.mounts]]
+source = "../schema/report.schema.json"
+target = "static/schema/report.schema.json"

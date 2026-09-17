@@ -1,0 +1,6 @@
+# expect: unterminated variable reference
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    commands: {a: {command: [a, "${root"]}}

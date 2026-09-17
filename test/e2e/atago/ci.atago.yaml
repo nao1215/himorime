@@ -1,0 +1,258 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/atago/main/schema/atago.schema.json
+version: "1"
+
+suite:
+  name: yahiko ci
+
+# yahiko ci with the GitHub Actions environment simulated by files in the
+# workdir: an event payload whose base commit is the repository's HEAD, and a
+# step summary file. Nothing talks to GitHub.
+defaults:
+  scenario:
+    env:
+      GIT_AUTHOR_NAME: yahiko-e2e
+      GIT_AUTHOR_EMAIL: e2e@example.com
+      GIT_COMMITTER_NAME: yahiko-e2e
+      GIT_COMMITTER_EMAIL: e2e@example.com
+      GIT_CONFIG_NOSYSTEM: "1"
+
+scenarios:
+  - name: a pull request compares with its base and writes the job summary
+    env:
+      GITHUB_ACTIONS: "true"
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_EVENT_PATH: ${workdir}/event.json
+      GITHUB_STEP_SUMMARY: ${workdir}/summary.md
+    steps:
+      - fixture: {file: repo/delay.txt, content: "30ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: pull request}
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep-from, "$${artifact}"]}
+      - fixture: {file: summary.md, content: "output of an earlier step\n"}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run: {command: "e2ehelper event pull_request ${workdir}/repo ${workdir}/event.json"}
+      - run: {command: git switch -q -c feature, cwd: repo}
+      - fixture: {file: repo/README.md, content: "docs only\n"}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m docs, cwd: repo}
+      - run:
+          command: yahiko ci
+          cwd: repo
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: "(?m)^sleepy .* (PASS|INCONCLUSIVE)$"
+            not_contains: "\x1b["
+      - assert:
+          stderr: {matches: "comparing base [0-9a-f]{12} \\([0-9a-f]{40}\\) with the working tree"}
+      - assert:
+          file:
+            path: summary.md
+            contains:
+              - "output of an earlier step\n## "
+              - "yahiko benchmark comparison: "
+              - "| Benchmark | Command | Base | Head | Change | Interval | Confidence | Tolerance | Result |"
+              - "| sleepy | app |"
+
+  - name: a regression in a pull request exits 1 and says so in the summary
+    env:
+      GITHUB_ACTIONS: "true"
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_EVENT_PATH: ${workdir}/event.json
+      GITHUB_STEP_SUMMARY: ${workdir}/summary.md
+    steps:
+      - fixture: {file: repo/delay.txt, content: "30ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: pull request}
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep-from, "$${artifact}"]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run: {command: "e2ehelper event pull_request ${workdir}/repo ${workdir}/event.json"}
+      - fixture: {file: repo/delay.txt, content: "200ms\n"}
+      - run: {command: git -c commit.gpgsign=false commit -q -am slower, cwd: repo}
+      - run:
+          command: yahiko ci --format json --output ${workdir}/result.json
+          cwd: repo
+      - assert:
+          exit_code: 1
+          stdout: {empty: true}
+      - assert:
+          file:
+            path: result.json
+            json:
+              - {path: "$.git.base_source", equals: "pull_request.base.sha"}
+              - {path: "$.environment.ci", equals: "github-actions"}
+              - {path: "$.summary.regression", equals: 1}
+      - assert:
+          file:
+            path: summary.md
+            contains: ["## ❌ yahiko benchmark comparison: performance regression", "REGRESSION"]
+
+  - name: push and merge_group events use their own base fields
+    env:
+      GITHUB_ACTIONS: "true"
+      GITHUB_EVENT_PATH: ${workdir}/event.json
+    steps:
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: events}
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: quick
+                commands:
+                  app: {command: [e2ehelper, sleep, 1ms]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run: {command: "e2ehelper event push ${workdir}/repo ${workdir}/event.json"}
+      - run:
+          command: yahiko ci --quiet --format json
+          cwd: repo
+          env: {GITHUB_EVENT_NAME: push}
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.git.base_source", equals: "push before"}
+      - run: {command: "e2ehelper event merge_group ${workdir}/repo ${workdir}/event.json"}
+      - run:
+          command: yahiko ci --quiet --format json
+          cwd: repo
+          env: {GITHUB_EVENT_NAME: merge_group}
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.git.base_source", equals: "merge_group.base_sha"}
+
+  - name: pull_request_target is refused before anything runs
+    env:
+      GITHUB_ACTIONS: "true"
+      GITHUB_EVENT_NAME: pull_request_target
+      GITHUB_EVENT_PATH: ${workdir}/event.json
+    steps:
+      - fixture: {file: event.json, content: '{"pull_request":{"base":{"sha":"1111111111111111111111111111111111111111"}}}'}
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: refused}
+            benchmarks:
+              - name: never
+                commands:
+                  app: {command: [e2ehelper, write, "$${root}/ran"]}
+      - run:
+          command: yahiko ci
+      - assert:
+          exit_code: 3
+          stdout: {empty: true}
+          stderr: {contains: ["refusing to run for pull_request_target", "trigger the workflow on pull_request instead"]}
+      - assert:
+          file: {path: ran, exists: false}
+
+  - name: without a base the error explains how to name one
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: no base}
+            benchmarks:
+              - name: never
+                commands:
+                  app: {command: [e2ehelper, sleep, 1ms]}
+      - run:
+          command: yahiko ci
+      - assert:
+          exit_code: 3
+          stderr: {contains: ["not running in GitHub Actions", "--against <ref>", "YAHIKO_BASE_REF"]}
+      - run:
+          command: yahiko ci
+          env:
+            GITHUB_ACTIONS: "true"
+            GITHUB_EVENT_NAME: schedule
+      - assert:
+          exit_code: 3
+          stderr: {contains: 'event "schedule" has no base commit'}
+
+  - name: a base commit missing from a shallow clone points at fetch-depth
+    env:
+      GITHUB_ACTIONS: "true"
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_EVENT_PATH: ${workdir}/event.json
+    steps:
+      - fixture: {file: event.json, content: '{"pull_request":{"base":{"sha":"1111111111111111111111111111111111111111"}}}'}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: shallow}
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: quick
+                commands:
+                  app: {command: [e2ehelper, sleep, 1ms]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: yahiko ci
+          cwd: repo
+      - assert:
+          exit_code: 4
+          stderr: {contains: "fetch-depth: 0"}
+
+  - name: locally, YAHIKO_BASE_REF or --against name the base
+    steps:
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: local}
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: quick
+                commands:
+                  app: {command: [e2ehelper, sleep, 1ms]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: yahiko ci --quiet --format json
+          cwd: repo
+          env: {YAHIKO_BASE_REF: main}
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.git.base_source", equals: "YAHIKO_BASE_REF"}
+      - run:
+          command: yahiko ci --quiet --against main --summary ${workdir}/local-summary.md
+          cwd: repo
+      - assert:
+          exit_code: 0
+      - assert:
+          file: {path: local-summary.md, contains: "yahiko benchmark comparison"}

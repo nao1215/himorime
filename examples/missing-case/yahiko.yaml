@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: why no overall score is printed when a case is missing.
+# https://nao1215.github.io/yahiko/cookbook/#understand-the-geometric-mean
+version: "1"
+
+suite:
+  name: missing case
+  description: The readall implementation has no measurement for the large case.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 5
+
+benchmarks:
+  - name: small
+    setup:
+      - command: ["${artifact}", -gen, "100", -o, "${workdir}/input.txt"]
+    baseline: scanner
+    commands:
+      scanner:
+        command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]
+      readall:
+        command: ["${artifact}", -impl, readall, "${workdir}/input.txt"]
+
+  - name: large
+    setup:
+      - command: ["${artifact}", -gen, "100000", -o, "${workdir}/input.txt"]
+    baseline: scanner
+    commands:
+      scanner:
+        command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]

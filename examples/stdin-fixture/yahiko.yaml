@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: compare parsers on a stdin fixture.
+# https://nao1215.github.io/yahiko/cookbook/#compare-parsers-on-a-stdin-fixture
+version: "1"
+
+suite:
+  name: stdin fixture
+  description: Both implementations read the same access log on standard input.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 10
+
+benchmarks:
+  - name: access log on stdin
+    # The fixture is reopened for every run, so each run reads it from the
+    # first byte. Relative paths are relative to this file.
+    stdin: testdata/access.log
+    baseline: scanner
+    commands:
+      scanner:
+        command: ["${artifact}", -impl, scanner]
+      readall:
+        command: ["${artifact}", -impl, readall]
+
+  - name: inline stdin
+    stdin:
+      content: "a short inline input\nwith two lines\n"
+    baseline: scanner
+    commands:
+      scanner:
+        command: ["${artifact}", -impl, scanner]
+      readall:
+        command: ["${artifact}", -impl, readall]

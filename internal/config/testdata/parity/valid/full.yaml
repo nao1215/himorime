@@ -1,0 +1,107 @@
+version: "1"
+suite:
+  name: full
+  description: every key the format has
+defaults:
+  warmup: 2
+  runs: 15
+  min_runs: 5
+  max_runs: 50
+  min_time: 500ms
+  timeout: 30s
+  cwd: fixtures
+  env:
+    LANG: C
+  stdout: discard
+  stderr: logs/err.txt
+  exit_codes: [0]
+  regression:
+    metric: mean
+    max_percent: "7.5%"
+    confidence: 0.99
+    min_samples: 10
+    max_cv: 0.25
+build:
+  command: [go, build, -o, "${artifact}", ./cmd/tool]
+  shell: false
+  cwd: "${root}"
+  env:
+    CGO_ENABLED: "0"
+  timeout: 5m
+benchmarks:
+  - name: parse
+    description: parse a fixture
+    tags: [parser, smoke]
+    warmup: 1
+    runs: 20
+    min_runs: 10
+    max_runs: 30
+    min_time: 1s
+    timeout: 10s
+    cwd: "${workdir}"
+    env:
+      TOKEN: "${env:TOKEN}"
+    stdout: out/last.txt
+    stderr: discard
+    exit_codes: [0, 1]
+    stdin: testdata/input.txt
+    setup:
+      - command: [gen, "${workdir}/big.txt"]
+        timeout: 1m
+    prepare_each:
+      - command: "rm -rf ${workdir}/cache"
+        shell: true
+    cleanup:
+      - command: [cleanup]
+        cwd: "${workdir}"
+        env:
+          X: "1"
+    baseline: tool
+    commands:
+      tool:
+        command: ["${artifact}${exe}", --parse]
+        timeout: 5s
+        cwd: sub
+        env:
+          MODE: fast
+        stdout: discard
+        stderr: discard
+        exit_codes: [0]
+      other:
+        command: "other --parse < ${workdir}/big.txt"
+        shell: true
+    budget:
+      tool:
+        mean: "< 30ms"
+        median: "<= 20ms"
+        min: "< 1s"
+        max: "< 2s"
+    regression:
+      metric: median
+      max_percent: 10
+      confidence: 0.95
+      min_samples: 12
+      max_cv: 0
+      commands: [tool]
+  - name: inline stdin
+    stdin:
+      content: "hello\n"
+    commands:
+      cat:
+        command: [cat]
+  - name: file stdin
+    stdin:
+      file: "${root}/testdata/x.txt"
+    commands:
+      cat:
+        command: [cat]
+report:
+  outputs:
+    - format: json
+      path: results/bench.json
+    - format: markdown
+      path: results/bench.md
+    - format: csv
+      path: results/bench.csv
+    - format: github
+      path: results/summary.md

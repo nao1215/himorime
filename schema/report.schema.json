@@ -1,0 +1,721 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/nao1215/yahiko/main/schema/report.schema.json",
+  "title": "yahiko JSON report",
+  "description": "The report written by `yahiko run|compare|ci --format json`. Durations are integer nanoseconds. Fields are only added within a schema_version.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "mode",
+    "yahiko_version",
+    "seed",
+    "started_at",
+    "finished_at",
+    "environment",
+    "git",
+    "suites",
+    "summary"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "Report format version.",
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "mode": {
+      "description": "run for `yahiko run`, compare for `yahiko compare` and `yahiko ci`.",
+      "type": "string",
+      "enum": [
+        "run",
+        "compare"
+      ]
+    },
+    "yahiko_version": {
+      "description": "Version of the yahiko that wrote the report.",
+      "type": "string"
+    },
+    "seed": {
+      "description": "Seed of the execution order and the bootstrap; pass it to --seed to reproduce the order.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "started_at": {
+      "description": "Start time, RFC 3339.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "description": "Finish time, RFC 3339.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "environment": {
+      "description": "The machine. Host names and environment variables are never recorded.",
+      "type": "object",
+      "required": [
+        "os",
+        "arch",
+        "cpu_model",
+        "logical_cpus",
+        "go_version",
+        "ci"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "os": {
+          "description": "GOOS, such as linux.",
+          "type": "string"
+        },
+        "arch": {
+          "description": "GOARCH, such as amd64.",
+          "type": "string"
+        },
+        "cpu_model": {
+          "description": "CPU model name, or empty when unknown.",
+          "type": "string"
+        },
+        "logical_cpus": {
+          "description": "Logical CPUs available.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "go_version": {
+          "description": "Go version yahiko was built with.",
+          "type": "string"
+        },
+        "ci": {
+          "description": "github-actions, unknown (another CI), or empty.",
+          "type": "string"
+        }
+      }
+    },
+    "git": {
+      "description": "Revisions measured; null outside a Git repository.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "head_sha",
+        "dirty",
+        "base_ref",
+        "base_sha",
+        "base_source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "head_sha": {
+          "description": "Commit checked out in the working tree; empty without commits.",
+          "type": "string"
+        },
+        "dirty": {
+          "description": "Whether the working tree had uncommitted changes, which were measured.",
+          "type": "boolean"
+        },
+        "base_ref": {
+          "description": "The base revision as given; empty for a plain run.",
+          "type": "string"
+        },
+        "base_sha": {
+          "description": "The resolved base commit; empty for a plain run.",
+          "type": "string"
+        },
+        "base_source": {
+          "description": "Where the base came from: --against, YAHIKO_BASE_REF, pull_request.base.sha, merge_group.base_sha or push before.",
+          "type": "string"
+        }
+      }
+    },
+    "suites": {
+      "description": "One entry per suite file.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/suite"
+      }
+    },
+    "summary": {
+      "$ref": "#/definitions/summary"
+    }
+  },
+  "definitions": {
+    "result": {
+      "description": "Classification of a command, benchmark or suite.",
+      "type": "string",
+      "enum": [
+        "pass",
+        "improved",
+        "inconclusive",
+        "over_budget",
+        "regression",
+        "error"
+      ]
+    },
+    "error": {
+      "description": "A failure.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "kind",
+        "message",
+        "exit_code",
+        "stderr"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "description": "Failure kind.",
+          "type": "string",
+          "enum": [
+            "build_failed",
+            "setup_failed",
+            "prepare_each_failed",
+            "cleanup_failed",
+            "exit_code",
+            "timeout",
+            "start_failed",
+            "interrupted",
+            "invalid_path",
+            "internal"
+          ]
+        },
+        "message": {
+          "description": "What happened, with secrets masked.",
+          "type": "string"
+        },
+        "exit_code": {
+          "description": "Exit status of the failed process, when it exited.",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stderr": {
+          "description": "Tail of the failed process's standard error, with secrets masked.",
+          "type": "string"
+        }
+      }
+    },
+    "suite": {
+      "description": "One suite file.",
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "file",
+        "result",
+        "error",
+        "benchmarks",
+        "geometric_mean",
+        "geometric_mean_unavailable"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Suite name.",
+          "type": "string"
+        },
+        "description": {
+          "description": "Suite description.",
+          "type": "string"
+        },
+        "file": {
+          "description": "Suite path as given on the command line.",
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/definitions/result"
+        },
+        "error": {
+          "$ref": "#/definitions/error"
+        },
+        "benchmarks": {
+          "description": "Benchmarks in file order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/benchmark"
+          }
+        },
+        "geometric_mean": {
+          "$ref": "#/definitions/geometricMean"
+        },
+        "geometric_mean_unavailable": {
+          "description": "Why geometric_mean is null; empty when it is present.",
+          "type": "string"
+        }
+      }
+    },
+    "benchmark": {
+      "description": "One benchmark case.",
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "tags",
+        "baseline",
+        "rounds",
+        "result",
+        "error",
+        "commands"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Benchmark name.",
+          "type": "string"
+        },
+        "description": {
+          "description": "Benchmark description.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Tags.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "baseline": {
+          "description": "Baseline command name, or empty.",
+          "type": "string"
+        },
+        "rounds": {
+          "description": "Measured rounds; every healthy command ran once per round.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "result": {
+          "$ref": "#/definitions/result"
+        },
+        "error": {
+          "$ref": "#/definitions/error"
+        },
+        "commands": {
+          "description": "Commands in declaration order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/command"
+          }
+        }
+      }
+    },
+    "command": {
+      "description": "One command of a benchmark.",
+      "type": "object",
+      "required": [
+        "name",
+        "command",
+        "result",
+        "head",
+        "base",
+        "relative",
+        "comparison",
+        "budgets"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Command name.",
+          "type": "string"
+        },
+        "command": {
+          "description": "The command as written in the suite, before variables were substituted.",
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/definitions/result"
+        },
+        "head": {
+          "description": "Measurement in the working tree (the only side of a plain run).",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/measurement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "base": {
+          "description": "Measurement of the base revision; null in a plain run.",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/measurement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relative": {
+          "description": "Median ratios within the benchmark; null in a comparison or without samples.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "vs_baseline",
+            "vs_fastest"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "vs_baseline": {
+              "description": "Median divided by the baseline command's median.",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "vs_fastest": {
+              "description": "Median divided by the fastest command's median.",
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        "comparison": {
+          "description": "Base/head judgement; null in a plain run or when a side failed.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "metric",
+            "change_percent",
+            "ci_low_percent",
+            "ci_high_percent",
+            "probability_regression",
+            "probability_improvement",
+            "required_confidence",
+            "max_percent",
+            "min_samples",
+            "max_cv",
+            "verdict",
+            "reason"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "metric": {
+              "description": "Compared statistic.",
+              "type": "string",
+              "enum": [
+                "median",
+                "mean"
+              ]
+            },
+            "change_percent": {
+              "description": "(head - base) / base * 100 of the metric.",
+              "type": "number"
+            },
+            "ci_low_percent": {
+              "description": "Lower bound of the bootstrap interval at required_confidence.",
+              "type": "number"
+            },
+            "ci_high_percent": {
+              "description": "Upper bound of the bootstrap interval at required_confidence.",
+              "type": "number"
+            },
+            "probability_regression": {
+              "description": "Share of bootstrap resamples slower than +max_percent.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "probability_improvement": {
+              "description": "Share of bootstrap resamples faster than -max_percent.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "required_confidence": {
+              "description": "Configured confidence.",
+              "type": "number"
+            },
+            "max_percent": {
+              "description": "Configured tolerance in percent.",
+              "type": "number"
+            },
+            "min_samples": {
+              "description": "Configured minimum samples per side.",
+              "type": "integer"
+            },
+            "max_cv": {
+              "description": "Configured coefficient of variation limit; 0 when disabled.",
+              "type": "number"
+            },
+            "verdict": {
+              "description": "Statistical verdict before budgets.",
+              "type": "string",
+              "enum": [
+                "pass",
+                "improved",
+                "regression",
+                "inconclusive"
+              ]
+            },
+            "reason": {
+              "description": "Why the verdict is inconclusive; empty otherwise.",
+              "type": "string"
+            }
+          }
+        },
+        "budgets": {
+          "description": "Absolute budget checks of the head measurement.",
+          "type": "array",
+          "items": {
+            "description": "One budget.",
+            "type": "object",
+            "required": [
+              "metric",
+              "operator",
+              "limit_ns",
+              "actual_ns",
+              "pass"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "metric": {
+                "description": "Statistic.",
+                "type": "string",
+                "enum": [
+                  "mean",
+                  "median",
+                  "min",
+                  "max"
+                ]
+              },
+              "operator": {
+                "description": "Comparison.",
+                "type": "string",
+                "enum": [
+                  "<",
+                  "<="
+                ]
+              },
+              "limit_ns": {
+                "description": "Limit in nanoseconds.",
+                "type": "integer"
+              },
+              "actual_ns": {
+                "description": "Measured value; null without successful runs.",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "pass": {
+                "description": "Whether the budget was met.",
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "measurement": {
+      "description": "Statistics of one command on one side, in integer nanoseconds.",
+      "type": "object",
+      "required": [
+        "count",
+        "warmups",
+        "mean_ns",
+        "median_ns",
+        "stddev_ns",
+        "min_ns",
+        "max_ns",
+        "cv",
+        "samples_ns",
+        "error"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "description": "Successful measured runs.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "warmups": {
+          "description": "Warmup runs performed.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "mean_ns": {
+          "description": "Arithmetic mean.",
+          "type": "integer"
+        },
+        "median_ns": {
+          "description": "Median.",
+          "type": "integer"
+        },
+        "stddev_ns": {
+          "description": "Sample standard deviation.",
+          "type": "integer"
+        },
+        "min_ns": {
+          "description": "Fastest run.",
+          "type": "integer"
+        },
+        "max_ns": {
+          "description": "Slowest run.",
+          "type": "integer"
+        },
+        "cv": {
+          "description": "Coefficient of variation: stddev / mean.",
+          "type": "number"
+        },
+        "samples_ns": {
+          "description": "Every measured run in execution order.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "error": {
+          "$ref": "#/definitions/error"
+        }
+      }
+    },
+    "geometricMean": {
+      "description": "Supplementary cross-case geometric mean; null unless every command completed every case.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "reference",
+        "cases",
+        "values"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "description": "baseline, fastest, or base (head/base ratios of a comparison).",
+          "type": "string",
+          "enum": [
+            "baseline",
+            "fastest",
+            "base"
+          ]
+        },
+        "cases": {
+          "description": "Cases included.",
+          "type": "integer",
+          "minimum": 2
+        },
+        "values": {
+          "description": "One ratio per command.",
+          "type": "array",
+          "items": {
+            "description": "Geometric mean of one command.",
+            "type": "object",
+            "required": [
+              "command",
+              "ratio"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "description": "Command name, or head/base.",
+                "type": "string"
+              },
+              "ratio": {
+                "description": "Geometric mean ratio.",
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "summary": {
+      "description": "Counts over every command, and the exit status.",
+      "type": "object",
+      "required": [
+        "suites",
+        "benchmarks",
+        "commands",
+        "pass",
+        "improved",
+        "inconclusive",
+        "over_budget",
+        "regression",
+        "error",
+        "fail_on_inconclusive",
+        "exit_code"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "suites": {
+          "description": "Suites.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "benchmarks": {
+          "description": "Benchmarks.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "commands": {
+          "description": "Commands judged.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "pass": {
+          "description": "Commands that passed.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "improved": {
+          "description": "Commands that improved.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "inconclusive": {
+          "description": "Inconclusive comparisons.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "over_budget": {
+          "description": "Commands over an absolute budget.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "regression": {
+          "description": "Confirmed regressions.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "description": "Failed commands, benchmarks and builds.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "fail_on_inconclusive": {
+          "description": "Whether --fail-on-inconclusive was given.",
+          "type": "boolean"
+        },
+        "exit_code": {
+          "description": "The exit status yahiko returned.",
+          "type": "integer",
+          "enum": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: stop a command that hangs. This example fails on purpose (exit 4).
+# https://nao1215.github.io/yahiko/cookbook/#stop-a-command-that-hangs
+version: "1"
+
+suite:
+  name: timeout
+  description: A command that would take 30 seconds is stopped after one.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/sleepy]
+
+defaults:
+  warmup: 0
+  runs: 3
+
+benchmarks:
+  - name: hangs
+    commands:
+      sleepy:
+        command: ["${artifact}", -ms, "30000"]
+        # The run and every process it started are stopped when the limit
+        # passes: a process group on Unix, a Job Object on Windows.
+        timeout: 1s

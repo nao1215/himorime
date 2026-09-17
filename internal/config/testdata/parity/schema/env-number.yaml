@@ -1,0 +1,6 @@
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    env: {A: 1}
+    commands: {a: {command: [a]}}

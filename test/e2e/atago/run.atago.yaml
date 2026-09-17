@@ -1,0 +1,513 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/atago/main/schema/atago.schema.json
+version: "1"
+
+suite:
+  name: yahiko run
+
+# yahiko run against the portable helper. Timings are never compared with each
+# other at millisecond precision: the helper sleeps tens of milliseconds where
+# a result depends on time, and the assertions check classifications, table
+# structure, report schemas and exit codes.
+scenarios:
+  - name: several commands form a table with a baseline-relative column
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: table}
+            defaults: {warmup: 1, runs: 5}
+            benchmarks:
+              - name: sleepers
+                baseline: short
+                commands:
+                  short: {command: [e2ehelper, sleep, 1ms]}
+                  long: {command: [e2ehelper, sleep, 40ms]}
+      - run:
+          command: yahiko run
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: "(?m)^BENCHMARK +COMMAND +MEDIAN +MEAN +STDDEV +RELATIVE +RESULT$"
+      - assert:
+          stdout:
+            matches: "(?m)^sleepers +short +\\S+ +\\S+ +\\S+ +1\\.00x +PASS$"
+      - assert:
+          stdout:
+            matches: "(?m)^sleepers +long +[0-9.]+ms +\\S+ +\\S+ +[0-9.]+x +PASS$"
+      - assert:
+          stderr:
+            contains: ['benchmark "sleepers": 2 measurement units, 1 warmup, 5 runs', "finished after 5 rounds"]
+
+  - name: the JSON report keeps raw nanosecond samples, the environment and a schema version
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: json}
+            defaults: {warmup: 0, runs: 4}
+            benchmarks:
+              - name: sleep
+                tags: [smoke]
+                commands:
+                  helper: {command: [e2ehelper, sleep, 5ms]}
+      - run:
+          command: yahiko run --format json --seed 7
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.schema_version", equals: "1"}
+              - {path: "$.mode", equals: "run"}
+              - {path: "$.seed", equals: 7}
+              - {path: "$.environment.logical_cpus", gte: 1}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.count", equals: 4}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.samples_ns", length: 4}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.samples_ns[0]", gte: 5000000}
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
+              - {path: "$.summary.exit_code", equals: 0}
+      - assert:
+          stdout:
+            not_contains: ["hostname", "HOSTNAME", "PATH"]
+
+  - name: CSV, Markdown and a job summary are written to files, not mixed into stdout
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: "formats | escaped"}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: "commas, pipes | and quotes \""
+                commands:
+                  helper: {command: [e2ehelper, sleep, 1ms]}
+            report:
+              outputs:
+                - {format: markdown, path: out/report.md}
+      - run:
+          command: yahiko run --quiet --format csv --output out/report.csv --summary out/summary.md
+      - assert:
+          exit_code: 0
+          stdout: {empty: true}
+          stderr: {empty: true}
+      - assert:
+          file:
+            path: out/report.csv
+            contains:
+              - "suite,benchmark,command,side,result,count,mean_ns,median_ns,stddev_ns,min_ns,max_ns,cv,vs_baseline,vs_fastest,change_percent,ci_low_percent,ci_high_percent,probability_regression,error_kind,error_message"
+              - '"commas, pipes | and quotes """,helper,head,pass,3,'
+      - assert:
+          file:
+            path: out/report.md
+            contains: ["## formats \\| escaped", "| Benchmark | Command | Median |", "| commas, pipes \\| and quotes \" | helper |"]
+      - assert:
+          file:
+            path: out/summary.md
+            contains: ["## ✅ yahiko benchmarks: no regression"]
+
+  - name: an exceeded absolute budget exits 1
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: budget}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: slow
+                commands:
+                  helper: {command: [e2ehelper, sleep, 80ms]}
+                budget:
+                  helper: {median: "< 10ms"}
+              - name: fast
+                commands:
+                  helper: {command: [e2ehelper, sleep, 1ms]}
+                budget:
+                  helper: {median: "< 5s"}
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          exit_code: 1
+          stdout:
+            matches: "(?m)^slow +helper .* OVER BUDGET$"
+      - assert:
+          stdout:
+            matches: "(?m)^fast +helper .* PASS$"
+      - assert:
+          stdout:
+            contains: ["slow / helper: budget median < 10.00ms not met", "1 passed, 1 over budget"]
+
+  - name: a command that exits non-zero is an execution error with its stderr, and secrets are masked
+    env:
+      API_TOKEN: e2e-token-value-123456
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: failing}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: broken
+                baseline: ok
+                commands:
+                  ok: {command: [e2ehelper, sleep, 1ms]}
+                  bad:
+                    command: [e2ehelper, exit, "3", "leaked", "$${env:API_TOKEN}"]
+              - name: expected exit
+                commands:
+                  grep-like:
+                    command: [e2ehelper, exit, "1"]
+                    exit_codes: [0, 1]
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          exit_code: 4
+          stdout:
+            matches: "(?m)^broken +bad +- +- +- +- +ERROR$"
+      - assert:
+          stdout:
+            contains: ["broken / bad: exit code: exited with status 3 (allowed: 0)", "stderr: leaked ***"]
+      - assert:
+          stdout:
+            matches: "(?m)^expected exit +grep-like .* PASS$"
+      - assert:
+          stdout:
+            not_contains: "e2e-token-value-123456"
+      - assert:
+          stderr:
+            not_contains: "e2e-token-value-123456"
+
+  - name: a timeout stops the whole process tree and exits 4
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: timeout}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: hangs
+                commands:
+                  spawner:
+                    command: [e2ehelper, spawn, "$${root}/grandchild-survived"]
+                    timeout: 500ms
+      - run:
+          command: yahiko run --quiet
+          timeout: 60s
+      - assert:
+          duration:
+            lt: 30s
+      - assert:
+          exit_code: 4
+          stdout:
+            contains: ["hangs / spawner: timeout: timed out after 500ms and was stopped"]
+      # The grandchild writes its marker two seconds after it starts; wait
+      # past that and check it never did.
+      - run:
+          command: e2ehelper sleep 3s
+      - assert:
+          file:
+            path: grandchild-survived
+            exists: false
+
+  - name: tags and filters select the benchmarks that run
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: selection}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: smoke check
+                tags: [smoke]
+                commands: {helper: {command: [e2ehelper, sleep, 1ms]}}
+              - name: slow check
+                tags: [slow]
+                commands: {helper: {command: [e2ehelper, sleep, 1ms]}}
+              - name: other check
+                commands: {helper: {command: [e2ehelper, sleep, 1ms]}}
+      - run:
+          command: yahiko run --quiet --tag smoke
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "smoke check"
+            not_contains: ["slow check", "other check"]
+      - run:
+          command: yahiko run --quiet --skip-tag slow --filter "check$"
+      - assert:
+          stdout:
+            contains: ["smoke check", "other check"]
+            not_contains: "slow check"
+      - run:
+          command: yahiko run --quiet --tag nonexistent
+      - assert:
+          exit_code: 3
+          stderr: {contains: "no benchmark matches the selection"}
+
+  - name: stdin fixtures are reopened for every run and can be generated by setup
+    steps:
+      - fixture:
+          file: fixtures/three.txt
+          content: "one\ntwo\nthree\n"
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: stdin}
+            defaults: {warmup: 2, runs: 5}
+            benchmarks:
+              - name: committed fixture
+                stdin: fixtures/three.txt
+                commands:
+                  count: {command: [e2ehelper, count, "3"]}
+              - name: generated fixture
+                setup:
+                  - command: [e2ehelper, gen, "250", "$${workdir}/generated.txt"]
+                stdin: "$${workdir}/generated.txt"
+                commands:
+                  count: {command: [e2ehelper, count, "250"]}
+              - name: inline stdin
+                stdin:
+                  content: "a\nb\n"
+                commands:
+                  count: {command: [e2ehelper, count, "2"]}
+      - run:
+          command: yahiko run --quiet --format json
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.summary.pass", equals: 3}
+              - {path: "$.suites[0].benchmarks[1].commands[0].head.count", equals: 5}
+
+  - name: prepare_each recreates state before every run
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: prepare}
+            defaults: {warmup: 2, runs: 6}
+            benchmarks:
+              - name: consumes state
+                prepare_each:
+                  - command: [e2ehelper, write, "$${workdir}/state", fresh]
+                commands:
+                  consume: {command: [e2ehelper, consume, "$${workdir}/state"]}
+              - name: without prepare_each
+                setup:
+                  - command: [e2ehelper, write, "$${workdir}/state", once]
+                commands:
+                  consume: {command: [e2ehelper, consume, "$${workdir}/state"]}
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          exit_code: 4
+          stdout:
+            matches: "(?m)^consumes state +consume .* PASS$"
+      - assert:
+          stdout:
+            matches: "(?m)^without prepare_each +consume +- .* ERROR$"
+
+  - name: cleanup runs after success, after a failed command, and after a failed setup
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: cleanup}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: succeeds
+                cleanup:
+                  - command: [e2ehelper, write, "$${root}/cleaned-success"]
+                commands: {helper: {command: [e2ehelper, sleep, 1ms]}}
+              - name: command fails
+                cleanup:
+                  - command: [e2ehelper, write, "$${root}/cleaned-failure"]
+                commands: {helper: {command: [e2ehelper, exit, "2"]}}
+              - name: setup fails
+                setup:
+                  - command: [e2ehelper, exit, "5", "setup broke"]
+                cleanup:
+                  - command: [e2ehelper, write, "$${root}/cleaned-setup"]
+                commands: {helper: {command: [e2ehelper, sleep, 1ms]}}
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          exit_code: 4
+          stdout:
+            contains: ["setup fails: setup failed: setup[0] exited with status 5", "stderr: setup broke"]
+      - assert:
+          file: {path: cleaned-success, exists: true}
+      - assert:
+          file: {path: cleaned-failure, exists: true}
+      - assert:
+          file: {path: cleaned-setup, exists: true}
+
+  - name: an interrupt stops the run, runs cleanup and exits 4
+    skip: {os: windows}
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: interrupt}
+            defaults: {warmup: 0, runs: 200}
+            benchmarks:
+              - name: long
+                setup:
+                  - command: [e2ehelper, write, "$${root}/started"]
+                cleanup:
+                  - command: [e2ehelper, write, "$${root}/cleaned"]
+                commands:
+                  helper: {command: [e2ehelper, sleep, 200ms]}
+      - run:
+          command: e2ehelper interrupt 30s ${workdir}/started -- yahiko run --quiet
+          timeout: 90s
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: ["exit=4", "long", "ERROR"]
+      - assert:
+          stderr:
+            contains: ["interrupted; stopping commands and cleaning up", "interrupted; cleanup has run"]
+      - assert:
+          file: {path: cleaned, exists: true}
+
+  - name: shell true runs a pipeline through the platform shell
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: shell}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: pipeline
+                setup:
+                  - command: [e2ehelper, gen, "4", "$${workdir}/four.txt"]
+                commands:
+                  piped:
+                    command: "e2ehelper count 4 < $${workdir}/four.txt | e2ehelper count 1"
+                    shell: true
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: "(?m)^pipeline +piped .* PASS$"
+
+  - name: warm and cold caches measure differently
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: cache}
+            defaults: {warmup: 1, runs: 5}
+            benchmarks:
+              - name: warm
+                setup:
+                  - command: [e2ehelper, cache, "$${workdir}/c"]
+                commands:
+                  helper: {command: [e2ehelper, cache, "$${workdir}/c"]}
+              - name: cold
+                prepare_each:
+                  - command: [e2ehelper, remove, "$${workdir}/c"]
+                commands:
+                  helper: {command: [e2ehelper, cache, "$${workdir}/c"]}
+      - run:
+          command: yahiko run --quiet --format json
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              # A cache hit sleeps 5ms and a miss 200ms; process start-up on a
+              # slow Windows runner stays well inside the gap.
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.median_ns", lt: 150000000}
+              - {path: "$.suites[0].benchmarks[1].commands[0].head.median_ns", gte: 200000000}
+
+  - name: adaptive runs stop between the minimum and the maximum
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: adaptive}
+            defaults: {warmup: 0, min_runs: 3, max_runs: 6, min_time: 0s}
+            benchmarks:
+              - name: min runs only
+                commands: {helper: {command: [e2ehelper, sleep, 1ms]}}
+              - name: min time unreachable
+                min_time: 1h
+                commands: {helper: {command: [e2ehelper, sleep, 1ms]}}
+      - run:
+          command: yahiko run --quiet --format json
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.count", equals: 3}
+              - {path: "$.suites[0].benchmarks[1].commands[0].head.count", equals: 6}
+      - run:
+          command: yahiko run --quiet --format json --runs 2
+      - assert:
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[1].commands[0].head.count", equals: 2}
+
+  - name: the geometric mean needs every command in every case
+    steps:
+      - fixture:
+          file: complete.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: complete}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: small
+                baseline: a
+                commands:
+                  a: {command: [e2ehelper, sleep, 1ms]}
+                  b: {command: [e2ehelper, sleep, 30ms]}
+              - name: large
+                baseline: a
+                commands:
+                  a: {command: [e2ehelper, sleep, 1ms]}
+                  b: {command: [e2ehelper, sleep, 30ms]}
+      - fixture:
+          file: partial.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: partial}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: small
+                baseline: a
+                commands:
+                  a: {command: [e2ehelper, sleep, 1ms]}
+                  b: {command: [e2ehelper, sleep, 30ms]}
+              - name: large
+                baseline: a
+                commands:
+                  a: {command: [e2ehelper, sleep, 1ms]}
+      - run:
+          command: yahiko run --quiet complete.yahiko.yaml
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: ["geometric mean over 2 cases (relative to the baseline): a 1.00x"]
+      - run:
+          command: yahiko run --quiet partial.yahiko.yaml --format json
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].geometric_mean", equals: null}
+              - {path: "$.suites[0].geometric_mean_unavailable", equals: 'command "b" is missing from benchmark "large"'}

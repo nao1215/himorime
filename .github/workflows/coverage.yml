@@ -1,0 +1,49 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Coverage is reported in the job log and kept as an artifact. The job fails
+  # below the floor so that coverage cannot erode silently; it needs no write
+  # permission and posts no comment.
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COVERAGE_FLOOR: "80"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+      - name: go test with coverage
+        run: go test -covermode=atomic -coverpkg=./internal/... -coverprofile=cover.out ./internal/...
+      - name: report and enforce the floor
+        run: |
+          go tool cover -func=cover.out | tee coverage.txt | tail -1
+          total="$(tail -1 coverage.txt | awk '{print $NF}' | tr -d '%')"
+          {
+            echo "### Coverage"
+            echo
+            echo "Total statement coverage of internal packages: **${total}%** (floor ${COVERAGE_FLOOR}%)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          awk -v t="$total" -v f="$COVERAGE_FLOOR" 'BEGIN { exit !(t + 0 >= f + 0) }' || {
+            echo "::error::coverage ${total}% is below the floor of ${COVERAGE_FLOOR}%"
+            exit 1
+          }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: |
+            cover.out
+            coverage.txt
+          retention-days: 14

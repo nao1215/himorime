@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=../schema/yahiko.schema.json
+#
+# yahiko measuring itself. Informational: .github/workflows/benchmark.yml runs
+# `yahiko ci bench` on pull requests without blocking merges, and `make bench`
+# runs it locally.
+version: "1"
+
+suite:
+  name: yahiko dogfood
+  description: Start-up, validation and a small measured run of yahiko itself.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", .]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  runs: 15
+  regression:
+    max_percent: 15
+    confidence: 0.95
+
+benchmarks:
+  - name: version
+    tags: [smoke]
+    commands:
+      yahiko:
+        command: ["${artifact}", version]
+
+  - name: validate every example
+    commands:
+      yahiko:
+        command:
+          - "${artifact}"
+          - validate
+          - "${root}/../examples/cache"
+          - "${root}/../examples/compare-clis"
+          - "${root}/../examples/input-sizes"
+          - "${root}/../examples/reports"
+          - "${root}/../examples/stdin-fixture"
+
+  - name: list with a filter
+    commands:
+      yahiko:
+        command: ["${artifact}", list, --format, json, --filter, "^(small|large)$", "${root}/../examples/input-sizes"]
+
+  - name: run a tiny suite
+    setup:
+      - command: ["${artifact}", init, "${workdir}/tiny.yaml"]
+    commands:
+      yahiko:
+        command: ["${artifact}", run, --quiet, --runs, "3", --warmup, "0", --format, json, "${workdir}/tiny.yaml"]

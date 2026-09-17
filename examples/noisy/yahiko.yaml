@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipes: see an inconclusive comparison, and decide whether it fails CI.
+# https://nao1215.github.io/yahiko/cookbook/#handle-noisy-measurements
+#
+#   yahiko compare --against main examples/noisy
+#   yahiko compare --against main --fail-on-inconclusive examples/noisy
+version: "1"
+
+suite:
+  name: noisy
+  description: A stand-in program whose run time alternates between 10ms and 60ms.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/sleepy]
+
+defaults:
+  warmup: 0
+  runs: 12
+
+benchmarks:
+  - name: bimodal
+    commands:
+      sleepy:
+        command: ["${artifact}", -ms, "10", -jitter-ms, "50", -state, "${workdir}/calls"]
+    regression:
+      max_percent: 10
+      confidence: 0.95
+      # The alternating run time gives a coefficient of variation near 0.7.
+      # Above max_cv a comparison is inconclusive instead of pass or fail.
+      max_cv: 0.3

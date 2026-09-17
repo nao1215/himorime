@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/yahiko/main/schema/yahiko.schema.json
+#
+# A yahiko benchmark suite. Replace the example with the programs you want to
+# measure, then run:
+#
+#   yahiko validate
+#   yahiko run
+#
+# Reference: https://nao1215.github.io/yahiko/configuration/
+version: "1"
+
+suite:
+  name: my benchmarks
+  description: Startup time of the tools this project depends on.
+
+defaults:
+  warmup: 2
+  # Remove runs to measure adaptively (at least 10 runs and 2s per command).
+  runs: 10
+
+benchmarks:
+  - name: git startup
+    tags: [smoke]
+    commands:
+      git:
+        # A list of arguments runs without a shell. Use a string together
+        # with `shell: true` when you need pipes or redirection.
+        command: [git, --version]
+    budget:
+      git:
+        median: "< 1s"
+
+# To compare the working tree with a Git revision (yahiko compare --against
+# main), add a build that writes ${artifact} and measure that artifact:
+#
+# build:
+#   command: [go, build, -o, "${artifact}", .]
+#
+# benchmarks:
+#   - name: help
+#     commands:
+#       mytool:
+#         command: ["${artifact}", --help]
+#     regression:
+#       max_percent: 10
+#       confidence: 0.95

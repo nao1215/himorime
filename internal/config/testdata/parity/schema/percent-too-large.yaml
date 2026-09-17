@@ -1,0 +1,6 @@
+version: "1"
+suite: {name: x}
+defaults: {regression: {max_percent: 1001}}
+benchmarks:
+  - name: a
+    commands: {a: {command: [a]}}
