@@ -3,8 +3,7 @@ title: Exit codes
 description: himorime's exit statuses are a stable contract. What each one means and which one wins when several apply.
 ---
 
-himorime's exit status is part of its public interface and does not change
-within a major version.
+himorime's exit status is part of its public interface and does not change within a major version.
 
 <!-- BEGIN GENERATED: exit-codes -->
 | Code | Name | Meaning |
@@ -20,38 +19,20 @@ within a major version.
 
 ## When several apply
 
-Validation happens before anything runs, so exit 2 and exit 3 never combine
-with the others. A requested metric the platform cannot measure at all, with
-the default `metrics.unsupported: fail`, exits 6 before anything is built or
-run. After measuring, the status is decided in this order:
+Validation happens before anything runs, so exit 2 and exit 3 never combine with the others. A requested metric the platform cannot measure at all, with the default `metrics.unsupported: fail`, exits 6 before anything is built or run. After measuring, the status is decided in this order:
 
-1. `4` when any command, hook or build failed, a report could not be written,
-   cleanup failed, or the run was interrupted. Results of a run that did not
-   complete are not presented as a pass.
-2. `6` when a requested metric could not be measured: unsupported for the
-   process tree at run time, or not reported by the operating system, or the
-   declared throughput work could not be read. Performance was not judged, so
-   it is neither a pass nor a regression.
-3. `1` when any budget was exceeded or any regression was confirmed, on any
-   metric.
-4. `1` when `--fail-on-inconclusive` was given and any comparison was
-   inconclusive.
+1. `4` when any command, hook or build failed, a report could not be written, cleanup failed, or the run was interrupted. Results of a run that did not complete are not presented as a pass.
+2. `6` when a requested metric could not be measured: unsupported for the process tree at run time, or not reported by the operating system, or the declared throughput work could not be read. Performance was not judged, so it is neither a pass nor a regression.
+3. `1` when any budget was exceeded or any regression was confirmed, on any metric.
+4. `1` when `--fail-on-inconclusive` was given and any comparison was inconclusive.
 5. `0` otherwise.
 
-`1` always means the code's performance was judged and found wanting; `4` and
-`6` mean himorime could not complete the judgement. In CI, the last line of the
-log says which (`himorime: exit 1: performance check failed: ...`), and
-annotations carry distinct titles; see [GitHub Actions](/github-actions/).
+`1` always means the code's performance was judged and found wanting; `4` and `6` mean himorime could not complete the judgement. In CI, the last line of the log says which (`himorime: exit 1: performance check failed: ...`), and annotations carry distinct titles; see [GitHub Actions](/github-actions/).
 
 ## Inconclusive results
 
-An inconclusive comparison exits `0` by default: shared CI runners are noisy,
-and failing a pull request on a result that cannot be told apart from noise
-teaches people to ignore the check. The table, the JSON report and the job
-summary still say `INCONCLUSIVE` and why.
+An inconclusive comparison exits `0` by default: shared CI runners are noisy, and failing a pull request on a result that cannot be told apart from noise teaches people to ignore the check. The table, the JSON report and the job summary still say `INCONCLUSIVE` and why.
 
-Pass `--fail-on-inconclusive` to `compare` or `ci` to exit `1` instead, for
-example on a dedicated benchmark machine where noise is low and an
-inconclusive result deserves attention.
+Pass `--fail-on-inconclusive` to `compare` or `ci` to exit `1` instead, for example on a dedicated benchmark machine where noise is low and an inconclusive result deserves attention.
 
 The JSON report carries the status it produced in `summary.exit_code`.
