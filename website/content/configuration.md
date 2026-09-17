@@ -428,7 +428,7 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 |---|---|---|
 | `confidence` |  | Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95. |
 | `min_samples` |  | Fewest samples per side for a verdict. In a comparison, adaptive runs keep measuring until every compared command has this many; fewer is inconclusive. Default 10. |
-| `max_cv` |  | A side whose coefficient of variation exceeds this is inconclusive; 0 disables the check. Default 0.5. |
+| `max_cv` |  | A side whose spread exceeds this is inconclusive: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (standard deviation / mean) when the statistic is mean; 0 disables the check. Default 0.5. |
 | `commands` |  | Compare only these commands. Default: every command. |
 | `latency` |  | How latency (wall-clock time; lower is better) is compared. |
 | `throughput` |  | How throughput (higher is better, so a drop is a degradation) is compared. |

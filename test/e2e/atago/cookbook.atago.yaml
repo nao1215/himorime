@@ -194,14 +194,14 @@ scenarios:
           command: himorime compare --against main --quiet --format json examples/script-compare
           cwd: repo
           timeout: 180s
-      # The medians show that each revision ran its own script. A shared
-      # runner can be too noisy for a verdict, which is inconclusive and
-      # exits 0, never a pass.
+      # The medians show that each revision ran its own script, and 300ms
+      # added to a script that ran in under 250ms is far beyond any noise a
+      # shared runner adds.
       - assert:
-          exit_code: {in: [0, 1]}
+          exit_code: 1
           stdout:
             json:
-              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", matches: "^(regression|inconclusive)$"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.stats.median", lt: 250000000}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.median", gte: 300000000}
       - run: {command: git status --porcelain, cwd: repo}
@@ -227,19 +227,20 @@ scenarios:
           command: himorime compare --against main --quiet --format json examples/gate-cpu-memory
           cwd: repo
           timeout: 600s
-      # A shared runner can be too noisy for a latency verdict, and Windows
-      # accounts CPU time in clock ticks too coarse for a program this short:
-      # those comparisons are inconclusive. Either way the latency is not
-      # gated and nothing fails the run.
+      # The latency regression is real and not gated, so nothing fails the
+      # run. The result can still be inconclusive on Windows, where the CPU
+      # time of a program this short is inconclusive by itself; that is
+      # issue #9 and not what this recipe is about.
       - assert:
           exit_code: 0
           stdout:
             json:
-              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", matches: "^(regression|inconclusive)$"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: false}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.gate", equals: true}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.peak_rss.gate", equals: true}
               - {path: "$.suites[0].benchmarks[0].commands[0].result", matches: "^(pass|inconclusive)$"}
+              - {path: "$.summary.not_gated.regression", equals: 1}
               - {path: "$.summary.regression", equals: 0}
               - {path: "$.summary.exit_code", equals: 0}
       - run:
@@ -249,9 +250,9 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^wait for input +.* (REGRESSION|INCONCLUSIVE) \\(NOT GATED\\)$"
+            matches: "(?m)^wait for input +.* REGRESSION \\(NOT GATED\\)$"
       - assert:
-          stdout: {matches: "not gated: 1 (regressed|inconclusive)"}
+          stdout: {contains: "not gated: 1 regressed"}
 
   - name: Fail a GitHub Actions job when a performance budget is violated
     env:

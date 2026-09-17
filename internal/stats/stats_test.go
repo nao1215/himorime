@@ -337,3 +337,116 @@ func TestCompareMinDifference(t *testing.T) {
 		t.Fatalf("values = %+v", c)
 	}
 }
+
+// TestSummarizeRobustCV pins the dispersion the noise gate uses for order
+// statistics: the interquartile range scaled to a standard deviation, over
+// the median. Rare slow runs must not move it; a genuinely wide distribution
+// must.
+func TestSummarizeRobustCV(t *testing.T) {
+	t.Parallel()
+	alternating := func(a, b float64, pairs int) []float64 {
+		out := make([]float64, 0, pairs*2)
+		for range pairs {
+			out = append(out, a, b)
+		}
+		return out
+	}
+	tests := []struct {
+		name    string
+		samples []float64
+		want    float64
+		atLeast float64
+	}{
+		{name: "no samples", samples: nil, want: 0},
+		{name: "one sample", samples: []float64{5}, want: 0},
+		{name: "median is not positive", samples: []float64{0, 0, 0}, want: 0},
+		{name: "one outlier among nine equal runs", samples: []float64{40, 40, 40, 40, 40, 40, 40, 40, 40, 400}, want: 0},
+		{name: "four evenly spaced samples", samples: []float64{1, 2, 3, 4}, want: 1.5 / 1.349 / 2.5},
+		{name: "two modes far apart", samples: alternating(10, 60, 5), atLeast: 1.0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := Summarize(tt.samples).RobustCV
+			if tt.atLeast > 0 {
+				if got < tt.atLeast {
+					t.Fatalf("RobustCV = %v, want at least %v", got, tt.atLeast)
+				}
+				return
+			}
+			if math.Abs(got-tt.want) > 1e-9 {
+				t.Fatalf("RobustCV = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSummarizeKeepsTheClassicCV pins that the classic coefficient of
+// variation is unchanged, because the mean statistic still uses it.
+func TestSummarizeKeepsTheClassicCV(t *testing.T) {
+	t.Parallel()
+	if got := Summarize([]float64{1, 2, 3, 4}).CV; math.Abs(got-math.Sqrt(5.0/3.0)/2.5) > 1e-9 {
+		t.Errorf("CV = %v", got)
+	}
+	s := Summarize([]float64{40, 40, 40, 40, 40, 40, 40, 40, 40, 400})
+	if s.CV < 1 {
+		t.Errorf("CV = %v, want the outlier to dominate it", s.CV)
+	}
+	if s.RobustCV != 0 {
+		t.Errorf("RobustCV = %v, want the outlier ignored", s.RobustCV)
+	}
+}
+
+// TestCompareNoiseGateFollowsTheStatistic pins which dispersion the gate
+// applies: a few slow runs must not hide a change judged on the median, and
+// the mean keeps the classic coefficient of variation.
+func TestCompareNoiseGateFollowsTheStatistic(t *testing.T) {
+	t.Parallel()
+	withOutlier := []float64{40, 41, 39, 40, 42, 40, 41, 39, 40, 400}
+	slowerWithOutlier := []float64{100, 102.5, 97.5, 100, 105, 100, 102.5, 97.5, 100, 2500}
+	bimodal := []float64{10, 60, 10, 60, 10, 60, 10, 60, 10, 60}
+	tests := []struct {
+		name   string
+		base   []float64
+		head   []float64
+		metric Metric
+		want   Verdict
+		reason string
+	}{
+		{
+			name: "a slow run on each side does not hide a regression of the median",
+			base: withOutlier, head: slowerWithOutlier, metric: Median,
+			want: VerdictRegression,
+		},
+		{
+			name: "the same samples judged on the mean stay gated",
+			base: withOutlier, head: slowerWithOutlier, metric: Mean,
+			want: VerdictInconclusive, reason: ReasonNoisy,
+		},
+		{
+			name: "two modes far apart still trip the gate",
+			base: bimodal, head: bimodal, metric: Median,
+			want: VerdictInconclusive, reason: ReasonNoisy,
+		},
+		{
+			name:   "an unchanged side with one slow run passes",
+			base:   []float64{40, 40, 40, 40, 40, 40, 40, 40, 40, 400},
+			head:   []float64{40, 40, 40, 40, 40, 40, 40, 40, 40, 400},
+			metric: Median,
+			want:   VerdictPass,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			o := defaultOptions()
+			o.Metric = tt.metric
+			got := Compare(tt.base, tt.head, o)
+			if got.Verdict != tt.want || (tt.reason != "" && got.Reason != tt.reason) {
+				t.Fatalf("verdict = %s (%q, change %.2f%%, P(reg)=%.3f, base cv %.3f robust %.3f, head cv %.3f robust %.3f), want %s %q",
+					got.Verdict, got.Reason, got.Change, got.ProbRegression,
+					got.Base.CV, got.Base.RobustCV, got.Head.CV, got.Head.RobustCV, tt.want, tt.reason)
+			}
+		})
+	}
+}

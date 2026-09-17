@@ -29,7 +29,19 @@ type Summary struct {
 	// by the mean. It is 0 when there are fewer than two samples or the mean
 	// is not positive.
 	CV float64
+	// RobustCV is the interquartile range scaled to a standard deviation
+	// (divided by 1.349) and then by the median. It describes the spread of
+	// the bulk of the samples: rare slow runs, which shared CI runners
+	// produce, leave it unchanged, while a distribution with two modes
+	// raises it. It is 0 when there are fewer than two samples or the median
+	// is not positive.
+	RobustCV float64
 }
+
+// iqrToStddev converts an interquartile range to the standard deviation of a
+// normal distribution with the same range, so that RobustCV and CV are on the
+// same scale and one MaxCV setting means the same thing for both.
+const iqrToStddev = 1.349
 
 // Summarize computes the summary of samples. It does not modify samples.
 func Summarize(samples []float64) Summary {
@@ -58,6 +70,10 @@ func Summarize(samples []float64) Summary {
 		s.Stddev = sd
 		if mean > 0 {
 			s.CV = sd / mean
+		}
+		if s.Median > 0 {
+			iqr := percentile(sorted, 0.75) - percentile(sorted, 0.25)
+			s.RobustCV = iqr / iqrToStddev / s.Median
 		}
 	}
 	return s
@@ -146,6 +162,17 @@ func (s Summary) Value(m Metric) float64 {
 		return s.Median
 	}
 	return s.Median
+}
+
+// Dispersion is the spread the noise gate compares with MaxCV. It matches the
+// statistic being compared: the mean moves with every sample, so it is judged
+// by the classic coefficient of variation, while an order statistic is judged
+// by the robust one, which rare slow runs do not move.
+func (s Summary) Dispersion(m Metric) float64 {
+	if m == Mean {
+		return s.CV
+	}
+	return s.RobustCV
 }
 
 // GeometricMean returns the geometric mean of positive ratios. ok is false when

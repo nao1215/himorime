@@ -52,7 +52,7 @@ In order:
 | Verdict | When |
 |---|---|
 | `inconclusive` | Either side has fewer than `min_samples` samples. |
-| `inconclusive` | Either side's coefficient of variation (stddev / mean) exceeds `max_cv`. |
+| `inconclusive` | Either side's spread exceeds `max_cv`: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (stddev / mean) when the statistic is `mean`. |
 | `pass` | `min_difference` is set and the absolute difference is smaller. |
 | `regression` | The observed degradation exceeds `max_percent` and `probability_regression` ≥ `confidence`. |
 | `improved` | The observed degradation is below `-max_percent` and `probability_improvement` ≥ `confidence`. |
@@ -114,7 +114,7 @@ The latency comparison is still computed with the same bootstrap and shown with 
 Shared CI runners are noisy. Neighboring jobs, CPU frequency scaling, the host's load and cold caches all move timings by more than a small regression. CPU time moves less than latency, because waiting does not count, but frequency scaling and cache contention still change it. Peak RSS is usually steady, but depends on the allocator, the runtime and the input. himorime does not pretend otherwise:
 
 - A result it cannot call is `inconclusive`, with the reason, and exits 0 unless you pass `--fail-on-inconclusive`.
-- `max_cv` guards against distributions so spread out (for example bimodal) that a median comparison means little.
+- `max_cv` guards against distributions so spread out that a comparison of them means little, such as one with two modes far apart. It measures the bulk of the samples, so a few slow runs do not trip it.
 - Very short commands are dominated by process creation. Below a millisecond or so you are mostly measuring the operating system starting a process, and a 10% tolerance may be smaller than the variation of that start-up. Measure a representative workload instead of `--version` when you can.
 
 Ways to get conclusive results:
@@ -133,7 +133,9 @@ Ways to get conclusive results:
 - Degradations of 25% and 50% were called regressions in 99.6 to 100% of trials with 10 or 30 samples and up to 10% noise.
 - Changes near the tolerance mostly come out `inconclusive`: +8% was a regression in 0.1% of trials, +10% in 3.8%, +12% in 25.5% with 30 samples and 63.2% with 100. None was confidently called in the wrong direction.
 - `inconclusive` grows with noise and shrinks with samples: at 10% noise, 46.7% of identical comparisons with 10 samples, 8.9% with 30 and none with 100.
-- `max_cv` uses the standard deviation, so a few outliers make a comparison inconclusive even when the median is barely affected: one sample 3 to 10 times slower among 30 did so in 85% of trials, three in all of them, hiding a real +20% change too. With `max_cv: 0` the median comparison called that change a regression in 99.9% of trials. Consider `max_cv: 0` when rare outliers are expected and the metric is the median.
+- Rare slow runs do not hide a verdict. With one, three of 30 or three on each side made 3 to 10 times slower, an unchanged pair passed in 100% of trials, and a real +20% change was called a regression in 99.9 to 100%, with the same numbers as with the gate turned off. With two of 10 the outliers left too few samples for the bootstrap and 33.8% of unchanged trials were inconclusive, none a false alarm.
+- How rare is rare depends on `runs`. Three slow runs of 10 are 30% of the samples, they move the quartiles, and the gate fired in every trial. Raise `runs` when a benchmark is short enough that a noisy machine slows a large share of its runs.
+- The gate still fires on a distribution that is genuinely wide. With half the samples in a mode five times slower, every trial was inconclusive on the gate, with and without a real +25% change underneath.
 - The bootstrap resamples base and head independently, although the runner pairs them by round. When the machine drifted during the run by the same factor for both revisions, the independent bootstrap produced no false regression, but lost power: a step of 30% in the middle of the run made every comparison inconclusive, a real +20% change included, where a paired resampling of rounds, evaluated in the test for comparison, detected it in 82 to 95% of trials. Without drift both behaved the same within the Monte Carlo error. himorime keeps the independent bootstrap: it errs toward `inconclusive`, and whether pairing is worth its assumptions depends on how much real runners drift, which synthetic data cannot tell.
 
 `ci_low_percent` and `ci_high_percent` describe the central interval of the bootstrap distribution. The verdict uses one-sided probabilities, so the interval of a regression can reach below the tolerance, and that of a pass above it; the probabilities, not the interval, decide.
