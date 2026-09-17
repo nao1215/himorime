@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -14,10 +15,15 @@ import (
 // types, ranges, enums, required keys, name patterns and path shapes are
 // already guaranteed here and are not checked a second time.
 type validator struct {
-	file     string
-	loc      locator
-	issues   []Issue
-	hasBuild bool
+	file string
+	loc  locator
+	// dir is the absolute directory holding the suite file, which a relative
+	// path is resolved from, and projectRoot is the directory such a path may
+	// not leave. Both are empty when the suite has no place on disk.
+	dir         string
+	projectRoot string
+	issues      []Issue
+	hasBuild    bool
 }
 
 func (v *validator) add(p path, hint, format string, args ...any) {
@@ -206,7 +212,28 @@ func (v *validator) checkPathTemplate(p path, s string, allowWorkdir bool) {
 	}
 	if len(refs) > 0 && hasDotDot(s) {
 		v.add(p, "remove .. from the path", "path %q must not contain ..", s)
+		return
 	}
+	if len(refs) == 0 && hasDotDot(s) && v.leavesProject(s) {
+		v.add(p, "paths must stay inside the repository holding the suite, or inside the suite's directory when it is not in a repository",
+			"path %q leaves the project", s)
+	}
+}
+
+// leavesProject reports whether a relative path without variables resolves
+// outside the project. The run resolves .. the same way, before it follows
+// symbolic links, so a path rejected here is one the run would reject too,
+// after it had already built and started measuring.
+func (v *validator) leavesProject(s string) bool {
+	if v.dir == "" || v.projectRoot == "" {
+		return false
+	}
+	target := filepath.Join(v.dir, filepath.FromSlash(s))
+	rel, err := filepath.Rel(v.projectRoot, target)
+	if err != nil {
+		return true
+	}
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func refName(r Ref) string {
@@ -393,6 +420,10 @@ func (v *validator) resolveWork(p path, raw RawWork) *Work {
 		}
 		if unit != metric.BytesUnit {
 			v.add(p.key("unit"), "remove unit or write unit: bytes", "file_size measures bytes, so its unit must be bytes, not %q", unit)
+			// The unit the writer has to put here is bytes. Carrying the
+			// rejected one further would make the budget and tolerance
+			// checks below repeat it back as the unit to write.
+			unit = metric.BytesUnit
 		}
 	} else {
 		w.Value = *raw.Value
@@ -401,6 +432,7 @@ func (v *validator) resolveWork(p path, raw RawWork) *Work {
 		}
 		if metric.IsByteUnit(unit) && unit != metric.BytesUnit {
 			v.add(p.key("unit"), "convert the value to bytes and write unit: bytes; throughput is then shown as KiB/s, MiB/s and so on", "work unit %q is a byte size multiple", unit)
+			unit = metric.BytesUnit
 		}
 	}
 	w.Unit = unit

@@ -591,3 +591,139 @@ func TestLoadRejectsMetrics(t *testing.T) {
 		})
 	}
 }
+
+// TestLoadReportsAWrongWorkUnitOnce pins that a work unit himorime rejects is
+// not used to build the hints of the budget and tolerance errors that follow
+// it: a writer who fixes the unit must not be told to write it again.
+func TestLoadReportsAWrongWorkUnitOnce(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		src   string
+		want  []string
+		field string
+	}{
+		{
+			name: "byte multiple with a byte rate everywhere",
+			src: minimal("") + `    metrics:
+      throughput: {work: {value: 1000, unit: KB}}
+    budget:
+      tool:
+        throughput: {median: ">= 1KB/s"}
+    regression:
+      throughput: {min_difference: 1KB/s}
+`,
+			want:  []string{`work unit "KB" is a byte size multiple`},
+			field: "benchmarks[0].metrics.throughput.work.unit",
+		},
+		{
+			name: "file size in records with a byte rate budget",
+			src: minimal("") + `    metrics:
+      throughput: {work: {file_size: in.json, unit: records}}
+    budget:
+      tool:
+        throughput: {median: ">= 1MiB/s"}
+`,
+			want:  []string{"its unit must be bytes"},
+			field: "benchmarks[0].metrics.throughput.work.unit",
+		},
+		{
+			name: "byte multiple with a budget in another unit",
+			src: minimal("") + `    metrics:
+      throughput: {work: {value: 1000, unit: KB}}
+    budget:
+      tool:
+        throughput: {median: ">= 1000 records/s"}
+`,
+			want:  []string{`work unit "KB" is a byte size multiple`, "the budget is in records/s"},
+			field: "benchmarks[0].metrics.throughput.work.unit",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseString(t, tt.src)
+			var verr *ValidationError
+			if !errors.As(err, &verr) {
+				t.Fatalf("Load() error = %v, want a ValidationError\n%s", err, tt.src)
+			}
+			if len(verr.Issues) != len(tt.want) {
+				t.Fatalf("issues = %d, want %d:\n%v\nsource:\n%s", len(verr.Issues), len(tt.want), err, tt.src)
+			}
+			for i, w := range tt.want {
+				if !strings.Contains(verr.Issues[i].Message, w) {
+					t.Errorf("issue %d = %q, want it to contain %q", i, verr.Issues[i].Message, w)
+				}
+			}
+			if verr.Issues[0].Field != tt.field {
+				t.Errorf("first issue field = %q, want %q", verr.Issues[0].Field, tt.field)
+			}
+		})
+	}
+}
+
+// TestLoadRejectsARelativePathThatLeavesTheProject pins that validation
+// answers the same question the run answers: a relative path whose .. leaves
+// the repository holding the suite, or the suite's own directory when it is
+// not in a repository, is rejected before anything is built or measured.
+func TestLoadRejectsARelativePathThatLeavesTheProject(t *testing.T) {
+	t.Parallel()
+	write := func(t *testing.T, dir, src string) (*Suite, error) {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, "himorime.yaml")
+		if err := os.WriteFile(p, []byte(src), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(p)
+	}
+	suite := func(cwd string) string {
+		return "version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    commands:\n      tool: {command: [tool], cwd: " + cwd + "}\n"
+	}
+
+	t.Run("outside a repository", func(t *testing.T) {
+		t.Parallel()
+		_, err := write(t, t.TempDir(), suite("../.."))
+		var verr *ValidationError
+		if !errors.As(err, &verr) {
+			t.Fatalf("Load() error = %v, want a ValidationError", err)
+		}
+		is := verr.Issues[0]
+		if is.Field != "benchmarks[0].commands.tool.cwd" || !strings.Contains(is.Message, "leaves the project") {
+			t.Errorf("issue = %+v, want the escaping path", is)
+		}
+		if is.Line == 0 {
+			t.Errorf("issue %q has no position", is.Message)
+		}
+	})
+
+	t.Run("inside a repository", func(t *testing.T) {
+		t.Parallel()
+		top := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(top, ".git"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := write(t, filepath.Join(top, "bench"), suite("..")); err != nil {
+			t.Errorf("a .. that stays in the repository must be accepted: %v", err)
+		}
+		if _, err := write(t, filepath.Join(top, "bench2"), suite("../..")); err == nil {
+			t.Error("a .. that leaves the repository must be rejected")
+		}
+	})
+
+	t.Run("every path setting", func(t *testing.T) {
+		t.Parallel()
+		for _, src := range []string{
+			"version: \"1\"\nsuite: {name: x}\nbuild: {command: [go, build], cwd: ../..}\nbenchmarks:\n  - name: a\n    commands: {tool: {command: [tool]}}\n",
+			"version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    stdin: ../../in.txt\n    commands: {tool: {command: [tool]}}\n",
+			"version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    metrics: {throughput: {work: {file_size: ../../in.txt}}}\n    commands: {tool: {command: [tool]}}\n",
+			"version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    commands: {tool: {command: [tool]}}\nreport: {outputs: [{format: json, path: ../../out.json}]}\n",
+		} {
+			if _, err := write(t, t.TempDir(), src); err == nil {
+				t.Errorf("accepted an escaping path:\n%s", src)
+			}
+		}
+	})
+}

@@ -138,6 +138,37 @@ scenarios:
               - 'semantic.yaml:5:15: benchmarks[0].baseline: baseline "missing" is not a command of this benchmark'
               - "${artifact} is used but the suite has no build section"
 
+  - name: a relative path that leaves the project is rejected before anything runs
+    steps:
+      - fixture:
+          file: escape.yaml
+          content: |
+            version: "1"
+            suite: {name: escape}
+            benchmarks:
+              - name: parse
+                commands:
+                  tool:
+                    command: [e2ehelper, sleep, 1ms]
+                    cwd: ../..
+      - run:
+          command: himorime validate escape.yaml
+      - assert:
+          exit_code: 2
+          stderr:
+            contains:
+              - 'escape.yaml:8:14: benchmarks[0].commands.tool.cwd: path "../.." leaves the project'
+              - "paths must stay inside the repository holding the suite"
+      # run refuses the same suite for the same reason, without building or
+      # measuring anything.
+      - run:
+          command: himorime run escape.yaml
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: 'path "../.." leaves the project'
+            not_contains: "resolves outside the project"
+
   - name: a missing suite file is a configuration error
     steps:
       - run:

@@ -812,7 +812,9 @@
           "required": [
             "value",
             "file_size",
-            "unit"
+            "unit",
+            "measured_min",
+            "measured_max"
           ],
           "additionalProperties": false,
           "properties": {
@@ -830,6 +832,20 @@
             "unit": {
               "description": "Unit of work.",
               "type": "string"
+            },
+            "measured_min": {
+              "description": "Smallest work of a measured run, in unit; null when no run was measured.",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "measured_max": {
+              "description": "Largest work of a measured run, in unit; null when no run was measured.",
+              "type": [
+                "number",
+                "null"
+              ]
             }
           }
         },

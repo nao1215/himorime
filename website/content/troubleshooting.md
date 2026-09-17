@@ -72,6 +72,14 @@ Commands written as lists run without a shell: no `~`, globbing, pipes or `$VAR`
 
 A `cwd` or `stdin` path, after following symbolic links, leaves the Git repository, the base worktree and `${workdir}`. Keep fixtures inside the repository, or generate them into `${workdir}` in `setup`.
 
+## "path ... leaves the project"
+
+A relative path's `..` climbs out of the repository holding the suite, or out of the suite's directory when it is not in a repository. This is caught when the suite is loaded, so `run` and `compare` stop with exit 2 before the build. Keep the path inside the repository, or write generated files to `${workdir}`.
+
+## "the work differs between the revisions"
+
+The file named by `metrics.throughput.work.file_size` has a different size in the two revisions, so their throughput describes two different jobs. Point `file_size` at `${head_root}` so both revisions read the working tree's fixture, or leave the fixture unchanged in a pull request you want judged on throughput.
+
 ## himorime keeps running after Ctrl+C
 
 The first interrupt stops the measured commands and then runs `cleanup` hooks and removes the temporary worktree, which can take a moment. Interrupt a second time to quit immediately. Cleanup that has not run yet is then skipped: a temporary worktree stays in the system temporary directory (`himorime-*`), and once that directory is deleted, the next `himorime compare` prunes its entry from the repository.

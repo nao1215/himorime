@@ -75,7 +75,8 @@ func Parse(display, abs string, src []byte) (*Suite, error) {
 	if err := yaml.UnmarshalWithOptions(decodeSrc, &raw, yaml.DisallowUnknownField()); err != nil {
 		return nil, &ValidationError{Issues: []Issue{decodeIssue(display, err)}}
 	}
-	v := &validator{file: display, loc: loc}
+	dir := filepath.Dir(abs)
+	v := &validator{file: display, loc: loc, dir: dir, projectRoot: projectRoot(dir)}
 	suite := v.resolve(&raw)
 	if len(v.issues) > 0 {
 		return nil, &ValidationError{Issues: v.issues}
@@ -83,6 +84,23 @@ func Parse(display, abs string, src []byte) (*Suite, error) {
 	suite.Path = abs
 	suite.Dir = filepath.Dir(abs)
 	return suite, nil
+}
+
+// projectRoot is the directory a relative path of the suite may not leave:
+// the top of the repository holding the suite, or the suite's own directory
+// when it is not in a repository. It is the same directory the run confines
+// paths to, found without asking Git, so that validation and the run agree.
+func projectRoot(dir string) string {
+	for cur := dir; ; {
+		if _, err := os.Lstat(filepath.Join(cur, ".git")); err == nil {
+			return cur
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return dir
+		}
+		cur = parent
+	}
 }
 
 // resolveAliases returns src with every YAML alias replaced by a copy of its

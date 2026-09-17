@@ -78,6 +78,10 @@ metrics:
 
 Because throughput is computed per run, `min` is the slowest run and `p95` is the fast end of the distribution. Use `min` or a low percentile such as `p5` for a worst-case floor.
 
+Reports record the measured work, not only the declared amount: `work.measured_min` and `work.measured_max` in JSON, `measured_work_min` and `measured_work_max` rows in CSV. The work can differ between runs and between revisions.
+
+A comparison whose two revisions measured different work is inconclusive, and its reason names both amounts: a `file_size` fixture that grew or shrank changes throughput without the command running any faster or slower. The declared `value` is the same for both revisions, because a comparison reads one suite file, from the working tree.
+
 ## CPU time and utilization
 
 User and system CPU time are read from the operating system when a run exits. `cpu_total` is their sum. They count time the processes spent running on a CPU, not time spent waiting for I/O, locks, sleeps or other processes, so CPU time can be much smaller than latency (a program waiting on disk) or much larger (a program using several cores).

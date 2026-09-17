@@ -1,0 +1,8 @@
+# expect: work unit "KB" is a byte size multiple
+version: "1"
+suite: {name: x}
+benchmarks:
+  - name: a
+    metrics: {throughput: {work: {value: 1000, unit: KB}}}
+    commands: {a: {command: [a]}}
+    budget: {a: {throughput: {median: ">= 1KB/s"}}}
