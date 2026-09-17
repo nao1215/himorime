@@ -21,9 +21,7 @@ defaults:
     memory: false
     unsupported: skip
   regression:
-    metric: mean
-    max_percent: "7.5%"
-    min_difference: 1ms
+    latency: {metric: mean, max_percent: "7.5%", min_difference: 1ms, gate: true}
     confidence: 0.99
     min_samples: 10
     max_cv: 0.25
@@ -102,10 +100,8 @@ benchmarks:
         memory:
           peak_rss: {max: "<= 64MiB", median: "< 60000KB"}
     regression:
-      metric: median
-      max_percent: 10
-      min_difference: 500us
-      throughput: {max_percent: 10, min_difference: "10 records/s"}
+      latency: {metric: median, max_percent: 10, min_difference: 500us, gate: false}
+      throughput: {max_percent: 10, min_difference: "10 records/s", gate: true}
       cpu: {max_percent: 15}
       memory: {min_difference: 256KiB}
       confidence: 0.95

@@ -76,21 +76,27 @@ func runTable(sb *strings.Builder, s Suite, o TerminalOptions) {
 		case metric.GroupThroughput:
 			sb.WriteString("\nthroughput\n")
 			groupRunTable(sb, s, o, g, []string{"MEDIAN", "MEAN", "MIN"}, func(m *Measurement) []string {
-				return []string{statCell(m, metric.Throughput, median), statCell(m, metric.Throughput, mean), statCell(m, metric.Throughput, minOf)}
+				return []string{statCell(m, metric.Throughput, medianOf), statCell(m, metric.Throughput, meanOf), statCell(m, metric.Throughput, minOf)}
 			})
 			sb.WriteString("THROUGHPUT is the declared work divided by the latency of each run; MIN is the slowest run.\n")
 		case metric.GroupCPU:
 			sb.WriteString("\ncpu\n")
 			groupRunTable(sb, s, o, g, []string{"USER", "SYSTEM", "TOTAL", "UTILIZATION"}, func(m *Measurement) []string {
-				return []string{statCell(m, metric.CPUUser, median), statCell(m, metric.CPUSystem, median), statCell(m, metric.CPUTotal, median), statCell(m, metric.CPUUtilization, median)}
+				return []string{statCell(m, metric.CPUUser, medianOf), statCell(m, metric.CPUSystem, medianOf), statCell(m, metric.CPUTotal, medianOf), statCell(m, metric.CPUUtilization, medianOf)}
 			})
 			sb.WriteString(cpuFootnote + "\n")
+			if note := processNote(s, g); note != "" {
+				sb.WriteString(note + "\n")
+			}
 		case metric.GroupMemory:
 			sb.WriteString("\nmemory\n")
 			groupRunTable(sb, s, o, g, []string{"PEAK RSS", "MAX"}, func(m *Measurement) []string {
-				return []string{statCell(m, metric.PeakRSS, median), statCell(m, metric.PeakRSS, maxOf)}
+				return []string{statCell(m, metric.PeakRSS, medianOf), statCell(m, metric.PeakRSS, maxOf)}
 			})
-			sb.WriteString("PEAK RSS is the median over runs of the largest resident set size of any process in the tree; MAX is the highest run.\n")
+			sb.WriteString("PEAK RSS is the median over runs; MAX is the highest run.\n")
+			if note := processNote(s, g); note != "" {
+				sb.WriteString(note + "\n")
+			}
 		}
 	}
 	if hasBudgets(s) {
@@ -114,9 +120,9 @@ func latencyRunTable(sb *strings.Builder, s Suite, o TerminalOptions) {
 		for _, c := range b.Commands {
 			median, mean, stddev, rel := "-", "-", "-", "-"
 			if c.Head != nil && c.Head.Count > 0 {
-				median = FormatDuration(c.Head.MedianNS)
-				mean = FormatDuration(c.Head.MeanNS)
-				stddev = FormatDuration(c.Head.StddevNS)
+				median = statCell(c.Head, metric.Latency, medianOf)
+				mean = statCell(c.Head, metric.Latency, meanOf)
+				stddev = statCell(c.Head, metric.Latency, stddevOf)
 			}
 			if c.Relative != nil {
 				switch {
@@ -188,6 +194,14 @@ func compareTable(sb *strings.Builder, s Suite, o TerminalOptions) {
 		compareMetricTable(sb, s, o, def)
 	}
 	sb.WriteString("BASE and HEAD show the compared statistic; CONFIDENCE is the bootstrap probability that the change exceeds TOLERANCE in its direction.\n")
+	if hasNotGated(s) {
+		sb.WriteString("(NOT GATED) marks a metric with gate: false: it is compared and reported, but never fails the run.\n")
+	}
+	for _, g := range []metric.Group{metric.GroupCPU, metric.GroupMemory} {
+		if note := processNote(s, g); note != "" {
+			sb.WriteString(note + "\n")
+		}
+	}
 	if hasBudgets(s) {
 		sb.WriteString("\nbudgets (head)\n")
 		budgetTable(sb, s, o)
@@ -328,5 +342,9 @@ func summaryLine(sb *strings.Builder, r *Report) {
 	if s.Benchmarks == 1 {
 		noun = "benchmark"
 	}
-	fmt.Fprintf(sb, "%s · %d %s · seed %d · exit %d\n", strings.Join(parts, ", "), s.Benchmarks, noun, r.Seed, s.ExitCode)
+	extra := ""
+	if note := checksNote(s); note != "" {
+		extra = " · " + note
+	}
+	fmt.Fprintf(sb, "%s · %d %s%s · seed %d · exit %d\n", strings.Join(parts, ", "), s.Benchmarks, noun, extra, r.Seed, s.ExitCode)
 }

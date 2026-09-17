@@ -37,7 +37,7 @@ func TestMeasureCollectsUsageAndWork(t *testing.T) {
 	f := newFixture(t)
 	b := bench("usage", 3, f.command("a", "ok"))
 	b.Metrics = config.Metrics{CPU: true, Memory: true, Throughput: &config.Work{Value: 500, Unit: "records"}, Unsupported: config.UnsupportedFail}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if res.Failure != nil {
 		t.Fatal(res.Failure)
 	}
@@ -63,7 +63,7 @@ func TestMeasureWithoutMetricsCollectsNoUsage(t *testing.T) {
 		requested = requested || s.CollectUsage
 		return proc.Run(ctx, s, now)
 	}
-	res := f.runner.Measure(context.Background(), f.suite, bench("latency only", 2, f.command("a", "ok")), []Side{f.side})
+	res := f.runner.Measure(context.Background(), bench("latency only", 2, f.command("a", "ok")), []Side{f.side})
 	m := res.Commands[0].Sides[SideHead]
 	if requested || m.CPUUser != nil || m.PeakRSS != nil || m.Work != nil {
 		t.Fatalf("a latency-only benchmark collected usage: requested=%v %+v", requested, m)
@@ -80,7 +80,7 @@ func TestMeasureUnsupportedAtRunTime(t *testing.T) {
 	f.runner.Exec = fakeUsage(unsupported)
 	b := bench("fail policy", 2, f.command("a", "ok"))
 	b.Metrics = config.Metrics{CPU: true, Memory: true, Unsupported: config.UnsupportedFail}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	m := res.Commands[0].Sides[SideHead]
 	if m.Failure == nil || m.Failure.Kind != FailMetricUnsupported || !strings.Contains(m.Failure.Message, "the command ran 2 processes") {
 		t.Fatalf("failure = %+v", m.Failure)
@@ -93,7 +93,7 @@ func TestMeasureUnsupportedAtRunTime(t *testing.T) {
 	f2.runner.Exec = fakeUsage(unsupported)
 	b2 := bench("skip policy", 3, f2.command("a", "ok"))
 	b2.Metrics = config.Metrics{CPU: true, Memory: true, Unsupported: config.UnsupportedSkip}
-	res2 := f2.runner.Measure(context.Background(), f2.suite, b2, []Side{f2.side})
+	res2 := f2.runner.Measure(context.Background(), b2, []Side{f2.side})
 	m2 := res2.Commands[0].Sides[SideHead]
 	if m2.Failure != nil {
 		t.Fatalf("skip policy failed: %+v", m2.Failure)
@@ -121,7 +121,7 @@ func TestMeasureCollectionFailureIsNeverSkipped(t *testing.T) {
 	})
 	b := bench("collection", 3, f.command("a", "ok"))
 	b.Metrics = config.Metrics{CPU: true, Memory: true, Unsupported: config.UnsupportedSkip}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	m := res.Commands[0].Sides[SideHead]
 	if m.Failure == nil || m.Failure.Kind != FailMetricCollection || !strings.Contains(m.Failure.Message, "rusage missing") {
 		t.Fatalf("failure = %+v", m.Failure)
@@ -139,7 +139,7 @@ func TestMeasureUnsupportedPlatform(t *testing.T) {
 	b := bench("fail", 2, f.command("a", "append", log, "measured"))
 	b.Setup = []config.Exec{f.helper("append", log, "setup")}
 	b.Metrics = config.Metrics{CPU: true, Unsupported: config.UnsupportedFail}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if res.Failure == nil || res.Failure.Kind != FailMetricUnsupported || !strings.Contains(res.Failure.Message, "not on this OS") {
 		t.Fatalf("failure = %+v", res.Failure)
 	}
@@ -155,7 +155,7 @@ func TestMeasureUnsupportedPlatform(t *testing.T) {
 	f2.runner.Capabilities = noCPU
 	b2 := bench("skip", 2, f2.command("a", "ok"))
 	b2.Metrics = config.Metrics{CPU: true, Unsupported: config.UnsupportedSkip}
-	res2 := f2.runner.Measure(context.Background(), f2.suite, b2, []Side{f2.side})
+	res2 := f2.runner.Measure(context.Background(), b2, []Side{f2.side})
 	m := res2.Commands[0].Sides[SideHead]
 	if res2.Failure != nil || m.Failure != nil || len(m.Samples) != 2 || m.CPUUser != nil {
 		t.Fatalf("skip: %+v %+v", res2.Failure, m)
@@ -177,7 +177,7 @@ func TestMeasureWorkFromFileSize(t *testing.T) {
 	}
 	b := bench("file size", 2, f.command("a", "ok"))
 	b.Metrics = config.Metrics{Throughput: &config.Work{FileSize: "input dir/data file.json", Unit: "bytes"}}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	m := res.Commands[0].Sides[SideHead]
 	if m.Failure != nil || len(m.Work) != 2 || m.Work[0] != 1234 {
 		t.Fatalf("work = %v, failure %+v", m.Work, m.Failure)
@@ -188,7 +188,7 @@ func TestMeasureWorkFromFileSize(t *testing.T) {
 	b2 := bench("generated", 1, f2.command("a", "ok"))
 	b2.Setup = []config.Exec{f2.helper("append", "${workdir}/gen.txt", "hello")}
 	b2.Metrics = config.Metrics{Throughput: &config.Work{FileSize: "${workdir}/gen.txt", Unit: "bytes"}}
-	res2 := f2.runner.Measure(context.Background(), f2.suite, b2, []Side{f2.side})
+	res2 := f2.runner.Measure(context.Background(), b2, []Side{f2.side})
 	if m := res2.Commands[0].Sides[SideHead]; m.Failure != nil || len(m.Work) != 1 || m.Work[0] != 6 {
 		t.Fatalf("generated work = %+v", m)
 	}
@@ -199,7 +199,7 @@ func TestMeasureWorkFromFileSize(t *testing.T) {
 		_ = os.MkdirAll(filepath.Join(f3.dir, "input dir"), 0o700)
 		b3 := bench(name, 1, f3.command("a", "ok"))
 		b3.Metrics = config.Metrics{Throughput: &config.Work{FileSize: file, Unit: "bytes"}}
-		res3 := f3.runner.Measure(context.Background(), f3.suite, b3, []Side{f3.side})
+		res3 := f3.runner.Measure(context.Background(), b3, []Side{f3.side})
 		if m := res3.Commands[0].Sides[SideHead]; m.Failure == nil || m.Failure.Kind != FailMetricCollection {
 			t.Errorf("%s work file: failure = %+v", name, m.Failure)
 		}

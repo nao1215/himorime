@@ -132,14 +132,13 @@ func defaults() string {
 		{"timeout (build)", duration(config.DefaultBuildTimeout)},
 		{"stdout, stderr", config.OutputDiscard},
 		{"exit_codes", "[0]"},
-		{"regression.metric", string(config.DefaultMetric)},
-		{"regression.max_percent", fmt.Sprint(config.DefaultMaxPercent)},
 		{"regression.confidence", fmt.Sprint(config.DefaultConfidence)},
 		{"regression.min_samples", fmt.Sprint(config.DefaultMinSamples)},
 		{"regression.max_cv", fmt.Sprint(config.DefaultMaxCV)},
-		{"regression.min_difference", "unset (none)"},
-		{"regression.throughput, cpu, memory: metric", string(config.DefaultMetric)},
-		{"regression.throughput, cpu, memory: max_percent", fmt.Sprint(config.DefaultMaxPercent)},
+		{"regression.latency, throughput, cpu, memory: metric", string(config.DefaultMetric)},
+		{"regression.latency, throughput, cpu, memory: max_percent", fmt.Sprint(config.DefaultMaxPercent)},
+		{"regression.latency, throughput, cpu, memory: min_difference", "unset (none)"},
+		{"regression.latency, throughput, cpu, memory: gate", "true"},
 		{"metrics.cpu, metrics.memory", "false"},
 		{"metrics.unsupported", config.UnsupportedFail},
 		{"metrics.throughput.work.unit", "operations (value), bytes (file_size)"},
@@ -168,7 +167,8 @@ func duration(d time.Duration) string {
 func variables() string {
 	rows := [][2]string{
 		{"${artifact}", "The file the build step writes. In a comparison each revision has its own. Only available when the suite has a build section. On Windows it ends in .exe."},
-		{"${root}", "The directory holding the suite file, inside the tree being measured: the working tree, or the temporary worktree of the base revision."},
+		{"${root}", "The directory holding the suite file, inside the tree being measured: the working tree, or the temporary worktree of the base revision. Relative paths are relative to it, so each revision runs its own scripts and reads its own files."},
+		{"${head_root}", "The directory holding the suite file inside the working tree, the same for every revision. Use it for a fixture or tool both revisions must share. Equal to ${root} in a plain run."},
 		{"${workdir}", "A fresh, empty directory created for each benchmark (and each revision in a comparison) and removed after cleanup. Not available in build."},
 		{"${exe}", "`.exe` on Windows, empty elsewhere."},
 		{"${env:NAME}", "The environment variable NAME. A variable that is not set is an execution error."},
@@ -206,7 +206,7 @@ func configReference() (string, error) {
 		{"benchmarks[].budget.NAME.cpu", []string{"definitions", "budgetSet", "properties", "cpu"}},
 		{"benchmarks[].budget.NAME.memory", []string{"definitions", "budgetSet", "properties", "memory"}},
 		{"regression", []string{"definitions", "regressionBenchmark"}},
-		{"regression.throughput, regression.cpu, regression.memory", []string{"definitions", "cpuRegression"}},
+		{"regression.latency, regression.throughput, regression.cpu, regression.memory", []string{"definitions", "latencyRegression"}},
 		{"report", []string{"properties", "report"}},
 	}
 	var sb strings.Builder

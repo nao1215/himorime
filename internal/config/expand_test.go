@@ -11,6 +11,7 @@ func TestExpand(t *testing.T) {
 	vars := Vars{
 		Artifact: "/tmp/a/artifact",
 		Root:     "/repo",
+		HeadRoot: "/work",
 		Workdir:  "/tmp/w",
 		Exe:      ".exe",
 		LookupEnv: func(k string) (string, bool) {
@@ -29,6 +30,7 @@ func TestExpand(t *testing.T) {
 		"$${artifact} stays literal": "${artifact} stays literal",
 		"a $ b $1 {x}":               "a $ b $1 {x}",
 		"${root}${root}":             "/repo/repo",
+		"${head_root}/testdata/x":    "/work/testdata/x",
 	}
 	for in, want := range tests {
 		got, err := Expand(in, vars, nil)

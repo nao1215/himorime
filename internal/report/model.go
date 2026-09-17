@@ -2,8 +2,8 @@
 // as a terminal table, JSON, CSV, Markdown or a GitHub Actions job summary.
 //
 // The Report type is the JSON report contract, described by
-// schema/report.schema.json. Fields are only ever added within a schema
-// version; renaming or removing one requires a new SchemaVersion.
+// schema/report.schema.json. Once released, fields are only ever added within
+// a schema version; renaming or removing one requires a new SchemaVersion.
 package report
 
 import "time"
@@ -127,26 +127,18 @@ type Command struct {
 	Head     *Measurement `json:"head"`
 	Base     *Measurement `json:"base"`
 	Relative *Relative    `json:"relative"`
-	// Comparison is the latency comparison, kept in its original shape.
-	// Comparisons holds every compared metric, latency included.
-	Comparison  *Comparison                  `json:"comparison"`
+	// Comparisons holds every compared metric, latency included, keyed by
+	// metric name. It is null outside a revision comparison.
 	Comparisons map[string]*MetricComparison `json:"comparisons"`
 	Budgets     []BudgetCheck                `json:"budgets"`
 }
 
-// Measurement is the statistics of one command on one side. The *_ns fields
-// and samples_ns describe latency in integer nanoseconds; Metrics describes
-// every metric, latency included, in its canonical unit.
+// Measurement is one command on one side. Every metric, latency included, is
+// described once, in its canonical unit, under Metrics.
 type Measurement struct {
-	Count     int     `json:"count"`
-	Warmups   int     `json:"warmups"`
-	MeanNS    int64   `json:"mean_ns"`
-	MedianNS  int64   `json:"median_ns"`
-	StddevNS  int64   `json:"stddev_ns"`
-	MinNS     int64   `json:"min_ns"`
-	MaxNS     int64   `json:"max_ns"`
-	CV        float64 `json:"cv"`
-	SamplesNS []int64 `json:"samples_ns"`
+	// Count is the number of measured runs.
+	Count   int `json:"count"`
+	Warmups int `json:"warmups"`
 	// Metrics is keyed by metric name and holds every metric yahiko knows,
 	// with a status saying whether it was measured.
 	Metrics map[string]*MetricSummary `json:"metrics"`
@@ -167,7 +159,12 @@ type MetricSummary struct {
 	Group  string `json:"group"`
 	Unit   string `json:"unit"`
 	Better string `json:"better"`
-	Scope  string `json:"scope"`
+	// Scope is wall_clock or process_tree. Source and ProcessAggregation say
+	// how a process_tree value was obtained on the measuring platform and how
+	// the processes of the tree were combined; see Metrics in the docs.
+	Scope              string `json:"scope"`
+	Source             string `json:"source"`
+	ProcessAggregation string `json:"process_aggregation"`
 	// Status is measured, not_requested, unsupported or failed. Only a
 	// measured metric has Stats and Samples; the others never carry zeros
 	// that could be mistaken for a value.
@@ -212,22 +209,6 @@ type Relative struct {
 	VsFastest *float64 `json:"vs_fastest"`
 }
 
-// Comparison is the base/head judgement of one command.
-type Comparison struct {
-	Metric             string  `json:"metric"`
-	ChangePercent      float64 `json:"change_percent"`
-	CILowPercent       float64 `json:"ci_low_percent"`
-	CIHighPercent      float64 `json:"ci_high_percent"`
-	ProbRegression     float64 `json:"probability_regression"`
-	ProbImprovement    float64 `json:"probability_improvement"`
-	RequiredConfidence float64 `json:"required_confidence"`
-	MaxPercent         float64 `json:"max_percent"`
-	MinSamples         int     `json:"min_samples"`
-	MaxCV              float64 `json:"max_cv"`
-	Verdict            string  `json:"verdict"`
-	Reason             string  `json:"reason"`
-}
-
 // MetricComparison is the base/head judgement of one metric of one command.
 type MetricComparison struct {
 	Metric string `json:"metric"`
@@ -257,6 +238,10 @@ type MetricComparison struct {
 	// Verdict is pass, improved, regression, inconclusive or skipped.
 	Verdict string `json:"verdict"`
 	Reason  string `json:"reason"`
+	// Gate is true when Verdict decides the command's result and the exit
+	// status. A comparison with Gate false is reported for information only:
+	// its regression or inconclusive verdict never fails the run.
+	Gate bool `json:"gate"`
 }
 
 // VerdictSkipped marks a comparison of a metric that was not measured.
@@ -311,7 +296,24 @@ type Summary struct {
 	Error              int  `json:"error"`
 	FailOnInconclusive bool `json:"fail_on_inconclusive"`
 	ExitCode           int  `json:"exit_code"`
+	// NotGated counts the metric comparisons with gate: false by verdict.
+	// They never change a command's result, so they are counted apart.
+	NotGated VerdictCounts `json:"not_gated"`
+	// Skipped counts the budgets and comparisons skipped because their
+	// metric is unsupported on this platform (metrics.unsupported: skip).
+	Skipped int `json:"skipped"`
 }
+
+// VerdictCounts counts metric comparisons by verdict.
+type VerdictCounts struct {
+	Pass         int `json:"pass"`
+	Improved     int `json:"improved"`
+	Inconclusive int `json:"inconclusive"`
+	Regression   int `json:"regression"`
+}
+
+// Total is the number of comparisons counted.
+func (v VerdictCounts) Total() int { return v.Pass + v.Improved + v.Inconclusive + v.Regression }
 
 // GeometricMean is the supplementary cross-case summary.
 type GeometricMean struct {

@@ -32,7 +32,8 @@ benchmarks:
           peak_rss:
             max: "<= 512MiB"
     regression:
-      max_percent: 50
+      latency:
+        max_percent: 50
       memory:
         max_percent: 20
         min_difference: 4MiB

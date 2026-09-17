@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/yahiko/internal/proc"
 )
 
 // The view helpers turn judged results into the text the terminal table,
@@ -18,6 +19,8 @@ const (
 	labelSkipped     = "SKIPPED"
 	labelNoData      = "NO DATA"
 	labelFail        = "FAIL"
+	// labelNotGated follows the verdict of a comparison with gate: false.
+	labelNotGated = "(NOT GATED)"
 )
 
 // groupsShown returns the metric groups any command of the suite measured,
@@ -45,6 +48,41 @@ func groupsShown(s Suite) []metric.Group {
 		}
 	}
 	return out
+}
+
+// hasNotGated reports whether any comparison of the suite has gate: false.
+func hasNotGated(s Suite) bool {
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			for _, mc := range c.Comparisons {
+				if !mc.Gate {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// checksNote summarizes the comparisons that did not decide the result: not
+// gated ones with a verdict worth attention, and skipped checks. It returns
+// "" when there are none.
+func checksNote(s Summary) string {
+	var parts []string
+	if n := s.NotGated; n.Regression > 0 || n.Inconclusive > 0 {
+		var p []string
+		if n.Regression > 0 {
+			p = append(p, fmt.Sprintf("%d regressed", n.Regression))
+		}
+		if n.Inconclusive > 0 {
+			p = append(p, fmt.Sprintf("%d inconclusive", n.Inconclusive))
+		}
+		parts = append(parts, "not gated: "+strings.Join(p, ", "))
+	}
+	if s.Skipped > 0 {
+		parts = append(parts, fmt.Sprintf("%d checks skipped (unsupported metric)", s.Skipped))
+	}
+	return strings.Join(parts, " · ")
 }
 
 func hasBudgets(s Suite) bool {
@@ -136,10 +174,11 @@ func workUnitOf(ms *MetricSummary) string {
 	return ms.Work.Unit
 }
 
-func median(st *MetricStats) float64 { return st.Median }
-func mean(st *MetricStats) float64   { return st.Mean }
-func maxOf(st *MetricStats) float64  { return st.Max }
-func minOf(st *MetricStats) float64  { return st.Min }
+func medianOf(st *MetricStats) float64 { return st.Median }
+func meanOf(st *MetricStats) float64   { return st.Mean }
+func stddevOf(st *MetricStats) float64 { return st.Stddev }
+func maxOf(st *MetricStats) float64    { return st.Max }
+func minOf(st *MetricStats) float64    { return st.Min }
 
 func percentileOf(p string) func(*MetricStats) float64 {
 	return func(st *MetricStats) float64 {
@@ -270,7 +309,9 @@ func comparedMetrics(s Suite) []metric.Def {
 	return out
 }
 
-// comparisonLabel is the RESULT cell of one metric comparison.
+// comparisonLabel is the RESULT cell of one metric comparison. A comparison
+// that is not gated says so next to its verdict, so a regression that did
+// not fail the run is never shown as a plain PASS or a plain REGRESSION.
 func comparisonLabel(c Command, mc *MetricComparison, name metric.Name) (string, Result) {
 	if c.Result.isError() {
 		return verdictLabel(c.Result), c.Result
@@ -282,10 +323,25 @@ func comparisonLabel(c Command, mc *MetricComparison, name metric.Name) (string,
 		return labelSkipped, ResultInconclusive
 	}
 	result := verdictResult(mc.Verdict)
+	overBudget := false
 	for _, bc := range c.Budgets {
 		if bc.Metric == string(name) && bc.Status == BudgetFail {
-			result = worst(result, ResultOverBudget)
+			overBudget = true
 		}
+	}
+	if !mc.Gate {
+		label := verdictLabel(result) + " " + labelNotGated
+		if overBudget {
+			return verdictLabel(ResultOverBudget) + ", " + label, ResultOverBudget
+		}
+		// A change that did not fail the run is colored as a warning at most.
+		if result == ResultRegression {
+			result = ResultInconclusive
+		}
+		return label, result
+	}
+	if overBudget {
+		result = worst(result, ResultOverBudget)
 	}
 	return verdictLabel(result), result
 }
@@ -327,14 +383,23 @@ func commandNotes(mode Mode, b Benchmark, c Command) []string {
 	}
 	for _, def := range metric.Defs() {
 		mc := c.Comparisons[string(def.Name)]
-		if mc == nil || mc.Verdict != string(ResultInconclusive) || mc.Reason == "" {
+		if mc == nil {
 			continue
 		}
+		// Latency, the metric every benchmark compares, is not named.
+		name := def.Label + " "
 		if def.Name == metric.Latency {
-			notes = append(notes, fmt.Sprintf("%s: inconclusive: %s", label, mc.Reason))
-			continue
+			name = ""
 		}
-		notes = append(notes, fmt.Sprintf("%s: %s inconclusive: %s", label, def.Label, mc.Reason))
+		if !mc.Gate {
+			name = def.Label + " (not gated) "
+		}
+		switch {
+		case mc.Verdict == string(ResultInconclusive) && mc.Reason != "":
+			notes = append(notes, fmt.Sprintf("%s: %sinconclusive: %s", label, name, mc.Reason))
+		case mc.Verdict == string(ResultRegression) && !mc.Gate:
+			notes = append(notes, fmt.Sprintf("%s: %s regressed beyond its tolerance, but gate: false keeps it from failing the run", label, def.Label))
+		}
 	}
 	return notes
 }
@@ -361,3 +426,40 @@ func unsupportedReason(m *Measurement, g metric.Group) string {
 
 // cpuFootnote explains utilization above 100%.
 const cpuFootnote = "CPU values are medians over runs of the process tree. Utilization is CPU time divided by wall-clock time; above 100% means more than one CPU was busy."
+
+// processNote describes which processes a CPU or memory value of the suite
+// covers and how they were combined, from the collection the report records.
+// It returns "" when no command measured the group.
+func processNote(s Suite, g metric.Group) string {
+	var ms *MetricSummary
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			for _, m := range []*Measurement{c.Head, c.Base} {
+				for _, def := range metric.InGroup(g) {
+					if x := metricSummary(m, def.Name); x != nil && x.Status == StatusMeasured && ms == nil {
+						ms = x
+					}
+				}
+			}
+		}
+	}
+	if ms == nil {
+		return ""
+	}
+	return aggregationText(ms.ProcessAggregation)
+}
+
+// aggregationText explains a process aggregation in one sentence.
+func aggregationText(aggregation string) string {
+	switch aggregation {
+	case proc.AggregationSumWaited:
+		return "Process tree: the command plus every descendant its parent waited for (rusage); a descendant left running or reaped by init is not counted."
+	case proc.AggregationSumJob:
+		return "Process tree: every process of the command's Job Object, whether or not it was waited for."
+	case proc.AggregationMaxProcess:
+		return "Peak RSS is the largest peak of any single process of the tree (rusage ru_maxrss), not the combined memory of processes running at the same time."
+	case proc.AggregationStartedProcess:
+		return "Peak RSS is the peak working set of the started process; a run that started other processes reports it as unsupported."
+	}
+	return ""
+}

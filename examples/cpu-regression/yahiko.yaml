@@ -36,7 +36,8 @@ benchmarks:
     regression:
       # Latency and CPU time get separate tolerances. CPU time ignores time
       # spent waiting, so it moves less when the runner is busy.
-      max_percent: 25
+      latency:
+        max_percent: 25
       cpu:
         max_percent: 20
         # A difference smaller than this is never a regression, however large

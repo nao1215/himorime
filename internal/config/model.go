@@ -53,8 +53,6 @@ type Metric string
 const (
 	MetricMean   Metric = "mean"
 	MetricMedian Metric = "median"
-	MetricMin    Metric = "min"
-	MetricMax    Metric = "max"
 )
 
 // Format names a report format.
@@ -251,18 +249,15 @@ type Budget struct {
 }
 
 // Regression configures the comparison between a base revision and the
-// working tree. Metric, MaxPercent and MinDifference apply to latency.
+// working tree. Confidence, MinSamples, MaxCV and Commands apply to every
+// metric; each comparable metric has its own MetricRegression.
 type Regression struct {
-	Metric     Metric
-	MaxPercent float64
-	// MinDifference is the smallest latency difference, in nanoseconds, that
-	// can be a regression; 0 disables it.
-	MinDifference float64
-	Confidence    float64
-	MinSamples    int
-	MaxCV         float64
+	Confidence float64
+	MinSamples int
+	MaxCV      float64
 	// Commands limits the comparison to these commands; all when empty.
 	Commands   []string
+	Latency    MetricRegression
 	Throughput MetricRegression
 	CPU        MetricRegression
 	Memory     MetricRegression
@@ -274,6 +269,10 @@ type MetricRegression struct {
 	MaxPercent float64
 	// MinDifference is in the metric's canonical unit; 0 disables it.
 	MinDifference float64
+	// Gate is true when the metric's verdict decides the command's result and
+	// the exit status. A metric with Gate false is still compared and
+	// reported, but only for information.
+	Gate bool
 	// unit and unitPath remember the work unit a throughput min_difference
 	// was written in, so a benchmark can check it against its work.
 	unit     string
@@ -285,7 +284,7 @@ type MetricRegression struct {
 func (r Regression) For(n metric.Name) (MetricRegression, bool) {
 	switch n {
 	case metric.Latency:
-		return MetricRegression{Metric: r.Metric, MaxPercent: r.MaxPercent, MinDifference: r.MinDifference}, true
+		return r.Latency, true
 	case metric.Throughput:
 		return r.Throughput, true
 	case metric.CPUTotal:

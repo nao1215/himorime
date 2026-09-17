@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"io/fs"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -145,7 +146,7 @@ func (r *Runner) Build(ctx context.Context, s *config.Suite, side Side) *Failure
 		return &Failure{Kind: FailInternal, Message: fmt.Sprintf("create artifact directory: %v", err)}
 	}
 	r.logf("building %s: %s", side.Name, r.Redactor.String(s.Build.Display()))
-	vars := config.Vars{Artifact: side.Artifact, Root: side.Root, Exe: exeSuffix(), LookupEnv: r.lookupEnv}
+	vars := config.Vars{Artifact: side.Artifact, Root: side.Root, HeadRoot: side.HeadRoot, Exe: exeSuffix(), LookupEnv: r.lookupEnv}
 	cwd := side.Root
 	if s.Build.Cwd != "" {
 		var f *Failure
@@ -182,15 +183,13 @@ type sideState struct {
 	vars    config.Vars
 	stdin   string
 	setupOK bool
-	// suiteDir is the directory relative paths of the suite resolve from.
-	suiteDir string
 }
 
 // Measure runs one benchmark across the given sides. With more than one side
 // (a revision comparison) only the commands the benchmark's regression
 // settings compare are measured. The result is a named return so the deferred
 // teardown can record a cleanup failure.
-func (r *Runner) Measure(ctx context.Context, s *config.Suite, b config.Benchmark, sides []Side) (res BenchmarkResult) {
+func (r *Runner) Measure(ctx context.Context, b config.Benchmark, sides []Side) (res BenchmarkResult) {
 	res.Benchmark = b
 	warmup, runs := b.Warmup, b.Runs
 	if r.WarmupOverride != nil {
@@ -204,7 +203,7 @@ func (r *Runner) Measure(ctx context.Context, s *config.Suite, b config.Benchmar
 	for i, side := range sides {
 		states[i] = &sideState{side: side}
 	}
-	defer r.teardown(ctx, s, b, states, &res)
+	defer r.teardown(ctx, b, states, &res)
 
 	skipped := map[metric.Group]string{}
 	for _, p := range r.UnsupportedMetrics([]config.Benchmark{b}) {
@@ -221,7 +220,7 @@ func (r *Runner) Measure(ctx context.Context, s *config.Suite, b config.Benchmar
 	}
 
 	for _, st := range states {
-		if f := r.prepareSide(ctx, s, b, st); f != nil {
+		if f := r.prepareSide(ctx, b, st); f != nil {
 			res.Failure = f
 			return res
 		}
@@ -233,14 +232,15 @@ func (r *Runner) Measure(ctx context.Context, s *config.Suite, b config.Benchmar
 			u.m.skip(g, reason)
 		}
 	}
+	minRuns := minRunsFor(b, len(sides))
 	mode := fmt.Sprintf("%d runs", runs)
 	if runs == 0 {
-		mode = fmt.Sprintf("adaptive runs (min %d, max %d, min time %s)", b.MinRuns, b.MaxRuns, b.MinTime)
+		mode = fmt.Sprintf("adaptive runs (min %d, max %d, min time %s)", minRuns, b.MaxRuns, b.MinTime)
 	}
 	r.logf("benchmark %q: %d measurement units, %d warmup, %s", b.Name, len(units), warmup, mode)
 
 	l := &loop{
-		r: r, ctx: ctx, s: s, b: b, states: states, units: units,
+		r: r, ctx: ctx, b: b, states: states, units: units,
 		rng: rand.New(rand.NewPCG(r.Seed, nameHash(b.Name))), //nolint:gosec // the order must be reproducible from --seed
 	}
 	for range warmup {
@@ -249,7 +249,7 @@ func (r *Runner) Measure(ctx context.Context, s *config.Suite, b config.Benchmar
 			return res
 		}
 	}
-	for round := 0; !done(units, runs, b, round); round++ {
+	for round := 0; !done(units, runs, minRuns, b, round); round++ {
 		active, f := l.round(true)
 		if f != nil {
 			res.Failure = f
@@ -287,7 +287,6 @@ func commandUnits(b config.Benchmark, sides []Side, res *BenchmarkResult) []*uni
 type loop struct {
 	r      *Runner
 	ctx    context.Context
-	s      *config.Suite
 	b      config.Benchmark
 	states []*sideState
 	units  []*unit
@@ -305,7 +304,7 @@ func (l *loop) round(record bool) (int, *Failure) {
 			continue
 		}
 		active++
-		f := l.r.runOnce(l.ctx, l.s, l.b, l.states[u.side], u, record)
+		f := l.r.runOnce(l.ctx, l.b, l.states[u.side], u, record)
 		if f != nil && f.Kind == FailInterrupted {
 			return active, f
 		}
@@ -319,9 +318,21 @@ func (l *loop) round(record bool) (int, *Failure) {
 	return active, nil
 }
 
+// minRunsFor is the fewest measured runs of adaptive measuring. A revision
+// comparison (more than one side) also needs regression.min_samples on each
+// side, or its verdict could only be inconclusive; a plain run judges no
+// comparison and keeps min_runs. Callers reject a max_runs, runs or --runs
+// below min_samples before measuring, so the loop can always reach it.
+func minRunsFor(b config.Benchmark, sides int) int {
+	if sides > 1 && b.Regression.MinSamples > b.MinRuns {
+		return b.Regression.MinSamples
+	}
+	return b.MinRuns
+}
+
 // done decides whether the measuring loop stops before starting round. Every
 // unit runs once per round, so all healthy units hold the same sample count.
-func done(units []*unit, runs int, b config.Benchmark, round int) bool {
+func done(units []*unit, runs, minRuns int, b config.Benchmark, round int) bool {
 	if runs > 0 {
 		return round >= runs
 	}
@@ -332,7 +343,7 @@ func done(units []*unit, runs int, b config.Benchmark, round int) bool {
 		if u.m.Failure != nil {
 			continue
 		}
-		if len(u.m.Samples) < b.MinRuns || u.total < b.MinTime {
+		if len(u.m.Samples) < minRuns || u.total < b.MinTime {
 			return false
 		}
 	}
@@ -345,7 +356,7 @@ func nameHash(s string) uint64 {
 	return h.Sum64()
 }
 
-func (r *Runner) prepareSide(ctx context.Context, s *config.Suite, b config.Benchmark, st *sideState) *Failure {
+func (r *Runner) prepareSide(ctx context.Context, b config.Benchmark, st *sideState) *Failure {
 	base := filepath.Join(r.TempDir, st.side.Name)
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		return &Failure{Kind: FailInternal, Message: fmt.Sprintf("create temporary directory: %v", err)}
@@ -355,8 +366,7 @@ func (r *Runner) prepareSide(ctx context.Context, s *config.Suite, b config.Benc
 		return &Failure{Kind: FailInternal, Message: fmt.Sprintf("create workdir: %v", err)}
 	}
 	st.workdir = wd
-	st.suiteDir = s.Dir
-	st.vars = config.Vars{Artifact: st.side.Artifact, Root: st.side.Root, Workdir: wd, Exe: exeSuffix(), LookupEnv: r.lookupEnv}
+	st.vars = config.Vars{Artifact: st.side.Artifact, Root: st.side.Root, HeadRoot: st.side.HeadRoot, Workdir: wd, Exe: exeSuffix(), LookupEnv: r.lookupEnv}
 
 	if b.Stdin.Kind == config.StdinContent {
 		content, err := config.Expand(b.Stdin.Content, st.vars, nil)
@@ -377,20 +387,20 @@ func (r *Runner) prepareSide(ctx context.Context, s *config.Suite, b config.Benc
 
 	st.setupOK = true
 	for i, h := range b.Setup {
-		if f := r.runBenchmarkHook(ctx, s, h, st, FailSetup, fmt.Sprintf("setup[%d]", i)); f != nil {
+		if f := r.runBenchmarkHook(ctx, h, st, FailSetup, fmt.Sprintf("setup[%d]", i)); f != nil {
 			return f
 		}
 	}
 
 	if b.Stdin.Kind == config.StdinFile {
-		p, f := r.resolvePath(b.Stdin.File, st.vars, s.Dir, st.side.ProjectRoot, wd)
+		p, f := r.resolvePath(b.Stdin.File, st.vars, st.side.Root, st.side.ProjectRoot, wd)
 		if f != nil {
 			f.Message = "stdin: " + f.Message
 			return f
 		}
 		info, err := os.Stat(p)
 		if err != nil {
-			return &Failure{Kind: FailSetup, Message: fmt.Sprintf("stdin fixture %s: %v", b.Stdin.File, redactErr(r.Redactor, err))}
+			return &Failure{Kind: FailSetup, Message: fmt.Sprintf("stdin fixture %s: %v%s", b.Stdin.File, redactErr(r.Redactor, err), sharedHint(st.side, b.Stdin.File, err))}
 		}
 		if info.IsDir() {
 			return &Failure{Kind: FailSetup, Message: fmt.Sprintf("stdin fixture %s is a directory", b.Stdin.File)}
@@ -400,7 +410,7 @@ func (r *Runner) prepareSide(ctx context.Context, s *config.Suite, b config.Benc
 	return nil
 }
 
-func (r *Runner) teardown(ctx context.Context, s *config.Suite, b config.Benchmark, states []*sideState, res *BenchmarkResult) {
+func (r *Runner) teardown(ctx context.Context, b config.Benchmark, states []*sideState, res *BenchmarkResult) {
 	cctx := ctx
 	if ctx.Err() != nil {
 		var cancel context.CancelFunc
@@ -410,7 +420,7 @@ func (r *Runner) teardown(ctx context.Context, s *config.Suite, b config.Benchma
 	for _, st := range states {
 		if st.setupOK {
 			for i, h := range b.Cleanup {
-				if f := r.runBenchmarkHook(cctx, s, h, st, FailCleanup, fmt.Sprintf("cleanup[%d]", i)); f != nil && res.Failure == nil {
+				if f := r.runBenchmarkHook(cctx, h, st, FailCleanup, fmt.Sprintf("cleanup[%d]", i)); f != nil && res.Failure == nil {
 					res.Failure = f
 				}
 			}
@@ -426,11 +436,11 @@ func (r *Runner) teardown(ctx context.Context, s *config.Suite, b config.Benchma
 	}
 }
 
-func (r *Runner) runBenchmarkHook(ctx context.Context, s *config.Suite, h config.Exec, st *sideState, kind FailureKind, label string) *Failure {
-	dir := s.Dir
+func (r *Runner) runBenchmarkHook(ctx context.Context, h config.Exec, st *sideState, kind FailureKind, label string) *Failure {
+	dir := st.side.Root
 	if h.Cwd != "" {
 		var f *Failure
-		dir, f = r.resolvePath(h.Cwd, st.vars, s.Dir, st.side.ProjectRoot, st.workdir)
+		dir, f = r.resolvePath(h.Cwd, st.vars, st.side.Root, st.side.ProjectRoot, st.workdir)
 		if f != nil {
 			f.Kind = kind
 			return f
@@ -477,17 +487,17 @@ func (r *Runner) runHook(ctx context.Context, e config.Exec, vars config.Vars, d
 }
 
 // runOnce runs prepare_each hooks and then the command once.
-func (r *Runner) runOnce(ctx context.Context, s *config.Suite, b config.Benchmark, st *sideState, u *unit, record bool) *Failure {
+func (r *Runner) runOnce(ctx context.Context, b config.Benchmark, st *sideState, u *unit, record bool) *Failure {
 	for i, h := range b.PrepareEach {
-		if f := r.runBenchmarkHook(ctx, s, h, st, FailPrepareEach, fmt.Sprintf("prepare_each[%d]", i)); f != nil {
+		if f := r.runBenchmarkHook(ctx, h, st, FailPrepareEach, fmt.Sprintf("prepare_each[%d]", i)); f != nil {
 			return f
 		}
 	}
 	c := b.Commands[u.command]
-	dir := s.Dir
+	dir := st.side.Root
 	if c.Cwd != "" {
 		var f *Failure
-		dir, f = r.resolvePath(c.Cwd, st.vars, s.Dir, st.side.ProjectRoot, st.workdir)
+		dir, f = r.resolvePath(c.Cwd, st.vars, st.side.Root, st.side.ProjectRoot, st.workdir)
 		if f != nil {
 			return f
 		}
@@ -522,7 +532,8 @@ func (r *Runner) runOnce(ctx context.Context, s *config.Suite, b config.Benchmar
 		if errors.Is(err, proc.ErrStart) {
 			kind = FailStart
 		}
-		return &Failure{Kind: kind, Message: fmt.Sprintf("%s: %v", r.Redactor.String(c.Display()), redactErr(r.Redactor, err))}
+		_, statErr := os.Stat(dir)
+		return &Failure{Kind: kind, Message: fmt.Sprintf("%s: %v%s", r.Redactor.String(c.Display()), redactErr(r.Redactor, err), sharedHint(st.side, "the working directory", statErr))}
 	}
 	if res.TimedOut {
 		return &Failure{Kind: FailTimeout, Message: fmt.Sprintf("timed out after %s and was stopped", c.Timeout), Stderr: r.tail(stderr.Name())}
@@ -598,14 +609,14 @@ func (r *Runner) work(b config.Benchmark, st *sideState) (float64, *Failure) {
 	if w.FileSize == "" {
 		return w.Value, nil
 	}
-	p, f := r.resolvePath(w.FileSize, st.vars, st.suiteDir, st.side.ProjectRoot, st.workdir)
+	p, f := r.resolvePath(w.FileSize, st.vars, st.side.Root, st.side.ProjectRoot, st.workdir)
 	if f != nil {
 		return 0, &Failure{Kind: FailMetricCollection, Metric: metric.GroupThroughput, Message: "throughput work file_size: " + f.Message}
 	}
 	info, err := os.Stat(p)
 	switch {
 	case err != nil:
-		return 0, &Failure{Kind: FailMetricCollection, Metric: metric.GroupThroughput, Message: fmt.Sprintf("throughput work file_size %s: %v", w.FileSize, redactErr(r.Redactor, err))}
+		return 0, &Failure{Kind: FailMetricCollection, Metric: metric.GroupThroughput, Message: fmt.Sprintf("throughput work file_size %s: %v%s", w.FileSize, redactErr(r.Redactor, err), sharedHint(st.side, w.FileSize, err))}
 	case info.IsDir():
 		return 0, &Failure{Kind: FailMetricCollection, Metric: metric.GroupThroughput, Message: fmt.Sprintf("throughput work file_size %s is a directory", w.FileSize)}
 	case info.Size() == 0:
@@ -778,6 +789,16 @@ func (r *Runner) tail(path string) string {
 		}
 	}
 	return strings.TrimSpace(text)
+}
+
+// sharedHint explains a path missing from the base revision: relative paths
+// are relative to ${root} of the revision being measured, so a file added in
+// the working tree does not exist there. It returns "" in every other case.
+func sharedHint(side Side, what string, err error) string {
+	if side.Name != SideBase || !errors.Is(err, fs.ErrNotExist) {
+		return ""
+	}
+	return fmt.Sprintf("; %s does not exist in the base revision, where relative paths and ${root} point; if both revisions should use the working tree's copy, start the path with ${head_root}", what)
 }
 
 func redactErr(r *redact.Redactor, err error) string {

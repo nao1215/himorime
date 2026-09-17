@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: gate on CPU time and memory, report latency only.
+# https://nao1215.github.io/yahiko/cookbook/#gate-on-cpu-time-and-memory-report-latency-only
+#
+#   yahiko compare --against main examples/gate-cpu-memory
+version: "1"
+
+suite:
+  name: gate cpu and memory
+  description: A program that mostly waits, compared on CPU time and peak RSS; its latency is shown but decides nothing.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/sleepy]
+
+defaults:
+  warmup: 1
+  runs: 15
+
+benchmarks:
+  - name: wait for input
+    metrics:
+      cpu: true
+      memory: true
+    commands:
+      sleepy:
+        command: ["${artifact}"]
+    regression:
+      # Latency is still measured, compared and reported with its verdict,
+      # marked NOT GATED, but a latency regression or an inconclusive latency
+      # comparison never fails the run.
+      latency:
+        gate: false
+      # CPU time and peak RSS decide the result and the exit status.
+      cpu:
+        max_percent: 25
+        min_difference: 5ms
+      memory:
+        max_percent: 25
+        min_difference: 4MiB

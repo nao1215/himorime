@@ -72,19 +72,27 @@ func markdownRun(sb *strings.Builder, s Suite, level int) {
 			markdownLatency(sb, s)
 		case metric.GroupThroughput:
 			markdownGroup(sb, s, g, []string{"Median", "Mean", "Min", "P95"}, func(m *Measurement) []string {
-				return []string{statCell(m, metric.Throughput, median), statCell(m, metric.Throughput, mean), statCell(m, metric.Throughput, minOf), statCell(m, metric.Throughput, percentileOf("p95"))}
+				return []string{statCell(m, metric.Throughput, medianOf), statCell(m, metric.Throughput, meanOf), statCell(m, metric.Throughput, minOf), statCell(m, metric.Throughput, percentileOf("p95"))}
 			})
 			sb.WriteString("Throughput is the declared work divided by the latency of each run.\n\n")
 		case metric.GroupCPU:
 			markdownGroup(sb, s, g, []string{"User", "System", "Total", "Total p95", "Utilization"}, func(m *Measurement) []string {
-				return []string{statCell(m, metric.CPUUser, median), statCell(m, metric.CPUSystem, median), statCell(m, metric.CPUTotal, median), statCell(m, metric.CPUTotal, percentileOf("p95")), statCell(m, metric.CPUUtilization, median)}
+				return []string{statCell(m, metric.CPUUser, medianOf), statCell(m, metric.CPUSystem, medianOf), statCell(m, metric.CPUTotal, medianOf), statCell(m, metric.CPUTotal, percentileOf("p95")), statCell(m, metric.CPUUtilization, medianOf)}
 			})
-			sb.WriteString(cpuFootnote + "\n\n")
+			sb.WriteString(cpuFootnote)
+			if note := processNote(s, g); note != "" {
+				sb.WriteString(" " + note)
+			}
+			sb.WriteString("\n\n")
 		case metric.GroupMemory:
 			markdownGroup(sb, s, g, []string{"Peak RSS (median)", "Peak RSS (max)"}, func(m *Measurement) []string {
-				return []string{statCell(m, metric.PeakRSS, median), statCell(m, metric.PeakRSS, maxOf)}
+				return []string{statCell(m, metric.PeakRSS, medianOf), statCell(m, metric.PeakRSS, maxOf)}
 			})
-			sb.WriteString("Peak RSS is the largest resident set size of any process in the tree. It is not the heap size of a language runtime.\n\n")
+			sb.WriteString("Peak RSS is a resident set size, not the heap size of a language runtime.")
+			if note := processNote(s, g); note != "" {
+				sb.WriteString(" " + note)
+			}
+			sb.WriteString("\n\n")
 		}
 	}
 	if hasBudgets(s) {
@@ -119,8 +127,8 @@ func markdownLatency(sb *strings.Builder, s Suite) {
 			cells := []string{"-", "-", "-", "-", "-", "-", "-", "-"}
 			if c.Head != nil && c.Head.Count > 0 {
 				cells = []string{
-					FormatDuration(c.Head.MedianNS), statCell(c.Head, metric.Latency, percentileOf("p95")), FormatDuration(c.Head.MeanNS),
-					FormatDuration(c.Head.StddevNS), FormatDuration(c.Head.MinNS), FormatDuration(c.Head.MaxNS), fmt.Sprint(c.Head.Count), "-",
+					statCell(c.Head, metric.Latency, medianOf), statCell(c.Head, metric.Latency, percentileOf("p95")), statCell(c.Head, metric.Latency, meanOf),
+					statCell(c.Head, metric.Latency, stddevOf), statCell(c.Head, metric.Latency, minOf), statCell(c.Head, metric.Latency, maxOf), fmt.Sprint(c.Head.Count), "-",
 				}
 			}
 			if c.Relative != nil {
@@ -193,6 +201,9 @@ func markdownCompare(sb *strings.Builder, s Suite, level int) {
 			}
 		}
 		sb.WriteString("\n")
+	}
+	if hasNotGated(s) {
+		sb.WriteString("(NOT GATED) marks a metric with gate: false: it is compared and reported, but never fails the run.\n\n")
 	}
 	if hasBudgets(s) {
 		fmt.Fprintf(sb, "%s Budgets (head)\n\n", h)

@@ -88,7 +88,7 @@ func compareFlags(fs *flag.FlagSet) any {
 	m := &measureFlags{}
 	m.registerCommon(fs)
 	fs.StringVar(&m.against, "against", "", "the Git `revision` to compare the working tree with (required)")
-	fs.BoolVar(&m.failOnInconclusive, "fail-on-inconclusive", false, "exit 1 when a comparison is inconclusive")
+	fs.BoolVar(&m.failOnInconclusive, "fail-on-inconclusive", false, "exit 1 when a gated comparison is inconclusive")
 	return m
 }
 
@@ -96,7 +96,7 @@ func ciFlags(fs *flag.FlagSet) any {
 	m := &measureFlags{}
 	m.registerCommon(fs)
 	fs.StringVar(&m.against, "against", "", "the base `revision`; defaults to $YAHIKO_BASE_REF, then the GitHub Actions event")
-	fs.BoolVar(&m.failOnInconclusive, "fail-on-inconclusive", false, "exit 1 when a comparison is inconclusive")
+	fs.BoolVar(&m.failOnInconclusive, "fail-on-inconclusive", false, "exit 1 when a gated comparison is inconclusive")
 	return m
 }
 

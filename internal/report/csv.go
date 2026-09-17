@@ -16,10 +16,10 @@ import (
 // without parsing a cell. Columns that do not apply to a row are empty.
 var CSVHeader = []string{
 	"suite", "benchmark", "command", "result", "record", "side",
-	"metric", "unit", "status", "statistic", "value",
+	"metric", "unit", "scope", "source", "process_aggregation", "status", "statistic", "value",
 	"operator", "limit", "base", "head", "difference",
 	"change_percent", "ci_low_percent", "ci_high_percent", "probability_regression", "max_percent",
-	"verdict", "reason", "error_kind", "error_message",
+	"verdict", "gate", "reason", "error_kind", "error_message",
 }
 
 // CSV record types.
@@ -155,7 +155,7 @@ func commandRows(mode Mode, s Suite, b Benchmark, c Command) [][]string {
 		}
 		row := newRow(s.Name, b.Name, c.Name, c.Result, recordComparison).
 			set("metric", mc.Metric).set("unit", mc.Unit).set("statistic", mc.Statistic).
-			set("max_percent", floatCell(mc.MaxPercent)).set("verdict", mc.Verdict).set("reason", mc.Reason)
+			set("max_percent", floatCell(mc.MaxPercent)).set("verdict", mc.Verdict).set("gate", strconv.FormatBool(mc.Gate)).set("reason", mc.Reason)
 		if mc.Verdict != VerdictSkipped {
 			row.set("change_percent", floatCell(mc.ChangePercent)).set("ci_low_percent", floatCell(mc.CILowPercent)).
 				set("ci_high_percent", floatCell(mc.CIHighPercent)).set("probability_regression", floatCell(mc.ProbRegression))
@@ -179,7 +179,8 @@ func statRows(s Suite, b Benchmark, c Command, side sideMeasurement, def metric.
 	}
 	base := func() *csvRowBuilder {
 		return newRow(s.Name, b.Name, c.Name, c.Result, recordStat).
-			set("side", side.name).set("metric", ms.Name).set("unit", ms.Unit).set("status", ms.Status)
+			set("side", side.name).set("metric", ms.Name).set("unit", ms.Unit).set("status", ms.Status).
+			set("scope", ms.Scope).set("source", ms.Source).set("process_aggregation", ms.ProcessAggregation)
 	}
 	if ms.Stats == nil {
 		return [][]string{base().set("reason", ms.Reason).row}

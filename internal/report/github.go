@@ -28,14 +28,20 @@ func WriteGitHubSummary(w io.Writer, r *Report) error {
 		icon, verdict = "❌", "inconclusive results (--fail-on-inconclusive)"
 	case s.Inconclusive > 0:
 		icon, verdict = "⚠️", "some comparisons were inconclusive"
+	case s.NotGated.Regression > 0:
+		icon, verdict = "⚠️", "no regression in gated metrics; a metric that is not gated regressed"
 	}
 	title := "benchmarks"
 	if r.Mode == ModeCompare {
 		title = "benchmark comparison"
 	}
 	fmt.Fprintf(&sb, "## %s yahiko %s: %s\n\n", icon, title, verdict)
-	fmt.Fprintf(&sb, "%d passed · %d improved · %d inconclusive · %d over budget · %d regressed · %d metric errors · %d errored\n\n",
+	fmt.Fprintf(&sb, "%d passed · %d improved · %d inconclusive · %d over budget · %d regressed · %d metric errors · %d errored",
 		s.Pass, s.Improved, s.Inconclusive, s.OverBudget, s.Regression, s.MetricError, s.Error)
+	if note := checksNote(s); note != "" {
+		sb.WriteString(" · " + note)
+	}
+	sb.WriteString("\n\n")
 	writeMarkdownBody(&sb, r, 3)
 	if r.Mode == ModeCompare {
 		sb.WriteString("\n<sub>Shared CI runners are noisy. A regression is reported only when the bootstrap confidence reaches the configured level; see https://nao1215.github.io/yahiko/regression-detection/.</sub>\n")

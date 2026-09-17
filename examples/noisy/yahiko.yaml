@@ -26,8 +26,9 @@ benchmarks:
       sleepy:
         command: ["${artifact}", -ms, "10", -jitter-ms, "50", -state, "${workdir}/calls"]
     regression:
-      max_percent: 10
       confidence: 0.95
+      latency:
+        max_percent: 10
       # The alternating run time gives a coefficient of variation near 0.7.
       # Above max_cv a comparison is inconclusive instead of pass or fail.
       max_cv: 0.3
@@ -42,8 +43,9 @@ benchmarks:
       # A wider tolerance than the default 10%, and an absolute floor: a
       # change of less than 2ms is never a regression on a shared runner,
       # however large it is in percent.
-      max_percent: 20
-      min_difference: 2ms
+      latency:
+        max_percent: 20
+        min_difference: 2ms
       cpu:
         max_percent: 50
         min_difference: 5ms

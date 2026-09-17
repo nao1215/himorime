@@ -1,0 +1,22 @@
+version: "1"
+suite: {name: shared fixtures}
+benchmarks:
+  - name: script
+    # Relative paths are relative to ${root}: each revision runs its own
+    # script. The fixture comes from the working tree for both revisions.
+    stdin: "${head_root}/testdata/input.txt"
+    metrics:
+      throughput:
+        work: {file_size: "${head_root}/testdata/input.txt"}
+    setup:
+      - command: [sh, "${head_root}/scripts/prepare.sh", "${workdir}"]
+        cwd: "${head_root}"
+    commands:
+      script:
+        command: [sh, work.sh]
+      pinned:
+        command: [sh, work.sh]
+        cwd: "${head_root}"
+    regression:
+      latency: {gate: false}
+      throughput: {max_percent: 5}

@@ -86,10 +86,11 @@ scenarios:
               - {path: "$.git.base_ref", equals: "main"}
               - {path: "$.git.base_source", equals: "--against"}
               - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "regression"}
-              - {path: "$.suites[0].benchmarks[0].commands[0].comparison.verdict", equals: "regression"}
-              - {path: "$.suites[0].benchmarks[0].commands[0].comparison.change_percent", gt: 100}
-              - {path: "$.suites[0].benchmarks[0].commands[0].base.samples_ns", length: 10}
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.samples_ns", length: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: true}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.change_percent", gt: 100}
+              - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.samples", length: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.samples", length: 10}
               - {path: "$.summary.regression", equals: 1}
               - {path: "$.summary.exit_code", equals: 1}
       - assert:
@@ -286,3 +287,166 @@ scenarios:
             json:
               - {path: "$.suites[0].benchmarks[0].commands", length: 1}
               - {path: "$.suites[0].benchmarks[0].commands[0].name", equals: "mine"}
+
+  # Without a build, commands run inside ${root} of each revision: a
+  # script-style program read from the tree is the base's in the base worktree
+  # and the working tree's in the head. delay.txt stands in for the script.
+  - name: a command without a build runs the files of each revision
+    steps:
+      - fixture: {file: repo/bench/delay.txt, content: "40ms\n"}
+      - fixture:
+          file: repo/bench/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: script}
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: script
+                commands:
+                  own: {command: [e2ehelper, sleep-from, delay.txt]}
+              - name: pinned
+                commands:
+                  shared: {command: [e2ehelper, sleep-from, "$${head_root}/delay.txt"]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - fixture: {file: repo/bench/delay.txt, content: "250ms\n"}
+      - run:
+          command: yahiko compare --against main --quiet --format json bench
+          cwd: repo
+          timeout: 180s
+      - assert:
+          exit_code: 1
+          stdout:
+            json:
+              # The base ran its own 40ms delay, the head the working tree's
+              # 250ms: a regression.
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.stats.median", lt: 150000000}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.median", gte: 250000000}
+              # ${head_root} gives both revisions the working tree's file.
+              - {path: "$.suites[0].benchmarks[1].commands[0].base.metrics.latency.stats.median", gte: 250000000}
+              - {path: "$.suites[0].benchmarks[1].commands[0].head.metrics.latency.stats.median", gte: 250000000}
+              - {path: "$.summary.regression", equals: 1}
+      - run: {command: git status --porcelain, cwd: repo}
+      - assert:
+          stdout: {equals: " M bench/delay.txt\n"}
+
+  - name: a fixture that only the working tree has fails the base with a hint
+    steps:
+      - fixture: {file: repo/yahiko.yaml, content: "version: \"1\"\nsuite: {name: fixture}\ndefaults: {warmup: 0, runs: 2, regression: {min_samples: 2}}\nbenchmarks:\n  - name: new input\n    stdin: input.txt\n    commands:\n      app: {command: [e2ehelper, sleep, 1ms]}\n"}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - fixture: {file: repo/input.txt, content: "added in the working tree\n"}
+      - run:
+          command: yahiko compare --against main --quiet
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 4
+          stdout:
+            contains: ["input.txt does not exist in the base revision", "start the path with ${head_root}"]
+      - run: {command: git worktree list --porcelain, cwd: repo}
+      - assert:
+          stdout: {count: 1, contains: "worktree "}
+
+  - name: adaptive runs of a comparison continue until min_samples
+    steps:
+      - fixture: {file: repo/delay.txt, content: "20ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: adaptive}
+            defaults: {warmup: 0, min_runs: 2, max_runs: 10, min_time: 1ms}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep-from, delay.txt]}
+                regression: {min_samples: 5}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: yahiko compare --against main --quiet --format json
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              # min_runs 2 and min_time 1ms hold after two rounds, but a verdict
+              # needs five samples per side.
+              - {path: "$.suites[0].benchmarks[0].rounds", equals: 5}
+              - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.samples", length: 5}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.samples", length: 5}
+      # A plain run judges no comparison and stops at min_runs.
+      - run:
+          command: yahiko run --quiet --format json
+          cwd: repo
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].rounds", equals: 2}
+      # max_runs below min_samples is refused before anything runs.
+      - fixture: {file: repo/yahiko.yaml, content: "version: \"1\"\nsuite: {name: adaptive}\ndefaults: {warmup: 0, min_runs: 2, max_runs: 4}\nbenchmarks:\n  - name: sleepy\n    commands:\n      app: {command: [e2ehelper, sleep-from, delay.txt]}\n    regression: {min_samples: 5}\n"}
+      - run:
+          command: yahiko compare --against main --quiet
+          cwd: repo
+      - assert:
+          exit_code: 2
+          stderr: {contains: "max_runs (4) is lower than regression.min_samples (5)"}
+      - run:
+          command: yahiko compare --against main --quiet --runs 3
+          cwd: repo
+      - assert:
+          exit_code: 3
+          stderr: {contains: "--runs 3 is lower than regression.min_samples (5)"}
+
+  - name: a regression of a metric that is not gated is reported without failing
+    steps:
+      - fixture: {file: repo/delay.txt, content: "20ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: gate}
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep-from, delay.txt]}
+                regression:
+                  latency: {gate: false}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - fixture: {file: repo/delay.txt, content: "250ms\n"}
+      - run:
+          command: yahiko compare --against main --quiet --fail-on-inconclusive --format json
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: false}
+              - {path: "$.summary.regression", equals: 0}
+              - {path: "$.summary.not_gated.regression", equals: 1}
+              - {path: "$.summary.exit_code", equals: 0}
+      - run:
+          command: yahiko compare --against main --quiet
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: "(?m)^sleepy +.* REGRESSION \\(NOT GATED\\)$"
+      - assert:
+          stdout:
+            contains: ["(NOT GATED) marks a metric with gate: false", "not gated: 1 regressed"]

@@ -143,8 +143,55 @@ func TestRunMeasuresWithInjectedClock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Elapsed != 250*time.Millisecond {
-		t.Fatalf("Elapsed = %v, want 250ms from the injected clock", res.Elapsed)
+	want := 250 * time.Millisecond
+	if suspendedUntilAttached {
+		// Four readings, 250ms apart: start, before and after attach, end.
+		// The 250ms attach took while the process was suspended is not
+		// latency: 750ms - 250ms.
+		want = 500 * time.Millisecond
+	}
+	if res.Elapsed != want {
+		t.Fatalf("Elapsed = %v, want %v from the injected clock", res.Elapsed, want)
+	}
+}
+
+// TestRunFailsWhenTheTreeCannotBeAttached: a process that cannot be put under
+// its tree handle is not measured as if its descendants could be stopped and
+// accounted for. It is killed and reaped, and the error says why.
+func TestRunFailsWhenTheTreeCannotBeAttached(t *testing.T) {
+	t.Parallel()
+	denied := errors.New("access is denied")
+	s := helper(t, "sleep", "HELPER_SLEEP=1m")
+	s.CollectUsage = true
+	start := time.Now()
+	res, err := run(context.Background(), s, nil, func(*exec.Cmd) (*tree, error) { return nil, denied })
+	if !errors.Is(err, ErrProcessTree) || !errors.Is(err, denied) || errors.Is(err, ErrStart) {
+		t.Fatalf("err = %v, want ErrProcessTree wrapping the cause", err)
+	}
+	if res.Elapsed != 0 || res.Usage.CPUErr != nil || res.ExitCode != 0 {
+		t.Fatalf("a failed attach must not produce a measurement: %+v", res)
+	}
+	if elapsed := time.Since(start); elapsed > 30*time.Second {
+		t.Fatalf("the process was not killed: Run took %v", elapsed)
+	}
+}
+
+// TestRunShortLivedProcesses: a process that exits at once is attached and
+// accounted for every time; on Windows it is suspended until it belongs to
+// its job, so it cannot exit before.
+func TestRunShortLivedProcesses(t *testing.T) {
+	t.Parallel()
+	cpuErr, _ := Capabilities()
+	for i := range 30 {
+		s := helper(t, "exit")
+		s.CollectUsage = true
+		res, err := Run(context.Background(), s, nil)
+		if err != nil || res.ExitCode != 0 {
+			t.Fatalf("run %d: %+v, %v", i, res, err)
+		}
+		if cpuErr == nil && res.Usage.CPUErr != nil {
+			t.Fatalf("run %d: CPU time of a short-lived process was not collected: %v", i, res.Usage.CPUErr)
+		}
 	}
 }
 

@@ -87,3 +87,14 @@ func normalizeMaxRSS(raw int64) (int64, error) {
 	}
 	return raw * maxRSSUnit, nil
 }
+
+func platformCollection(memory bool) Collection {
+	switch {
+	case !rusageSupported():
+		return Collection{Source: SourceUnavailable, ProcessAggregation: AggregationNone}
+	case memory:
+		return Collection{Source: SourceRusage, ProcessAggregation: AggregationMaxProcess}
+	default:
+		return Collection{Source: SourceRusage, ProcessAggregation: AggregationSumWaited}
+	}
+}

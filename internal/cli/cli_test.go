@@ -328,8 +328,10 @@ func TestRunTableJSONAndOutputs(t *testing.T) {
 			Benchmarks []struct {
 				Commands []struct {
 					Head struct {
-						Count     int     `json:"count"`
-						SamplesNS []int64 `json:"samples_ns"`
+						Count   int `json:"count"`
+						Metrics map[string]struct {
+							Samples []float64 `json:"samples"`
+						} `json:"metrics"`
 					} `json:"head"`
 				} `json:"commands"`
 			} `json:"benchmarks"`
@@ -339,7 +341,7 @@ func TestRunTableJSONAndOutputs(t *testing.T) {
 	if err != nil || json.Unmarshal(data, &rep) != nil {
 		t.Fatalf("result.json: %v\n%s", err, data)
 	}
-	if rep.Mode != "run" || len(rep.Suites[0].Benchmarks) != 2 || len(rep.Suites[0].Benchmarks[0].Commands[0].Head.SamplesNS) != 3 {
+	if rep.Mode != "run" || len(rep.Suites[0].Benchmarks) != 2 || len(rep.Suites[0].Benchmarks[0].Commands[0].Head.Metrics["latency"].Samples) != 3 {
 		t.Fatalf("report = %+v", rep)
 	}
 }

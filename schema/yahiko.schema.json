@@ -76,7 +76,7 @@
           "$ref": "#/definitions/positiveDuration"
         },
         "cwd": {
-          "description": "Working directory: relative to the suite file, or starting with ${root} or ${workdir}. Default: the suite file's directory.",
+          "description": "Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files.",
           "$ref": "#/definitions/pathTemplate"
         },
         "env": {
@@ -258,7 +258,7 @@
       ]
     },
     "pathTemplate": {
-      "description": "A relative path, or a path starting with ${root} or ${workdir}. Absolute paths and '..' after a variable are rejected.",
+      "description": "A relative path, which is relative to ${root}, or a path starting with ${root}, ${head_root} or ${workdir}. Absolute paths and '..' after a variable are rejected.",
       "type": "string",
       "minLength": 1,
       "not": {
@@ -371,7 +371,7 @@
           "type": "boolean"
         },
         "cwd": {
-          "description": "Working directory. For build, a relative path is relative to ${root} of the revision being built (the default); for hooks, to the suite file (the default). May start with ${root}, or ${workdir} in hooks.",
+          "description": "Working directory: relative to ${root} of the revision being built or measured (the default), or starting with ${root}, ${head_root}, or ${workdir} in hooks.",
           "$ref": "#/definitions/pathTemplate"
         },
         "env": {
@@ -406,7 +406,7 @@
           "type": "boolean"
         },
         "cwd": {
-          "description": "Working directory: relative to the suite file, or starting with ${root} or ${workdir}. Default: the suite file's directory.",
+          "description": "Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files.",
           "$ref": "#/definitions/pathTemplate"
         },
         "env": {
@@ -509,21 +509,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "metric": {
-          "description": "Statistic compared: median (default) or mean.",
-          "enum": [
-            "median",
-            "mean"
-          ]
-        },
-        "max_percent": {
-          "description": "Tolerated latency slowdown in percent: a number such as 10, or a string such as \"10%\". Default 10.",
-          "$ref": "#/definitions/percent"
-        },
-        "min_difference": {
-          "description": "The smallest latency difference that can be a regression or an improvement, such as 1ms; smaller differences pass. Default: none.",
-          "$ref": "#/definitions/duration"
-        },
         "confidence": {
           "description": "Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95.",
           "type": "number",
@@ -531,7 +516,7 @@
           "maximum": 0.999
         },
         "min_samples": {
-          "description": "Fewest samples per side for a verdict; fewer is inconclusive. Default 10.",
+          "description": "Fewest samples per side for a verdict. In a comparison, adaptive runs keep measuring until every compared command has this many; fewer is inconclusive. Default 10.",
           "type": "integer",
           "minimum": 2,
           "maximum": 100000
@@ -541,6 +526,9 @@
           "type": "number",
           "minimum": 0,
           "maximum": 10
+        },
+        "latency": {
+          "$ref": "#/definitions/latencyRegression"
         },
         "throughput": {
           "$ref": "#/definitions/throughputRegression"
@@ -558,21 +546,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "metric": {
-          "description": "Statistic compared: median (default) or mean.",
-          "enum": [
-            "median",
-            "mean"
-          ]
-        },
-        "max_percent": {
-          "description": "Tolerated latency slowdown in percent: a number such as 10, or a string such as \"10%\". Default 10.",
-          "$ref": "#/definitions/percent"
-        },
-        "min_difference": {
-          "description": "The smallest latency difference that can be a regression or an improvement, such as 1ms; smaller differences pass. Default: none.",
-          "$ref": "#/definitions/duration"
-        },
         "confidence": {
           "description": "Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95.",
           "type": "number",
@@ -580,7 +553,7 @@
           "maximum": 0.999
         },
         "min_samples": {
-          "description": "Fewest samples per side for a verdict; fewer is inconclusive. Default 10.",
+          "description": "Fewest samples per side for a verdict. In a comparison, adaptive runs keep measuring until every compared command has this many; fewer is inconclusive. Default 10.",
           "type": "integer",
           "minimum": 2,
           "maximum": 100000
@@ -599,6 +572,9 @@
             "type": "string",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
           }
+        },
+        "latency": {
+          "$ref": "#/definitions/latencyRegression"
         },
         "throughput": {
           "$ref": "#/definitions/throughputRegression"
@@ -671,7 +647,7 @@
           "$ref": "#/definitions/positiveDuration"
         },
         "cwd": {
-          "description": "Working directory: relative to the suite file, or starting with ${root} or ${workdir}. Default: the suite file's directory.",
+          "description": "Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files.",
           "$ref": "#/definitions/pathTemplate"
         },
         "env": {
@@ -694,7 +670,7 @@
           "description": "Standard input of every run: a fixture path (reopened for each run), or a mapping with file or content.",
           "oneOf": [
             {
-              "description": "Fixture path: relative to the suite file, or starting with ${root} or ${workdir}.",
+              "description": "Fixture path: relative to ${root} of the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Use ${head_root} to give every revision the working tree's file.",
               "$ref": "#/definitions/pathTemplate"
             },
             {
@@ -802,7 +778,7 @@
           "exclusiveMinimum": 0
         },
         "file_size": {
-          "description": "A file whose size in bytes is the work of each run: relative to the suite file, or starting with ${root} or ${workdir}. Read before every run, outside the measured time.",
+          "description": "A file whose size in bytes is the work of each run: relative to ${root} of the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Read before every run, outside the measured time.",
           "$ref": "#/definitions/pathTemplate"
         },
         "unit": {
@@ -877,6 +853,32 @@
         }
       }
     },
+    "latencyRegression": {
+      "description": "How latency (wall-clock time; lower is better) is compared.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "description": "Statistic compared: median (default) or mean.",
+          "enum": [
+            "median",
+            "mean"
+          ]
+        },
+        "max_percent": {
+          "description": "Tolerated degradation in percent: a number such as 10, or a string such as \"10%\". Default 10.",
+          "$ref": "#/definitions/percent"
+        },
+        "min_difference": {
+          "description": "The smallest absolute difference that can be a regression or an improvement; smaller differences pass. A duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory, a rate in the work unit such as \"1000 records/s\" for throughput. Default: none.",
+          "$ref": "#/definitions/duration"
+        },
+        "gate": {
+          "description": "Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run.",
+          "type": "boolean"
+        }
+      }
+    },
     "throughputRegression": {
       "description": "How throughput (higher is better, so a drop is a degradation) is compared.",
       "type": "object",
@@ -890,17 +892,21 @@
           ]
         },
         "max_percent": {
-          "description": "Tolerated degradation in percent. Default 10.",
+          "description": "Tolerated degradation in percent: a number such as 10, or a string such as \"10%\". Default 10.",
           "$ref": "#/definitions/percent"
         },
         "min_difference": {
           "description": "The smallest absolute difference that can be a regression or an improvement, such as \"1000 records/s\". Default: none.",
           "$ref": "#/definitions/rate"
+        },
+        "gate": {
+          "description": "Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run.",
+          "type": "boolean"
         }
       }
     },
     "cpuRegression": {
-      "description": "How total CPU time is compared.",
+      "description": "How total CPU time (lower is better) is compared.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -912,17 +918,21 @@
           ]
         },
         "max_percent": {
-          "description": "Tolerated degradation in percent. Default 10.",
+          "description": "Tolerated degradation in percent: a number such as 10, or a string such as \"10%\". Default 10.",
           "$ref": "#/definitions/percent"
         },
         "min_difference": {
           "description": "The smallest absolute difference that can be a regression or an improvement, such as 1ms. Default: none.",
           "$ref": "#/definitions/duration"
+        },
+        "gate": {
+          "description": "Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run.",
+          "type": "boolean"
         }
       }
     },
     "memoryRegression": {
-      "description": "How peak RSS is compared.",
+      "description": "How peak RSS (lower is better) is compared.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -934,12 +944,16 @@
           ]
         },
         "max_percent": {
-          "description": "Tolerated degradation in percent. Default 10.",
+          "description": "Tolerated degradation in percent: a number such as 10, or a string such as \"10%\". Default 10.",
           "$ref": "#/definitions/percent"
         },
         "min_difference": {
           "description": "The smallest absolute difference that can be a regression or an improvement, such as 1MiB. Default: none.",
           "$ref": "#/definitions/bytes"
+        },
+        "gate": {
+          "description": "Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run.",
+          "type": "boolean"
         }
       }
     }

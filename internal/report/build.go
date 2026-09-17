@@ -12,6 +12,7 @@ import (
 	"github.com/nao1215/yahiko/internal/config"
 	"github.com/nao1215/yahiko/internal/exitcode"
 	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/yahiko/internal/proc"
 	"github.com/nao1215/yahiko/internal/runner"
 	"github.com/nao1215/yahiko/internal/stats"
 )
@@ -176,29 +177,16 @@ func measurement(m *runner.Measurement, cfg config.Benchmark, percentiles []metr
 	if m == nil {
 		return nil
 	}
-	sum := stats.Summarize(stats.Durations(m.Samples))
 	out := &Measurement{
-		Count:     sum.Count,
-		Warmups:   m.Warmups,
-		MeanNS:    roundNS(sum.Mean),
-		MedianNS:  roundNS(sum.Median),
-		StddevNS:  roundNS(sum.Stddev),
-		MinNS:     roundNS(sum.Min),
-		MaxNS:     roundNS(sum.Max),
-		CV:        sum.CV,
-		SamplesNS: make([]int64, len(m.Samples)),
-		Metrics:   metricSummaries(m, cfg, percentiles),
-	}
-	for i, s := range m.Samples {
-		out.SamplesNS[i] = int64(s)
+		Count:   len(m.Samples),
+		Warmups: m.Warmups,
+		Metrics: metricSummaries(m, cfg, percentiles),
 	}
 	if m.Failure != nil {
 		out.Error = toError(m.Failure)
 	}
 	return out
 }
-
-func roundNS(v float64) int64 { return int64(math.Round(v)) }
 
 // budgetPercentiles lists the percentiles reported for a command: p90, p95
 // and p99, and every percentile one of its budgets uses.
@@ -255,13 +243,16 @@ func metricSummaries(m *runner.Measurement, cfg config.Benchmark, percentiles []
 	values := series(m, cfg)
 	out := map[string]*MetricSummary{}
 	for _, def := range metric.Defs() {
+		c := collection(def.Group)
 		ms := &MetricSummary{
-			Name:    string(def.Name),
-			Group:   string(def.Group),
-			Unit:    def.Unit(cfg.Metrics.WorkUnit()),
-			Better:  string(def.Better),
-			Scope:   string(def.Scope),
-			Samples: []float64{},
+			Name:               string(def.Name),
+			Group:              string(def.Group),
+			Unit:               def.Unit(cfg.Metrics.WorkUnit()),
+			Better:             string(def.Better),
+			Scope:              string(def.Scope),
+			Source:             c.Source,
+			ProcessAggregation: c.ProcessAggregation,
+			Samples:            []float64{},
 		}
 		out[string(def.Name)] = ms
 		if def.Name == metric.Throughput && cfg.Metrics.Throughput != nil {
@@ -296,6 +287,30 @@ func metricSummaries(m *runner.Measurement, cfg config.Benchmark, percentiles []
 	return out
 }
 
+// Collection sources of the metrics yahiko derives itself.
+const (
+	// SourceWallClock is the monotonic clock around the process, from just
+	// before it starts until it is reaped.
+	SourceWallClock = "wall_clock"
+	// SourceDeclaredWork is the suite's declared work divided by latency.
+	SourceDeclaredWork = "declared_work"
+)
+
+// collection describes how the metrics of a group are obtained on the
+// platform yahiko runs on.
+func collection(g metric.Group) proc.Collection {
+	switch g {
+	case metric.GroupCPU:
+		return proc.CPUCollection()
+	case metric.GroupMemory:
+		return proc.MemoryCollection()
+	case metric.GroupThroughput:
+		return proc.Collection{Source: SourceDeclaredWork, ProcessAggregation: proc.AggregationNone}
+	case metric.GroupLatency:
+	}
+	return proc.Collection{Source: SourceWallClock, ProcessAggregation: proc.AggregationNone}
+}
+
 func metricStats(samples []float64, percentiles []metric.Aggregation) *MetricStats {
 	if len(samples) == 0 {
 		return nil
@@ -322,34 +337,45 @@ func toError(f *runner.Failure) *Error {
 	return e
 }
 
+// latencyStats returns the latency statistics of a measurement that
+// completed with at least one run, or nil.
+func latencyStats(m *Measurement) *MetricStats {
+	if hasError(m) || m.Count == 0 {
+		return nil
+	}
+	ms := metricSummary(m, metric.Latency)
+	if ms == nil || ms.Status != StatusMeasured {
+		return nil
+	}
+	return ms.Stats
+}
+
 func relative(b *Benchmark) {
-	var fastest int64
+	var fastest float64
 	for _, c := range b.Commands {
-		if hasError(c.Head) || c.Head.Count == 0 {
-			continue
-		}
-		if fastest == 0 || c.Head.MedianNS < fastest {
-			fastest = c.Head.MedianNS
+		if st := latencyStats(c.Head); st != nil && (fastest == 0 || st.Median < fastest) {
+			fastest = st.Median
 		}
 	}
-	var baseline int64
+	var baseline float64
 	for _, c := range b.Commands {
-		if c.Name == b.Baseline && !hasError(c.Head) && c.Head.Count > 0 {
-			baseline = c.Head.MedianNS
+		if st := latencyStats(c.Head); st != nil && c.Name == b.Baseline {
+			baseline = st.Median
 		}
 	}
 	for i := range b.Commands {
 		c := &b.Commands[i]
-		if hasError(c.Head) || c.Head.Count == 0 {
+		st := latencyStats(c.Head)
+		if st == nil {
 			continue
 		}
 		rel := &Relative{}
 		if fastest > 0 {
-			v := float64(c.Head.MedianNS) / float64(fastest)
+			v := st.Median / fastest
 			rel.VsFastest = &v
 		}
 		if baseline > 0 {
-			v := float64(c.Head.MedianNS) / float64(baseline)
+			v := st.Median / baseline
 			rel.VsBaseline = &v
 		}
 		c.Relative = rel
@@ -399,7 +425,9 @@ func budgets(c *Command, cfg config.Benchmark) {
 	}
 }
 
-// compareMetrics judges every comparable metric the benchmark measures.
+// compareMetrics compares every comparable metric the benchmark measures.
+// Only the verdicts of gated metrics decide the command's result; a metric
+// with gate: false is compared and reported, but never changes the result.
 func compareMetrics(c *Command, br runner.BenchmarkResult, cfg config.Benchmark, seed uint64) {
 	result := ResultPass
 	if c.Result == ResultOverBudget {
@@ -412,6 +440,9 @@ func compareMetrics(c *Command, br runner.BenchmarkResult, cfg config.Benchmark,
 		}
 		mc := compareMetric(c, def, cfg, comparisonSeed(br.Benchmark.Name, c.Name, def.Name, seed))
 		c.Comparisons[string(def.Name)] = mc
+		if !mc.Gate {
+			continue
+		}
 		switch stats.Verdict(mc.Verdict) {
 		case stats.VerdictRegression:
 			result = worst(result, ResultRegression)
@@ -420,9 +451,6 @@ func compareMetrics(c *Command, br runner.BenchmarkResult, cfg config.Benchmark,
 		case stats.VerdictInconclusive:
 			result = worst(result, ResultInconclusive)
 		case stats.VerdictPass:
-		}
-		if def.Name == metric.Latency {
-			c.Comparison = legacyComparison(mc)
 		}
 	}
 	c.Result = result
@@ -440,6 +468,7 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 		RequiredConfidence: cfg.Regression.Confidence,
 		MinSamples:         cfg.Regression.MinSamples,
 		MaxCV:              cfg.Regression.MaxCV,
+		Gate:               reg.Gate,
 	}
 	base, head := c.Base.Metrics[string(def.Name)], c.Head.Metrics[string(def.Name)]
 	for _, side := range []*MetricSummary{base, head} {
@@ -480,34 +509,15 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 	return mc
 }
 
-func legacyComparison(mc *MetricComparison) *Comparison {
-	return &Comparison{
-		Metric:             mc.Statistic,
-		ChangePercent:      mc.ChangePercent,
-		CILowPercent:       mc.CILowPercent,
-		CIHighPercent:      mc.CIHighPercent,
-		ProbRegression:     mc.ProbRegression,
-		ProbImprovement:    mc.ProbImprovement,
-		RequiredConfidence: mc.RequiredConfidence,
-		MaxPercent:         mc.MaxPercent,
-		MinSamples:         mc.MinSamples,
-		MaxCV:              mc.MaxCV,
-		Verdict:            mc.Verdict,
-		Reason:             mc.Reason,
-	}
-}
-
 // comparisonSeed derives a per-comparison bootstrap seed, so a comparison's
 // result does not depend on which other benchmarks or metrics were selected.
-// Latency keeps the derivation it had before other metrics existed.
 func comparisonSeed(benchmark, command string, name metric.Name, seed uint64) uint64 {
 	h := fnv.New64a()
-	_, _ = h.Write([]byte(benchmark))
-	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(command))
-	if name != metric.Latency {
-		_, _ = h.Write([]byte{0})
-		_, _ = h.Write([]byte(name))
+	for i, part := range []string{benchmark, command, string(name)} {
+		if i > 0 {
+			_, _ = h.Write([]byte{0})
+		}
+		_, _ = h.Write([]byte(part))
 	}
 	return seed ^ h.Sum64()
 }
@@ -640,18 +650,18 @@ func compareGeoMean(s Suite) (*GeometricMean, string) {
 			return nil, fmt.Sprintf("benchmark %q did not complete", b.Name)
 		}
 		for _, c := range b.Commands {
-			if c.Result.isError() || c.Head == nil || c.Base == nil || c.Head.Count == 0 || c.Base.Count == 0 {
+			base, head := latencyStats(c.Base), latencyStats(c.Head)
+			if c.Result.isError() || base == nil || head == nil {
 				return nil, fmt.Sprintf("command %q did not complete benchmark %q on both revisions", c.Name, b.Name)
 			}
-			metric := config.MetricMedian
-			if c.Comparison != nil && c.Comparison.Metric == string(config.MetricMean) {
-				metric = config.MetricMean
+			pick := medianOf
+			if mc := c.Comparisons[string(metric.Latency)]; mc != nil && mc.Statistic == string(config.MetricMean) {
+				pick = meanOf
 			}
-			base := metricNS(c.Base, metric)
-			if base <= 0 {
+			if pick(base) <= 0 {
 				return nil, fmt.Sprintf("command %q measured zero time in benchmark %q", c.Name, b.Name)
 			}
-			ratios = append(ratios, float64(metricNS(c.Head, metric))/float64(base))
+			ratios = append(ratios, pick(head)/pick(base))
 		}
 	}
 	if len(ratios) < 2 {
@@ -685,6 +695,7 @@ func contains(list []string, s string) bool {
 func summarize(r *Report) {
 	sum := &r.Summary
 	sum.Suites = len(r.Suites)
+	countChecks(r)
 	count := func(res Result) {
 		switch res {
 		case ResultPass:
@@ -735,6 +746,38 @@ func summarize(r *Report) {
 	}
 }
 
+// countChecks counts the comparisons that are not gated, by verdict, and the
+// budgets and comparisons skipped because their metric is unsupported.
+func countChecks(r *Report) {
+	sum := &r.Summary
+	for _, s := range r.Suites {
+		for _, b := range s.Benchmarks {
+			for _, c := range b.Commands {
+				for _, bc := range c.Budgets {
+					if bc.Status == BudgetSkipped {
+						sum.Skipped++
+					}
+				}
+				for _, mc := range c.Comparisons {
+					switch {
+					case mc.Verdict == VerdictSkipped:
+						sum.Skipped++
+					case mc.Gate:
+					case mc.Verdict == string(stats.VerdictRegression):
+						sum.NotGated.Regression++
+					case mc.Verdict == string(stats.VerdictImproved):
+						sum.NotGated.Improved++
+					case mc.Verdict == string(stats.VerdictInconclusive):
+						sum.NotGated.Inconclusive++
+					default:
+						sum.NotGated.Pass++
+					}
+				}
+			}
+		}
+	}
+}
+
 func anyError(cs []Command) bool {
 	for _, c := range cs {
 		if c.Result.isError() {
@@ -747,18 +790,4 @@ func anyError(cs []Command) bool {
 // verdictLabel is the upper-case form used in tables.
 func verdictLabel(r Result) string {
 	return strings.ToUpper(strings.ReplaceAll(string(r), "_", " "))
-}
-
-func metricNS(m *Measurement, metric config.Metric) int64 {
-	switch metric {
-	case config.MetricMean:
-		return m.MeanNS
-	case config.MetricMin:
-		return m.MinNS
-	case config.MetricMax:
-		return m.MaxNS
-	case config.MetricMedian:
-		return m.MedianNS
-	}
-	return m.MedianNS
 }

@@ -10,6 +10,7 @@ import (
 const (
 	VarArtifact  = "artifact"
 	VarRoot      = "root"
+	VarHeadRoot  = "head_root"
 	VarWorkdir   = "workdir"
 	VarExe       = "exe"
 	varEnvPrefix = "env:"
@@ -19,7 +20,7 @@ var envNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Ref is one ${...} reference inside a template.
 type Ref struct {
-	Name string // artifact, root, workdir, exe, or env
+	Name string // artifact, root, head_root, workdir, exe, or env
 	Env  string // the variable name for ${env:NAME}
 }
 
@@ -37,7 +38,11 @@ func References(s string) ([]Ref, error) {
 // Vars are the values substituted into a template.
 type Vars struct {
 	Artifact string
-	Root     string
+	// Root is the suite directory inside the tree being measured.
+	Root string
+	// HeadRoot is the suite directory inside the working tree, the same for
+	// every side of a comparison.
+	HeadRoot string
 	Workdir  string
 	Exe      string
 	// LookupEnv resolves ${env:NAME}. It is os.LookupEnv in production.
@@ -69,6 +74,8 @@ func (v Vars) value(r Ref) (string, error) {
 		return v.Artifact, nil
 	case VarRoot:
 		return v.Root, nil
+	case VarHeadRoot:
+		return v.HeadRoot, nil
 	case VarWorkdir:
 		if v.Workdir == "" {
 			return "", fmt.Errorf("${workdir} is not available in the build step")
@@ -122,7 +129,7 @@ func expand(s string, resolve func(Ref) (string, error)) (string, error) {
 
 func parseRef(name string) (Ref, error) {
 	switch name {
-	case VarArtifact, VarRoot, VarWorkdir, VarExe:
+	case VarArtifact, VarRoot, VarHeadRoot, VarWorkdir, VarExe:
 		return Ref{Name: name}, nil
 	}
 	if env, ok := strings.CutPrefix(name, varEnvPrefix); ok {
@@ -131,7 +138,7 @@ func parseRef(name string) (Ref, error) {
 		}
 		return Ref{Name: "env", Env: env}, nil
 	}
-	return Ref{}, fmt.Errorf("unknown variable ${%s}: use ${artifact}, ${root}, ${workdir}, ${exe} or ${env:NAME}", name)
+	return Ref{}, fmt.Errorf("unknown variable ${%s}: use ${artifact}, ${root}, ${head_root}, ${workdir}, ${exe} or ${env:NAME}", name)
 }
 
 // QuotedReference reports whether a shell script places a ${...} reference

@@ -32,7 +32,8 @@ func cmd(name string) config.Command {
 }
 
 func regression() config.Regression {
-	return config.Regression{Metric: config.MetricMedian, MaxPercent: 10, Confidence: 0.95, MinSamples: 10, MaxCV: 0.5}
+	d := config.MetricRegression{Metric: config.MetricMedian, MaxPercent: 10, Gate: true}
+	return config.Regression{Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Latency: d, Throughput: d, CPU: d, Memory: d}
 }
 
 func runResult(name string, baseline string, cmds map[string][]time.Duration, order ...string) runner.BenchmarkResult {
@@ -172,7 +173,7 @@ func TestJudgeCompareVerdictsAndExitCodes(t *testing.T) {
 		if b.Commands[0].Result != want[i] {
 			t.Errorf("%s = %s, want %s", b.Name, b.Commands[0].Result, want[i])
 		}
-		if b.Commands[0].Comparison == nil || b.Commands[0].Base == nil || b.Commands[0].Relative != nil {
+		if b.Commands[0].Comparisons["latency"] == nil || b.Commands[0].Base == nil || b.Commands[0].Relative != nil {
 			t.Errorf("%s: comparison fields = %+v", b.Name, b.Commands[0])
 		}
 	}
@@ -560,10 +561,7 @@ func TestJSONKeepsRawNanoseconds(t *testing.T) {
 		Suites        []struct {
 			Benchmarks []struct {
 				Commands []struct {
-					Head struct {
-						SamplesNS []int64 `json:"samples_ns"`
-						MedianNS  int64   `json:"median_ns"`
-					} `json:"head"`
+					Head map[string]json.RawMessage `json:"head"`
 				} `json:"commands"`
 			} `json:"benchmarks"`
 		} `json:"suites"`
@@ -571,9 +569,29 @@ func TestJSONKeepsRawNanoseconds(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	h := decoded.Suites[0].Benchmarks[0].Commands[0].Head
-	if decoded.SchemaVersion != "1" || len(h.SamplesNS) != 3 || h.SamplesNS[0] != 1_234_567 || h.SamplesNS[2] != 999 || h.MedianNS != 1_234_567 {
-		t.Fatalf("decoded = %+v", decoded)
+	head := decoded.Suites[0].Benchmarks[0].Commands[0].Head
+	var metrics map[string]struct {
+		Unit    string    `json:"unit"`
+		Samples []float64 `json:"samples"`
+		Stats   struct {
+			Median float64 `json:"median"`
+		} `json:"stats"`
+	}
+	if err := json.Unmarshal(head["metrics"], &metrics); err != nil {
+		t.Fatal(err)
+	}
+	lat := metrics["latency"]
+	// Samples up to 24h in nanoseconds stay below 2^53, so a JSON number
+	// carries them exactly.
+	if decoded.SchemaVersion != "1" || lat.Unit != "ns" || len(lat.Samples) != 3 || lat.Samples[0] != 1_234_567 || lat.Samples[2] != 999 || lat.Stats.Median != 1_234_567 {
+		t.Fatalf("decoded = %+v", lat)
+	}
+	// Latency is described once, under metrics; no duplicate top-level
+	// copies remain.
+	for _, gone := range []string{"samples_ns", "median_ns", "mean_ns", "stddev_ns", "min_ns", "max_ns", "cv"} {
+		if _, ok := head[gone]; ok {
+			t.Errorf("head still has %s", gone)
+		}
 	}
 	if strings.Contains(buf.String(), "hostname") || strings.Contains(buf.String(), "PATH") {
 		t.Fatal("the report must not carry host or environment details")

@@ -50,5 +50,6 @@ benchmarks:
 #       mytool:
 #         command: ["${artifact}", --help]
 #     regression:
-#       max_percent: 10
 #       confidence: 0.95
+#       latency:
+#         max_percent: 10

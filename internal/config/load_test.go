@@ -27,8 +27,8 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if c.Timeout != DefaultTimeout || c.Stdout != OutputDiscard || c.Stderr != OutputDiscard || !reflect.DeepEqual(c.ExitCodes, []int{0}) {
 		t.Errorf("command defaults = %+v", c)
 	}
-	metricDefault := MetricRegression{Metric: MetricMedian, MaxPercent: 10}
-	want := Regression{Metric: MetricMedian, MaxPercent: 10, Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Throughput: metricDefault, CPU: metricDefault, Memory: metricDefault}
+	metricDefault := MetricRegression{Metric: MetricMedian, MaxPercent: 10, Gate: true}
+	want := Regression{Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Latency: metricDefault, Throughput: metricDefault, CPU: metricDefault, Memory: metricDefault}
 	if !reflect.DeepEqual(b.Regression, want) {
 		t.Errorf("regression defaults = %+v, want %+v", b.Regression, want)
 	}
@@ -50,8 +50,7 @@ defaults:
   stdout: default.out
   exit_codes: [0, 1]
   regression:
-    metric: mean
-    max_percent: "5%"
+    latency: {metric: mean, max_percent: "5%", gate: false}
     confidence: 0.9
     min_samples: 12
     max_cv: 0
@@ -69,7 +68,7 @@ benchmarks:
       two:
         command: [two]
     regression:
-      max_percent: 15
+      latency: {max_percent: 15}
       commands: [one]
   - name: second
     commands:
@@ -96,10 +95,15 @@ benchmarks:
 		t.Errorf("exit codes = %v %v", one.ExitCodes, two.ExitCodes)
 	}
 	r := first.Regression
-	if r.Metric != MetricMean || r.MaxPercent != 15 || r.Confidence != 0.9 || r.MinSamples != 12 || r.MaxCV != 0 || !reflect.DeepEqual(r.Commands, []string{"one"}) {
+	// A benchmark's latency setting overrides only the keys it writes: the
+	// statistic and the gate are still inherited from defaults.
+	if r.Latency.Metric != MetricMean || r.Latency.MaxPercent != 15 || r.Latency.Gate || r.Confidence != 0.9 || r.MinSamples != 12 || r.MaxCV != 0 || !reflect.DeepEqual(r.Commands, []string{"one"}) {
 		t.Errorf("benchmark regression = %+v", r)
 	}
-	if second.Regression.MaxPercent != 5 || second.Regression.Commands != nil {
+	if !r.CPU.Gate || !r.Memory.Gate || !r.Throughput.Gate {
+		t.Errorf("metrics without a gate setting must stay gated: %+v", r)
+	}
+	if second.Regression.Latency.MaxPercent != 5 || second.Regression.Commands != nil {
 		t.Errorf("inherited regression = %+v", second.Regression)
 	}
 	if !r.Compares("one") || r.Compares("two") || !second.Regression.Compares("three") {
@@ -237,8 +241,10 @@ benchmarks:
 		{"absolute stdin", minimal("stdin: /etc/passwd"), "absolute paths are not allowed", "benchmarks[0].stdin"},
 		{"windows absolute stdin", minimal(`stdin: 'C:\data.txt'`), "absolute paths are not allowed", "benchmarks[0].stdin"},
 		{"escaping stdout", minimal("stdout: ../escape.txt"), "relative path inside ${workdir}", "benchmarks[0].stdout"},
-		{"bad metric", minimal("regression: {metric: p95}"), "must be one of: median, mean", "benchmarks[0].regression.metric"},
-		{"zero max_percent", minimal("regression: {max_percent: 0}"), "percentage greater than 0", "benchmarks[0].regression.max_percent"},
+		{"bad metric", minimal("regression: {latency: {metric: p95}}"), "must be one of: median, mean", "benchmarks[0].regression.latency.metric"},
+		{"zero max_percent", minimal("regression: {latency: {max_percent: 0}}"), "percentage greater than 0", "benchmarks[0].regression.latency.max_percent"},
+		{"latency tolerance at the top level", minimal("regression: {max_percent: 10}"), `unknown key "max_percent"`, "benchmarks[0].regression.max_percent"},
+		{"gate is a boolean", minimal("regression: {cpu: {gate: \"no\"}}"), "expected true or false", "benchmarks[0].regression.cpu.gate"},
 		{"low confidence", minimal("regression: {confidence: 0.3}"), "must be at least 0.5, got 0.3", "benchmarks[0].regression.confidence"},
 		{"bad env name", minimal("env: {\"1X\": y}"), "invalid environment variable name", "benchmarks[0].env.1X"},
 		{"bad report format", "version: \"1\"\nsuite: {name: x}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\nreport: {outputs: [{format: table, path: x.txt}]}\n", "must be one of", "report.outputs[0].format"},
@@ -282,6 +288,8 @@ func TestLoadSemanticRules(t *testing.T) {
 		{"artifact without build", "setup:\n  - command: [\"${artifact}\"]", "${artifact} is used but the suite has no build section"},
 		{"unknown variable", "cwd: \"${home}/x\"", "unknown variable ${home}"},
 		{"variable not at start", "cwd: \"x/${root}\"", "${root} may only start a path"},
+		{"head_root not at start", "stdin: \"x/${head_root}/in.txt\"", "${head_root} may only start a path"},
+		{"dotdot after head_root", "stdin: \"${head_root}/../x\"", "must not contain .."},
 		{"dotdot after variable", "stdin: \"${workdir}/../x\"", "must not contain .."},
 		{"env var in path", "cwd: \"${env:HOME}\"", "${env:HOME} is not allowed in a path"},
 		{"control character", "description: ok\nname: \"a\\u0001b\"", "must not contain control characters"},
@@ -428,7 +436,7 @@ benchmarks:
         memory:
           peak_rss: {max: "<= 64MiB"}
     regression:
-      min_difference: 2ms
+      latency: {min_difference: 2ms}
       throughput: {metric: mean, max_percent: "8%", min_difference: 1MiB/s}
       memory: {max_percent: 5, min_difference: 512KiB}
   - name: records
@@ -477,7 +485,7 @@ benchmarks:
 		t.Errorf("budgets:\n got %v\nwant %v", got, want)
 	}
 	r := large.Regression
-	if r.MinDifference != 2e6 || r.Throughput.Metric != MetricMean || r.Throughput.MaxPercent != 8 || r.Throughput.MinDifference != 1<<20 {
+	if r.Latency.MinDifference != 2e6 || r.Throughput.Metric != MetricMean || r.Throughput.MaxPercent != 8 || r.Throughput.MinDifference != 1<<20 {
 		t.Errorf("regression = %+v", r)
 	}
 	if r.CPU.MaxPercent != 12 || r.Memory.MaxPercent != 5 || r.Memory.MinDifference != 512<<10 || r.Memory.Metric != MetricMedian {
@@ -557,7 +565,8 @@ func TestLoadRejectsMetrics(t *testing.T) {
 		{"regression for an unmeasured metric", withMetrics("", "", "memory: {max_percent: 5}"), "regression.memory is set but this benchmark does not measure memory", "benchmarks[0].regression.memory"},
 		{"regression percent threshold", withMetrics("cpu: true", "", "cpu: {max_percent: 0}"), "percentage greater than 0", "benchmarks[0].regression.cpu.max_percent"},
 		{"regression min_difference type", withMetrics("memory: true", "", "memory: {min_difference: 5ms}"), "invalid byte size", "benchmarks[0].regression.memory.min_difference"},
-		{"latency min_difference type", withMetrics("", "", "min_difference: 1MiB"), "invalid duration", "benchmarks[0].regression.min_difference"},
+		{"latency min_difference type", withMetrics("", "", "latency: {min_difference: 1MiB}"), "invalid duration", "benchmarks[0].regression.latency.min_difference"},
+		{"gate for an unmeasured metric", withMetrics("", "", "cpu: {gate: false}"), "regression.cpu is set but this benchmark does not measure cpu", "benchmarks[0].regression.cpu"},
 		{"throughput min_difference unit", withMetrics("throughput: {work: {value: 5, unit: records}}", "", "throughput: {min_difference: 1MiB/s}"), "min_difference is in bytes/s but the declared work unit is records", "benchmarks[0].regression.throughput.min_difference"},
 		{"regression metric p95", withMetrics("cpu: true", "", "cpu: {metric: p95}"), "must be one of: median, mean", "benchmarks[0].regression.cpu.metric"},
 		{"samples format in report", "version: \"1\"\nsuite: {name: x}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\nreport: {outputs: [{format: samples, path: x.csv}]}\n", "must be one of", "report.outputs[0].format"},

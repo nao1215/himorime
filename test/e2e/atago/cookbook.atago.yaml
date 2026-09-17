@@ -164,6 +164,86 @@ scenarios:
       - assert:
           stdout: {count: 1, contains: "worktree "}
 
+  - name: Compare a script-based CLI without a build step
+    # The recipe runs its script with sh.
+    skip: {os: windows}
+    steps:
+      - fixture: {file: repo/examples/script-compare/yahiko.yaml, from: ../../../examples/script-compare/yahiko.yaml}
+      - fixture: {file: repo/examples/script-compare/work.sh, from: ../../../examples/script-compare/work.sh}
+      - fixture: {file: repo/examples/script-compare/testdata/records.txt, from: ../../../examples/script-compare/testdata/records.txt}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: yahiko compare --against main --quiet examples/script-compare
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: "(?m)^count records +\\S+ +\\S+ +\\S+ +[+-][0-9.]+% +\\S+ +\\+20% +(PASS|INCONCLUSIVE)$"
+      # Only the working tree's script gets slower. With no build, the base
+      # revision still runs its own script, so the change is a regression.
+      - run:
+          command: e2ehelper replace examples/script-compare/work.sh "count=0" "sleep 0.3; count=0"
+          cwd: repo
+      - assert: {exit_code: 0}
+      - run:
+          command: yahiko compare --against main --quiet --format json examples/script-compare
+          cwd: repo
+          timeout: 180s
+      - assert:
+          exit_code: 1
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.stats.median", lt: 250000000}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.median", gte: 300000000}
+      - run: {command: git status --porcelain, cwd: repo}
+      - assert:
+          stdout: {equals: " M examples/script-compare/work.sh\n"}
+
+  - name: Gate on CPU time and memory, report latency only
+    steps:
+      - fixture: {file: repo/go.mod, from: ../../../go.mod}
+      - fixture: {file: repo/go.sum, from: ../../../go.sum}
+      - fixture: {file: repo/examples/tools/sleepy/main.go, from: ../../../examples/tools/sleepy/main.go}
+      - fixture: {file: repo/examples/gate-cpu-memory/yahiko.yaml, from: ../../../examples/gate-cpu-memory/yahiko.yaml}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      # The program now waits 200ms instead of 10ms: slower, but no more CPU
+      # time or memory.
+      - run:
+          command: e2ehelper replace examples/tools/sleepy/main.go "time.Sleep(d)" "time.Sleep(d + 190*time.Millisecond)"
+          cwd: repo
+      - assert: {exit_code: 0}
+      - run:
+          command: yahiko compare --against main --quiet --format json examples/gate-cpu-memory
+          cwd: repo
+          timeout: 600s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: false}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.gate", equals: true}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.peak_rss.gate", equals: true}
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
+              - {path: "$.summary.not_gated.regression", equals: 1}
+              - {path: "$.summary.exit_code", equals: 0}
+      - run:
+          command: yahiko compare --against main --quiet examples/gate-cpu-memory
+          cwd: repo
+          timeout: 600s
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: "(?m)^wait for input +.* REGRESSION \\(NOT GATED\\)$"
+      - assert:
+          stdout: {contains: "not gated: 1 regressed"}
+
   - name: Fail a GitHub Actions job when a performance budget is violated
     env:
       GITHUB_ACTIONS: "true"
@@ -246,7 +326,7 @@ scenarios:
             path: result.json
             json:
               - {path: "$.schema_version", equals: "1"}
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.samples_ns", length: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.samples", length: 10}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.samples", length: 10}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.unit", equals: "lines/s"}
               - {path: "$.suites[0].benchmarks[0].commands[1].relative.vs_fastest", gte: 1}
@@ -257,15 +337,15 @@ scenarios:
           command: e2ehelper csv-shape ${workdir}/result.csv
       - assert:
           exit_code: 0
-          stdout: {matches: "^rows=[0-9]+ columns=25\n$"}
+          stdout: {matches: "^rows=[0-9]+ columns=29\n$"}
       - assert:
           file:
             path: result.csv
             contains:
-              - "suite,benchmark,command,result,record,side,metric,unit,status,statistic,value"
-              - "reports,count 20k lines,scanner,pass,stat,head,latency,ns,measured,count,10,"
-              - "reports,count 20k lines,readall,pass,stat,head,peak_rss,bytes,measured,median,"
-              - "reports,count 20k lines,readall,pass,stat,head,cpu_utilization,percent,measured,p95,"
+              - "suite,benchmark,command,result,record,side,metric,unit,scope,source,process_aggregation,status,statistic,value"
+              - "reports,count 20k lines,scanner,pass,stat,head,latency,ns,wall_clock,wall_clock,none,measured,count,10,"
+              - "reports,count 20k lines,readall,pass,stat,head,peak_rss,bytes,process_tree,"
+              - "reports,count 20k lines,readall,pass,stat,head,cpu_utilization,percent,process_tree,"
       - run:
           command: yahiko run --quiet --format samples-csv --output ${workdir}/samples.csv ${env:YAHIKO_REPO}/examples/reports
           timeout: 180s

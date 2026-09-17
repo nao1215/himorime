@@ -64,6 +64,10 @@ fuzz: ## Run every fuzz target for FUZZTIME (default 10s)
 	go test -run '^$$' -fuzz '^FuzzEscapeMarkdown$$' -fuzztime $(FUZZTIME) ./internal/report
 	go test -run '^$$' -fuzz '^FuzzResolveBase$$' -fuzztime $(FUZZTIME) ./internal/ghactions
 
+.PHONY: calibration
+calibration: ## Print the regression classifier's verdict rates on synthetic data (1,000 trials per scenario)
+	YAHIKO_CALIBRATION=full go test -run '^TestCalibration$$' -count=1 -v ./internal/stats
+
 .PHONY: docs
 docs: ## Regenerate the generated sections of README.md and website/content
 	UPDATE_DOCS=1 go test ./internal/docgen -run '^TestGeneratedDocsInSync$$' -count=1

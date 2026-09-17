@@ -52,7 +52,7 @@ func FuzzReportFormats(f *testing.F) {
 			Benchmark: config.Benchmark{
 				Name: benchName, Commands: []config.Command{c},
 				Metrics:    config.Metrics{CPU: s1%2 == 0, Memory: true, Throughput: &config.Work{Value: 1, Unit: "records"}},
-				Regression: config.Regression{Metric: config.MetricMedian, MaxPercent: 10, Confidence: 0.95, MinSamples: 2},
+				Regression: config.Regression{Confidence: 0.95, MinSamples: 2, Latency: config.MetricRegression{Metric: config.MetricMedian, MaxPercent: 10, Gate: s1%3 == 0}},
 			},
 			Commands: []runner.CommandResult{{Command: c, Sides: sides}},
 		}

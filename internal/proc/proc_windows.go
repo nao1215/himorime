@@ -16,23 +16,30 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// configure starts the child in its own process group so that a console
-// Ctrl+C aimed at yahiko is handled by yahiko, which then stops the job.
+// configure starts the child in its own process group, so that a console
+// Ctrl+C aimed at yahiko is handled by yahiko, which then stops the job, and
+// suspended, so that attach can put it in its Job Object before it runs.
 func configure(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
-	cmd.SysProcAttr.CreationFlags |= windows.CREATE_NEW_PROCESS_GROUP
+	cmd.SysProcAttr.CreationFlags |= windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_SUSPENDED
 }
+
+// suspendedUntilAttached is true: the process is created suspended and
+// resumed by attach.
+const suspendedUntilAttached = true
 
 type tree struct {
 	job windows.Handle
 }
 
-// attach assigns the started process to a new Job Object. Processes the child
-// starts afterwards inherit the job, so terminating the job stops the tree.
-// A grandchild started in the instant between CreateProcess and the
-// assignment is not covered; that window is microseconds and documented.
+// attach assigns the suspended process to a new Job Object and then resumes
+// it. The process runs nothing before it belongs to the job, so every process
+// it starts inherits the job, and terminating the job stops the whole tree.
+// Every error is a real failure (access denied, a job that forbids nesting):
+// the process cannot have exited on its own while suspended. On failure the
+// job is released and the caller kills the still suspended process.
 func attach(cmd *exec.Cmd) (*tree, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
@@ -50,7 +57,8 @@ func attach(cmd *exec.Cmd) (*tree, error) {
 		_ = windows.CloseHandle(job)
 		return nil, fmt.Errorf("configure job object: %w", err)
 	}
-	h, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(cmd.Process.Pid)) //nolint:gosec // a PID always fits in uint32
+	pid := uint32(cmd.Process.Pid) //nolint:gosec // a PID always fits in uint32
+	h, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, pid)
 	if err != nil {
 		_ = windows.CloseHandle(job)
 		return nil, fmt.Errorf("open process: %w", err)
@@ -60,11 +68,52 @@ func attach(cmd *exec.Cmd) (*tree, error) {
 		_ = windows.CloseHandle(job)
 		return nil, fmt.Errorf("assign process to job object: %w", err)
 	}
+	if err := resumeProcess(pid); err != nil {
+		// The job holds the process now; closing it kills the process.
+		_ = windows.CloseHandle(job)
+		return nil, err
+	}
 	return &tree{job: job}, nil
 }
 
+// resumeProcess resumes the threads of a process created suspended. os/exec
+// closes the thread handle CreateProcess returned, so the thread is found
+// through a Toolhelp snapshot; a process created suspended has exactly one
+// thread, and it runs no code before it is resumed.
+func resumeProcess(pid uint32) error {
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
+	if err != nil {
+		return fmt.Errorf("resume process: snapshot threads: %w", err)
+	}
+	defer windows.CloseHandle(snap)
+	entry := windows.ThreadEntry32{Size: uint32(unsafe.Sizeof(windows.ThreadEntry32{}))}
+	resumed := 0
+	for err = windows.Thread32First(snap, &entry); err == nil; err = windows.Thread32Next(snap, &entry) {
+		if entry.OwnerProcessID != pid {
+			continue
+		}
+		th, err := windows.OpenThread(windows.THREAD_SUSPEND_RESUME, false, entry.ThreadID)
+		if err != nil {
+			return fmt.Errorf("resume process: open thread %d: %w", entry.ThreadID, err)
+		}
+		_, rerr := windows.ResumeThread(th)
+		_ = windows.CloseHandle(th)
+		if rerr != nil {
+			return fmt.Errorf("resume process: resume thread %d: %w", entry.ThreadID, rerr)
+		}
+		resumed++
+	}
+	if !errors.Is(err, windows.ERROR_NO_MORE_FILES) {
+		return fmt.Errorf("resume process: list threads: %w", err)
+	}
+	if resumed == 0 {
+		return fmt.Errorf("resume process: process %d has no thread to resume", pid)
+	}
+	return nil
+}
+
 func (t *tree) kill() error {
-	if t == nil || t.job == 0 {
+	if t.job == 0 {
 		return nil
 	}
 	err := windows.TerminateJobObject(t.job, 1)
@@ -78,7 +127,7 @@ func (t *tree) kill() error {
 // the job is empty so no file in a temporary directory is still open, and
 // releases the job.
 func (t *tree) close() {
-	if t == nil || t.job == 0 {
+	if t.job == 0 {
 		return
 	}
 	_ = t.kill()

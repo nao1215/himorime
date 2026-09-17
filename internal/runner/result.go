@@ -59,8 +59,14 @@ type Failure struct {
 // Side is one tree being measured.
 type Side struct {
 	Name string
-	// Root is the suite's directory inside this tree; ${root} expands to it.
+	// Root is the suite's directory inside this tree; ${root} expands to it,
+	// and every relative path of the suite is relative to it, so each
+	// revision runs its own scripts and reads its own files.
 	Root string
+	// HeadRoot is the suite's directory inside the working tree, the same for
+	// every side; ${head_root} expands to it. A fixture both revisions must
+	// share is written with it.
+	HeadRoot string
 	// ProjectRoot is the top of this tree (the Git worktree or the suite
 	// directory); paths may not resolve outside it.
 	ProjectRoot string

@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: compare a script-based CLI without a build step.
+# https://nao1215.github.io/yahiko/cookbook/#compare-a-script-based-cli-without-a-build-step
+#
+#   yahiko compare --against main examples/script-compare
+version: "1"
+
+suite:
+  name: script compare
+  description: A shell script measured as the base revision has it and as the working tree has it, with no build step.
+
+defaults:
+  warmup: 1
+  runs: 15
+
+benchmarks:
+  - name: count records
+    # Commands and hooks run in ${root}, this directory inside the revision
+    # being measured, and relative paths are relative to it. The base
+    # revision therefore runs the base's work.sh, and the head the working
+    # tree's.
+    #
+    # ${head_root} is this directory inside the working tree for both
+    # revisions: both read exactly the same records, even when the fixture
+    # changed or is new in the working tree.
+    stdin: "${head_root}/testdata/records.txt"
+    commands:
+      script:
+        command: [sh, work.sh]
+    regression:
+      latency:
+        max_percent: 20
+        min_difference: 20ms

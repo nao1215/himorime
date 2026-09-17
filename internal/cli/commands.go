@@ -74,9 +74,12 @@ func Commands() []Command {
 			Usage: "yahiko compare --against REF [flags] [PATH...]",
 			Short: "Compare a Git revision with the working tree",
 			Long: "Checks REF out into a temporary Git worktree, builds both REF and the current working " +
-				"tree (uncommitted changes included), and measures them interleaved on this machine. Every " +
-				"measured metric is compared in the direction that is worse for it. The working tree, index " +
-				"and branches are never modified. Exits 1 on a confirmed regression or an exceeded budget.",
+				"tree (uncommitted changes included), and measures them interleaved on this machine. Commands " +
+				"run in ${root} of each revision, so each runs its own code; ${head_root} names the working " +
+				"tree's copy for shared fixtures. Every measured metric is compared in the direction that is " +
+				"worse for it; a metric with regression.<metric>.gate: false is reported but never fails. The " +
+				"working tree, index and branches are never modified. Exits 1 on a gated regression or an " +
+				"exceeded budget.",
 			Flags: compareFlags,
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "compare", args) },
 		},

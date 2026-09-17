@@ -70,13 +70,12 @@ func (v *validator) resolve(raw *RawFile) *Suite {
 }
 
 func defaultRegression() Regression {
-	metricDefault := MetricRegression{Metric: DefaultMetric, MaxPercent: DefaultMaxPercent}
+	metricDefault := MetricRegression{Metric: DefaultMetric, MaxPercent: DefaultMaxPercent, Gate: true}
 	return Regression{
-		Metric:     DefaultMetric,
-		MaxPercent: DefaultMaxPercent,
 		Confidence: DefaultConfidence,
 		MinSamples: DefaultMinSamples,
 		MaxCV:      DefaultMaxCV,
+		Latency:    metricDefault,
 		Throughput: metricDefault,
 		CPU:        metricDefault,
 		Memory:     metricDefault,
@@ -88,15 +87,6 @@ func (v *validator) applyRegression(base Regression, raw *RawRegression, p path)
 		return base
 	}
 	r := base
-	if raw.Metric != nil {
-		r.Metric = Metric(*raw.Metric)
-	}
-	if raw.MaxPercent != nil {
-		r.MaxPercent = raw.MaxPercent.Value
-	}
-	if raw.MinDifference != nil {
-		r.MinDifference, _ = v.quantity(p.key("min_difference"), metric.KindDuration, *raw.MinDifference)
-	}
 	if raw.Confidence != nil {
 		r.Confidence = *raw.Confidence
 	}
@@ -109,6 +99,7 @@ func (v *validator) applyRegression(base Regression, raw *RawRegression, p path)
 	if raw.Commands != nil {
 		r.Commands = raw.Commands
 	}
+	r.Latency = v.applyMetricRegression(r.Latency, raw.Latency, p.key("latency"), metric.KindDuration)
 	r.Throughput = v.applyMetricRegression(r.Throughput, raw.Throughput, p.key("throughput"), metric.KindRate)
 	r.CPU = v.applyMetricRegression(r.CPU, raw.CPU, p.key("cpu"), metric.KindDuration)
 	r.Memory = v.applyMetricRegression(r.Memory, raw.Memory, p.key("memory"), metric.KindBytes)
@@ -129,6 +120,9 @@ func (v *validator) applyMetricRegression(base MetricRegression, raw *RawMetricR
 	if raw.MinDifference != nil {
 		r.MinDifference, r.unit = v.quantity(p.key("min_difference"), k, *raw.MinDifference)
 		r.unitPath = p.key("min_difference")
+	}
+	if raw.Gate != nil {
+		r.Gate = *raw.Gate
 	}
 	return r
 }
@@ -172,9 +166,10 @@ func hasDotDot(s string) bool {
 	return false
 }
 
-// checkPathTemplate validates the variables of a path: only ${root} or
-// ${workdir} may appear, only at the start, and no ".." may follow them. The
-// runner re-checks the final path after symlinks are resolved.
+// checkPathTemplate validates the variables of a path: only ${root},
+// ${head_root} or ${workdir} may appear, only at the start, and no ".." may
+// follow them. The runner re-checks the final path after symlinks are
+// resolved.
 func (v *validator) checkPathTemplate(p path, s string, allowWorkdir bool) {
 	refs, err := References(s)
 	if err != nil {
@@ -183,9 +178,9 @@ func (v *validator) checkPathTemplate(p path, s string, allowWorkdir bool) {
 	}
 	for i, r := range refs {
 		switch r.Name {
-		case VarRoot, VarWorkdir:
-			if i != 0 || (!strings.HasPrefix(s, "${root}") && !strings.HasPrefix(s, "${workdir}")) {
-				v.add(p, "start the path with ${root} or ${workdir}, or write a relative path", "${%s} may only start a path", r.Name)
+		case VarRoot, VarHeadRoot, VarWorkdir:
+			if i != 0 || !strings.HasPrefix(s, "${"+r.Name+"}") {
+				v.add(p, "start the path with ${root}, ${head_root} or ${workdir}, or write a relative path", "${%s} may only start a path", r.Name)
 				return
 			}
 			if r.Name == VarWorkdir && !allowWorkdir {
@@ -193,7 +188,7 @@ func (v *validator) checkPathTemplate(p path, s string, allowWorkdir bool) {
 				return
 			}
 		default:
-			v.add(p, "paths may use ${root} or ${workdir} as their first element", "${%s} is not allowed in a path", refName(r))
+			v.add(p, "paths may use ${root}, ${head_root} or ${workdir} as their first element", "${%s} is not allowed in a path", refName(r))
 			return
 		}
 	}

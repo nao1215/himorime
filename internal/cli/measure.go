@@ -374,7 +374,7 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 	s := ls.suite
 	in := report.SuiteInput{Suite: s, File: ls.display}
 
-	head := runner.Side{Name: runner.SideHead, Root: s.Dir, ProjectRoot: s.Dir}
+	head := runner.Side{Name: runner.SideHead, Root: s.Dir, HeadRoot: s.Dir, ProjectRoot: s.Dir}
 	switch {
 	case wt != nil:
 		head.ProjectRoot = repo.Top
@@ -393,7 +393,7 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 			in.BuildFailure = &runner.Failure{Kind: runner.FailPath, Message: fmt.Sprintf("%s is outside the Git repository %s", s.Dir, repo.Top)}
 			return in
 		}
-		base := runner.Side{Name: runner.SideBase, Root: filepath.Join(wt.Dir, rel), ProjectRoot: wt.Dir}
+		base := runner.Side{Name: runner.SideBase, Root: filepath.Join(wt.Dir, rel), HeadRoot: s.Dir, ProjectRoot: wt.Dir}
 		sides = []runner.Side{base, head}
 	}
 	for i := range sides {
@@ -404,12 +404,19 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 
 	m.logf("suite %q (%s): %s", s.Name, ls.display, plural(len(s.Benchmarks), "benchmark"))
 	for _, side := range sides {
-		if s.Build == nil {
-			break
-		}
+		// Commands, hooks and relative paths run inside ${root} of each
+		// revision, so a revision without the suite directory cannot be
+		// measured, with or without a build.
 		if _, err := os.Stat(side.Root); err != nil {
-			in.BuildFailure = &runner.Failure{Kind: runner.FailBuild, Message: fmt.Sprintf("the suite directory does not exist in the %s revision (%s)", side.Name, side.Root)}
+			kind := runner.FailBuild
+			if s.Build == nil {
+				kind = runner.FailSetup
+			}
+			in.BuildFailure = &runner.Failure{Kind: kind, Message: fmt.Sprintf("the suite directory does not exist in the %s revision (%s)", side.Name, side.Root)}
 			return in
+		}
+		if s.Build == nil {
+			continue
 		}
 		if f := r.Build(ctx, s, side); f != nil {
 			in.BuildFailure = f
@@ -420,7 +427,7 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		if ctx.Err() != nil {
 			break
 		}
-		in.Benchmarks = append(in.Benchmarks, r.Measure(ctx, s, b, sides))
+		in.Benchmarks = append(in.Benchmarks, r.Measure(ctx, b, sides))
 	}
 	return in
 }

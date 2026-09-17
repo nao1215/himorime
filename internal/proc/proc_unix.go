@@ -12,15 +12,22 @@ import (
 )
 
 // configure places the child in a new process group so that the whole tree
-// can be signaled at once.
+// can be signaled at once. The child joins the group between fork and exec,
+// before the command runs, so no descendant can start outside it.
 func configure(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
+
+// suspendedUntilAttached is false: the process group already exists when the
+// command starts, and attach only records it.
+const suspendedUntilAttached = false
 
 type tree struct {
 	pgid int
 }
 
+// attach records the process group. It cannot fail: Start would have failed
+// if the group could not be created.
 func attach(cmd *exec.Cmd) (*tree, error) {
 	return &tree{pgid: cmd.Process.Pid}, nil
 }

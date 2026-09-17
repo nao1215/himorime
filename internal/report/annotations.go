@@ -14,12 +14,13 @@ const (
 	TitleBudget       = "yahiko: performance budget exceeded"
 	TitleRegression   = "yahiko: performance regression"
 	TitleInconclusive = "yahiko: inconclusive comparison"
+	TitleNotGated     = "yahiko: performance regression (not gated)"
 	TitleMetricError  = "yahiko: metric could not be measured"
 	TitleError        = "yahiko: benchmark could not run"
 )
 
-// WriteAnnotations writes GitHub Actions workflow commands (::error and
-// ::warning) for every problem in the report, one line each, so failures
+// WriteAnnotations writes GitHub Actions workflow commands (::error,
+// ::warning and ::notice) for every problem in the report, one line each, so failures
 // appear on the run page and the pull request without opening the log.
 func WriteAnnotations(w io.Writer, r *Report) error {
 	var sb strings.Builder
@@ -62,10 +63,13 @@ func benchmarkAnnotations(sb *strings.Builder, file string, b Benchmark, c Comma
 		}
 		row := comparisonView(mc)
 		detail := fmt.Sprintf("%s: %s %s -> %s (%s, %s; tolerance %s)", label, def.Label, row.base, row.head, row.diff, row.change, row.tolerance)
-		switch mc.Verdict {
-		case string(ResultRegression):
+		switch {
+		case mc.Verdict == string(ResultRegression) && mc.Gate:
 			annotate(sb, "error", TitleRegression, file, detail)
-		case string(ResultInconclusive):
+		case mc.Verdict == string(ResultRegression):
+			// Reported so the change is seen, without failing anything.
+			annotate(sb, "notice", TitleNotGated, file, detail)
+		case mc.Verdict == string(ResultInconclusive) && mc.Gate:
 			annotate(sb, "warning", TitleInconclusive, file, detail+": "+mc.Reason)
 		}
 	}

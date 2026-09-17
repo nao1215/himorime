@@ -20,9 +20,10 @@ defaults:
   warmup: 2
   runs: 20
   regression:
-    metric: median
-    max_percent: 10
     confidence: 0.95
+    latency:
+      metric: median
+      max_percent: 10
 
 benchmarks:
   - name: count 50k lines

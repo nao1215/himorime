@@ -76,6 +76,11 @@ func TestMain(m *testing.M) {
 		// the kept stderr tail.
 		_, _ = io.WriteString(os.Stderr, strings.Repeat("x", 5000)+os.Getenv("SUITE_TOKEN")+strings.Repeat("y", stderrTailBytes-10))
 		os.Exit(1)
+	case "stdin-copy":
+		data, _ := io.ReadAll(os.Stdin)
+		if err := os.WriteFile(args[0], data, 0o600); err != nil {
+			os.Exit(5)
+		}
 	case "pwd":
 		wd, _ := os.Getwd()
 		_, _ = io.WriteString(os.Stdout, wd)
@@ -143,7 +148,7 @@ func TestMeasureFixedRunsInterleaved(t *testing.T) {
 	order := filepath.Join(f.dir, "order.txt")
 	b := bench("fixed", 4, f.command("a", "append", order, "a"), f.command("b", "append", order, "b"))
 	b.Warmup = 1
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if res.Failure != nil {
 		t.Fatalf("failure: %+v", res.Failure)
 	}
@@ -179,7 +184,7 @@ func TestMeasureOrderIsDeterministicForASeed(t *testing.T) {
 		f.runner.Seed = seed
 		order := filepath.Join(f.dir, "order.txt")
 		b := bench("order", 4, f.command("a", "append", order, "a"), f.command("b", "append", order, "b"), f.command("c", "append", order, "c"))
-		f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+		f.runner.Measure(context.Background(), b, []Side{f.side})
 		data, _ := os.ReadFile(order)
 		return strings.Join(strings.Fields(string(data)), "")
 	}
@@ -204,13 +209,13 @@ func TestMeasureAdaptiveRunsRespectBounds(t *testing.T) {
 	f := newFixture(t)
 	b := bench("adaptive", 0, f.command("a", "ok"))
 	b.MinRuns, b.MaxRuns, b.MinTime = 3, 50, 0
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if n := len(res.Commands[0].Sides[SideHead].Samples); n != 3 {
 		t.Fatalf("with min_time 0 adaptive runs stop at min_runs, got %d", n)
 	}
 
 	b.MinRuns, b.MaxRuns, b.MinTime = 2, 4, time.Hour
-	res = f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res = f.runner.Measure(context.Background(), b, []Side{f.side})
 	if n := len(res.Commands[0].Sides[SideHead].Samples); n != 4 {
 		t.Fatalf("an unreachable min_time must stop at max_runs, got %d", n)
 	}
@@ -218,7 +223,7 @@ func TestMeasureAdaptiveRunsRespectBounds(t *testing.T) {
 	b.MinRuns, b.MaxRuns, b.MinTime = 2, 100, 150*time.Millisecond
 	slow := bench("slow", 0, f.command("s", "sleep", "40ms"))
 	slow.MinRuns, slow.MaxRuns, slow.MinTime = 2, 100, 150*time.Millisecond
-	res = f.runner.Measure(context.Background(), f.suite, slow, []Side{f.side})
+	res = f.runner.Measure(context.Background(), slow, []Side{f.side})
 	samples := res.Commands[0].Sides[SideHead].Samples
 	var total time.Duration
 	for _, d := range samples {
@@ -245,7 +250,7 @@ func TestMeasureRunsOverride(t *testing.T) {
 	f.runner.RunsOverride, f.runner.WarmupOverride = &two, &zero
 	b := bench("override", 9, f.command("a", "ok"))
 	b.Warmup = 5
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	m := res.Commands[0].Sides[SideHead]
 	if len(m.Samples) != 2 || m.Warmups != 0 {
 		t.Fatalf("overrides ignored: %+v", m)
@@ -256,7 +261,7 @@ func TestMeasureCommandFailureIsIsolated(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	b := bench("fail", 3, f.command("good", "ok"), f.command("bad", "exit", "3", "boom", "super-secret-value"))
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if res.Failure != nil {
 		t.Fatalf("a command failure must not be a benchmark failure: %+v", res.Failure)
 	}
@@ -277,7 +282,7 @@ func TestMeasureAllowedExitCodes(t *testing.T) {
 	f := newFixture(t)
 	c := f.command("grep", "exit", "1")
 	c.ExitCodes = []int{0, 1}
-	res := f.runner.Measure(context.Background(), f.suite, bench("codes", 2, c), []Side{f.side})
+	res := f.runner.Measure(context.Background(), bench("codes", 2, c), []Side{f.side})
 	if m := res.Commands[0].Sides[SideHead]; m.Failure != nil || len(m.Samples) != 2 {
 		t.Fatalf("exit 1 was allowed but failed: %+v", m)
 	}
@@ -289,7 +294,7 @@ func TestMeasureTimeout(t *testing.T) {
 	c := f.command("slow", "sleep", "1m")
 	c.Timeout = 200 * time.Millisecond
 	start := time.Now()
-	res := f.runner.Measure(context.Background(), f.suite, bench("timeout", 3, c), []Side{f.side})
+	res := f.runner.Measure(context.Background(), bench("timeout", 3, c), []Side{f.side})
 	if time.Since(start) > 30*time.Second {
 		t.Fatal("the timeout did not stop the command")
 	}
@@ -303,7 +308,7 @@ func TestMeasureStartFailure(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	c := config.Command{Name: "missing", Exec: config.Exec{Argv: []string{"yahiko-no-such-program"}, Timeout: time.Second}, Stdout: config.OutputDiscard, Stderr: config.OutputDiscard, ExitCodes: []int{0}}
-	res := f.runner.Measure(context.Background(), f.suite, bench("start", 2, c), []Side{f.side})
+	res := f.runner.Measure(context.Background(), bench("start", 2, c), []Side{f.side})
 	if m := res.Commands[0].Sides[SideHead]; m.Failure == nil || m.Failure.Kind != FailStart {
 		t.Fatalf("failure = %+v", m.Failure)
 	}
@@ -318,7 +323,7 @@ func TestHooksRunInOrderAndCleanupAlwaysRuns(t *testing.T) {
 	b.Setup = []config.Exec{f.helper("append", log, "setup")}
 	b.PrepareEach = []config.Exec{f.helper("append", log, "prepare")}
 	b.Cleanup = []config.Exec{f.helper("append", log, "cleanup")}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if res.Failure != nil {
 		t.Fatal(res.Failure)
 	}
@@ -334,7 +339,7 @@ func TestHooksRunInOrderAndCleanupAlwaysRuns(t *testing.T) {
 	b2 := bench("setup-fails", 2, f2.command("a", "append", log2, "measured"))
 	b2.Setup = []config.Exec{f2.helper("exit", "9")}
 	b2.Cleanup = []config.Exec{f2.helper("append", log2, "cleanup")}
-	res2 := f2.runner.Measure(context.Background(), f2.suite, b2, []Side{f2.side})
+	res2 := f2.runner.Measure(context.Background(), b2, []Side{f2.side})
 	if res2.Failure == nil || res2.Failure.Kind != FailSetup || res2.Failure.ExitCode != 9 {
 		t.Fatalf("failure = %+v", res2.Failure)
 	}
@@ -349,7 +354,7 @@ func TestHooksRunInOrderAndCleanupAlwaysRuns(t *testing.T) {
 	b3 := bench("prepare-fails", 2, f3.command("a", "ok"))
 	b3.PrepareEach = []config.Exec{f3.helper("exit", "2")}
 	b3.Cleanup = []config.Exec{f3.helper("append", log3, "cleanup")}
-	res3 := f3.runner.Measure(context.Background(), f3.suite, b3, []Side{f3.side})
+	res3 := f3.runner.Measure(context.Background(), b3, []Side{f3.side})
 	if m := res3.Commands[0].Sides[SideHead]; m.Failure == nil || m.Failure.Kind != FailPrepareEach {
 		t.Fatalf("failure = %+v", m.Failure)
 	}
@@ -361,7 +366,7 @@ func TestHooksRunInOrderAndCleanupAlwaysRuns(t *testing.T) {
 	f4 := newFixture(t)
 	b4 := bench("cleanup-fails", 1, f4.command("a", "ok"))
 	b4.Cleanup = []config.Exec{f4.helper("exit", "5")}
-	if res4 := f4.runner.Measure(context.Background(), f4.suite, b4, []Side{f4.side}); res4.Failure == nil || res4.Failure.Kind != FailCleanup {
+	if res4 := f4.runner.Measure(context.Background(), b4, []Side{f4.side}); res4.Failure == nil || res4.Failure.Kind != FailCleanup {
 		t.Fatalf("failure = %+v", res4.Failure)
 	}
 }
@@ -377,7 +382,7 @@ func TestCancellationRunsCleanup(t *testing.T) {
 		time.Sleep(400 * time.Millisecond)
 		cancel()
 	}()
-	res := f.runner.Measure(ctx, f.suite, b, []Side{f.side})
+	res := f.runner.Measure(ctx, b, []Side{f.side})
 	if res.Failure == nil || res.Failure.Kind != FailInterrupted {
 		t.Fatalf("failure = %+v", res.Failure)
 	}
@@ -401,14 +406,14 @@ func TestStdinFixtureReopenedEveryRun(t *testing.T) {
 	b := bench("stdin", 3, f.command("count", "stdin-lines", "3"))
 	b.Warmup = 1
 	b.Stdin = config.Stdin{Kind: config.StdinFile, File: "in.txt"}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if m := res.Commands[0].Sides[SideHead]; m.Failure != nil || len(m.Samples) != 3 {
 		t.Fatalf("every run must read the whole fixture: %+v", m)
 	}
 
 	inline := bench("inline", 2, f.command("count", "stdin-lines", "2"))
 	inline.Stdin = config.Stdin{Kind: config.StdinContent, Content: "x\ny\n"}
-	res = f.runner.Measure(context.Background(), f.suite, inline, []Side{f.side})
+	res = f.runner.Measure(context.Background(), inline, []Side{f.side})
 	if m := res.Commands[0].Sides[SideHead]; m.Failure != nil {
 		t.Fatalf("inline stdin: %+v", m.Failure)
 	}
@@ -416,14 +421,14 @@ func TestStdinFixtureReopenedEveryRun(t *testing.T) {
 	generated := bench("generated", 2, f.command("count", "stdin-lines", "1"))
 	generated.Setup = []config.Exec{f.helper("append", "${workdir}/gen.txt", "line")}
 	generated.Stdin = config.Stdin{Kind: config.StdinFile, File: "${workdir}/gen.txt"}
-	res = f.runner.Measure(context.Background(), f.suite, generated, []Side{f.side})
+	res = f.runner.Measure(context.Background(), generated, []Side{f.side})
 	if res.Failure != nil {
 		t.Fatalf("a fixture written by setup: %+v", res.Failure)
 	}
 
 	missing := bench("missing", 2, f.command("count", "stdin-lines", "1"))
 	missing.Stdin = config.Stdin{Kind: config.StdinFile, File: "nope.txt"}
-	if res := f.runner.Measure(context.Background(), f.suite, missing, []Side{f.side}); res.Failure == nil || res.Failure.Kind != FailSetup {
+	if res := f.runner.Measure(context.Background(), missing, []Side{f.side}); res.Failure == nil || res.Failure.Kind != FailSetup {
 		t.Fatalf("missing fixture: %+v", res.Failure)
 	}
 }
@@ -446,7 +451,7 @@ func TestVariablesEnvAndCwd(t *testing.T) {
 		return config.Exec{Argv: []string{f.exe, "${workdir}/" + name, filepath.Join(f.dir, filepath.Base(name))}, Env: []config.EnvVar{{Name: "RUNNER_HELPER", Value: "copy"}}, Timeout: time.Minute}
 	}
 	b.Cleanup = []config.Exec{copyOut("out/env.txt"), copyOut("pwd.txt")}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if res.Failure != nil {
 		t.Fatal(res.Failure)
 	}
@@ -462,7 +467,7 @@ func TestVariablesEnvAndCwd(t *testing.T) {
 
 	missing := f.command("env", "print-env", "X")
 	missing.Env = append(missing.Env, config.EnvVar{Name: "X", Value: "${env:YAHIKO_SURELY_UNSET}"})
-	res = f.runner.Measure(context.Background(), f.suite, bench("unset", 1, missing), []Side{f.side})
+	res = f.runner.Measure(context.Background(), bench("unset", 1, missing), []Side{f.side})
 	if m := res.Commands[0].Sides[SideHead]; m.Failure == nil || !strings.Contains(m.Failure.Message, "YAHIKO_SURELY_UNSET is not set") {
 		t.Fatalf("unset variable: %+v", m.Failure)
 	}
@@ -475,7 +480,7 @@ func TestOutputFileKeepsLastRun(t *testing.T) {
 	c.Stdout = "logs/stdout.txt"
 	b := bench("output", 2, c)
 	b.Cleanup = []config.Exec{{Argv: []string{f.exe, "${workdir}/logs/stdout.txt", filepath.Join(f.dir, "kept.txt")}, Env: []config.EnvVar{{Name: "RUNNER_HELPER", Value: "copy"}}, Timeout: time.Minute}}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if res.Failure != nil {
 		t.Fatal(res.Failure)
 	}
@@ -494,7 +499,7 @@ func TestPathConfinement(t *testing.T) {
 		if err := os.Symlink(outside, filepath.Join(f.dir, "link")); err != nil {
 			t.Fatal(err)
 		}
-		res := f.runner.Measure(context.Background(), f.suite, bench("symlink", 1, c), []Side{f.side})
+		res := f.runner.Measure(context.Background(), bench("symlink", 1, c), []Side{f.side})
 		m := res.Commands[0].Sides[SideHead]
 		if m.Failure == nil || m.Failure.Kind != FailPath {
 			t.Fatalf("a cwd symlinked outside the project was accepted: %+v", m.Failure)
@@ -587,7 +592,7 @@ func TestShellCommand(t *testing.T) {
 		Stderr:    config.OutputDiscard,
 		ExitCodes: []int{0},
 	}
-	res := f.runner.Measure(context.Background(), f.suite, bench("shell", 2, c), []Side{f.side})
+	res := f.runner.Measure(context.Background(), bench("shell", 2, c), []Side{f.side})
 	if m := res.Commands[0].Sides[SideHead]; m.Failure != nil || len(m.Samples) != 2 {
 		t.Fatalf("shell command: %+v", m)
 	}
@@ -600,7 +605,7 @@ func TestCompareSidesOnlyMeasureComparedCommands(t *testing.T) {
 	base.Name = SideBase
 	b := bench("sides", 2, f.command("mine", "ok"), f.command("theirs", "ok"))
 	b.Regression.Commands = []string{"mine"}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{base, f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{base, f.side})
 	if len(res.Commands[0].Sides) != 2 || len(res.Commands[1].Sides) != 0 {
 		t.Fatalf("sides = %v / %v", res.Commands[0].Sides, res.Commands[1].Sides)
 	}
@@ -645,7 +650,7 @@ func TestHookWithABackgroundProcessDoesNotBlock(t *testing.T) {
 	b := bench("background", 1, f.command("a", "ok"))
 	b.Setup = []config.Exec{f.helper("background")}
 	start := time.Now()
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if res.Failure != nil {
 		t.Fatal(res.Failure)
 	}
@@ -661,7 +666,7 @@ func TestSecretsPassedThroughSuiteEnvAreMaskedAcrossTheTailBoundary(t *testing.T
 	f.runner.Environ = func() []string { return append(os.Environ(), "HOST_PAT=pat-value-0123456789abcdef") }
 	c := f.command("leaky", "pad-secret")
 	c.Env = append(c.Env, config.EnvVar{Name: "SUITE_TOKEN", Value: "${env:HOST_PAT}"})
-	res := f.runner.Measure(context.Background(), f.suite, bench("secret", 1, c), []Side{f.side})
+	res := f.runner.Measure(context.Background(), bench("secret", 1, c), []Side{f.side})
 	m := res.Commands[0].Sides[SideHead]
 	if m.Failure == nil {
 		t.Fatal("the command should fail")
@@ -695,7 +700,7 @@ func TestDanglingSymlinkIsNotFollowed(t *testing.T) {
 	c.Stdout = "out.txt"
 	b := bench("dangling", 1, c)
 	b.Setup = []config.Exec{{Argv: []string{f.exe, outside, "${workdir}/out.txt"}, Env: []config.EnvVar{{Name: "RUNNER_HELPER", Value: "symlink"}}, Timeout: time.Minute}}
-	res := f.runner.Measure(context.Background(), f.suite, b, []Side{f.side})
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
 	if m := res.Commands[0].Sides[SideHead]; m.Failure == nil || m.Failure.Kind != FailPath {
 		t.Fatalf("failure = %+v", m.Failure)
 	}

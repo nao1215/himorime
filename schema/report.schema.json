@@ -329,7 +329,6 @@
         "head",
         "base",
         "relative",
-        "comparison",
         "comparisons",
         "budgets"
       ],
@@ -396,92 +395,6 @@
             }
           }
         },
-        "comparison": {
-          "description": "The latency base/head judgement in its original shape; null in a plain run or when a side failed. See comparisons for every metric.",
-          "type": [
-            "object",
-            "null"
-          ],
-          "required": [
-            "metric",
-            "change_percent",
-            "ci_low_percent",
-            "ci_high_percent",
-            "probability_regression",
-            "probability_improvement",
-            "required_confidence",
-            "max_percent",
-            "min_samples",
-            "max_cv",
-            "verdict",
-            "reason"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "metric": {
-              "description": "Compared statistic.",
-              "type": "string",
-              "enum": [
-                "median",
-                "mean"
-              ]
-            },
-            "change_percent": {
-              "description": "(head - base) / base * 100 of the metric.",
-              "type": "number"
-            },
-            "ci_low_percent": {
-              "description": "Lower bound of the bootstrap interval at required_confidence.",
-              "type": "number"
-            },
-            "ci_high_percent": {
-              "description": "Upper bound of the bootstrap interval at required_confidence.",
-              "type": "number"
-            },
-            "probability_regression": {
-              "description": "Share of bootstrap resamples slower than +max_percent.",
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
-            "probability_improvement": {
-              "description": "Share of bootstrap resamples faster than -max_percent.",
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
-            "required_confidence": {
-              "description": "Configured confidence.",
-              "type": "number"
-            },
-            "max_percent": {
-              "description": "Configured tolerance in percent.",
-              "type": "number"
-            },
-            "min_samples": {
-              "description": "Configured minimum samples per side.",
-              "type": "integer"
-            },
-            "max_cv": {
-              "description": "Configured coefficient of variation limit; 0 when disabled.",
-              "type": "number"
-            },
-            "verdict": {
-              "description": "Statistical verdict before budgets.",
-              "type": "string",
-              "enum": [
-                "pass",
-                "improved",
-                "regression",
-                "inconclusive"
-              ]
-            },
-            "reason": {
-              "description": "Why the verdict is inconclusive; empty otherwise.",
-              "type": "string"
-            }
-          }
-        },
         "comparisons": {
           "description": "Base/head judgement of every compared metric keyed by name (latency, throughput, cpu_total, peak_rss); null in a plain run or when a side failed.",
           "type": [
@@ -502,18 +415,11 @@
       }
     },
     "measurement": {
-      "description": "Statistics of one command on one side. The *_ns fields and samples_ns describe latency in integer nanoseconds; metrics describes every metric in its canonical unit.",
+      "description": "One command on one side. Every metric, latency included, is described once under metrics, in its canonical unit.",
       "type": "object",
       "required": [
         "count",
         "warmups",
-        "mean_ns",
-        "median_ns",
-        "stddev_ns",
-        "min_ns",
-        "max_ns",
-        "cv",
-        "samples_ns",
         "metrics",
         "error"
       ],
@@ -528,38 +434,6 @@
           "description": "Warmup runs performed.",
           "type": "integer",
           "minimum": 0
-        },
-        "mean_ns": {
-          "description": "Arithmetic mean.",
-          "type": "integer"
-        },
-        "median_ns": {
-          "description": "Median.",
-          "type": "integer"
-        },
-        "stddev_ns": {
-          "description": "Sample standard deviation.",
-          "type": "integer"
-        },
-        "min_ns": {
-          "description": "Fastest run.",
-          "type": "integer"
-        },
-        "max_ns": {
-          "description": "Slowest run.",
-          "type": "integer"
-        },
-        "cv": {
-          "description": "Coefficient of variation: stddev / mean.",
-          "type": "number"
-        },
-        "samples_ns": {
-          "description": "Every measured run in execution order.",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 0
-          }
         },
         "metrics": {
           "description": "Every metric keyed by name, each with a status.",
@@ -671,7 +545,9 @@
         "metric_error",
         "error",
         "fail_on_inconclusive",
-        "exit_code"
+        "exit_code",
+        "not_gated",
+        "skipped"
       ],
       "additionalProperties": false,
       "properties": {
@@ -701,7 +577,7 @@
           "minimum": 0
         },
         "inconclusive": {
-          "description": "Inconclusive comparisons.",
+          "description": "Commands whose gated comparisons were inconclusive.",
           "type": "integer",
           "minimum": 0
         },
@@ -711,7 +587,7 @@
           "minimum": 0
         },
         "regression": {
-          "description": "Confirmed regressions.",
+          "description": "Commands with a gated regression.",
           "type": "integer",
           "minimum": 0
         },
@@ -741,6 +617,40 @@
             5,
             6
           ]
+        },
+        "not_gated": {
+          "description": "Metric comparisons with gate: false, counted by verdict. They never change a command's result or the exit status.",
+          "type": "object",
+          "required": [
+            "pass",
+            "improved",
+            "inconclusive",
+            "regression"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "pass": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "improved": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "inconclusive": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "regression": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "skipped": {
+          "description": "Budgets and comparisons skipped because their metric is unsupported on this platform (metrics.unsupported: skip).",
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -753,6 +663,8 @@
         "unit",
         "better",
         "scope",
+        "source",
+        "process_aggregation",
         "status",
         "reason",
         "stats",
@@ -799,6 +711,27 @@
           "enum": [
             "wall_clock",
             "process_tree"
+          ]
+        },
+        "source": {
+          "description": "Where the values come from on the measuring platform: wall_clock (a monotonic clock around the process), declared_work (declared work divided by latency), rusage (wait4 of the reaped command), job_object (Job Object accounting), process_memory_counters (the started process's peak working set), or unavailable.",
+          "enum": [
+            "wall_clock",
+            "declared_work",
+            "rusage",
+            "job_object",
+            "process_memory_counters",
+            "unavailable"
+          ]
+        },
+        "process_aggregation": {
+          "description": "How the processes of the tree are combined into one value per run: none (not a per-process value), sum_of_waited_descendants (the command plus every descendant its parent waited for), sum_of_job_processes (every process ever in the job), max_of_single_process_peaks (the largest peak of any one process, not the peak of their combined memory), started_process_only (the started process; a run with descendants is unsupported).",
+          "enum": [
+            "none",
+            "sum_of_waited_descendants",
+            "sum_of_job_processes",
+            "max_of_single_process_peaks",
+            "started_process_only"
           ]
         },
         "status": {
@@ -937,7 +870,8 @@
         "min_samples",
         "max_cv",
         "verdict",
-        "reason"
+        "reason",
+        "gate"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1036,6 +970,10 @@
         "reason": {
           "description": "Why the verdict is inconclusive or skipped, or a pass decided by min_difference.",
           "type": "string"
+        },
+        "gate": {
+          "description": "Whether the verdict decides the command's result and the exit status. false (regression.<metric>.gate: false) reports the comparison for information only.",
+          "type": "boolean"
         }
       }
     },

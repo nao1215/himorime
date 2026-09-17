@@ -63,8 +63,9 @@ scenarios:
               - {path: "$.seed", equals: 7}
               - {path: "$.environment.logical_cpus", gte: 1}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.count", equals: 4}
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.samples_ns", length: 4}
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.samples_ns[0]", gte: 5000000}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.samples", length: 4}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.samples[0]", gte: 5000000}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.source", equals: "wall_clock"}
               - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
               - {path: "$.summary.exit_code", equals: 0}
       - assert:
@@ -96,8 +97,8 @@ scenarios:
           file:
             path: out/report.csv
             contains:
-              - "suite,benchmark,command,result,record,side,metric,unit,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,reason,error_kind,error_message"
-              - '"commas, pipes | and quotes """,helper,pass,stat,head,latency,ns,measured,count,3,'
+              - "suite,benchmark,command,result,record,side,metric,unit,scope,source,process_aggregation,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,gate,reason,error_kind,error_message"
+              - '"commas, pipes | and quotes """,helper,pass,stat,head,latency,ns,wall_clock,wall_clock,none,measured,count,3,'
       - assert:
           file:
             path: out/report.md
@@ -430,8 +431,8 @@ scenarios:
             json:
               # A cache hit sleeps 5ms and a miss 200ms; process start-up on a
               # slow Windows runner stays well inside the gap.
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.median_ns", lt: 150000000}
-              - {path: "$.suites[0].benchmarks[1].commands[0].head.median_ns", gte: 200000000}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.median", lt: 150000000}
+              - {path: "$.suites[0].benchmarks[1].commands[0].head.metrics.latency.stats.median", gte: 200000000}
 
   - name: adaptive runs stop between the minimum and the maximum
     steps:

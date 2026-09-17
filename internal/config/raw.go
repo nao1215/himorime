@@ -144,26 +144,26 @@ type RawMemoryBudget struct {
 }
 
 // RawRegression configures how a base revision and the working tree are
-// compared. The top-level metric, max_percent and min_difference apply to
-// latency; throughput, cpu and memory carry their own.
+// compared. confidence, min_samples, max_cv and commands apply to every
+// metric; latency, throughput, cpu and memory carry each metric's tolerance.
 type RawRegression struct {
-	Metric        *string              `yaml:"metric"`
-	MaxPercent    *Percent             `yaml:"max_percent"`
-	MinDifference *string              `yaml:"min_difference"`
-	Confidence    *float64             `yaml:"confidence"`
-	MinSamples    *int                 `yaml:"min_samples"`
-	MaxCV         *float64             `yaml:"max_cv"`
-	Commands      []string             `yaml:"commands"`
-	Throughput    *RawMetricRegression `yaml:"throughput"`
-	CPU           *RawMetricRegression `yaml:"cpu"`
-	Memory        *RawMetricRegression `yaml:"memory"`
+	Confidence *float64             `yaml:"confidence"`
+	MinSamples *int                 `yaml:"min_samples"`
+	MaxCV      *float64             `yaml:"max_cv"`
+	Commands   []string             `yaml:"commands"`
+	Latency    *RawMetricRegression `yaml:"latency"`
+	Throughput *RawMetricRegression `yaml:"throughput"`
+	CPU        *RawMetricRegression `yaml:"cpu"`
+	Memory     *RawMetricRegression `yaml:"memory"`
 }
 
-// RawMetricRegression is the tolerance of one metric in a comparison.
+// RawMetricRegression is the tolerance of one metric in a comparison, and
+// whether its verdict gates the result.
 type RawMetricRegression struct {
 	Metric        *string  `yaml:"metric"`
 	MaxPercent    *Percent `yaml:"max_percent"`
 	MinDifference *string  `yaml:"min_difference"`
+	Gate          *bool    `yaml:"gate"`
 }
 
 // RawReport lists the report files written after every run.

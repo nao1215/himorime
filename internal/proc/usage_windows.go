@@ -38,35 +38,24 @@ func platformCapabilities() (cpu, memory error) { return nil, nil }
 
 // collect reads the usage of the tree. CPU time comes from the Job Object's
 // accounting, which covers every process that was ever part of the job, so it
-// includes descendants whether or not anyone waited for them. Windows keeps
-// no peak working set for a job, only per process, and a descendant's handle
-// is gone by the time the command exits; peak RSS is therefore the peak
-// working set of the started process and is reported only when the job ran
-// that single process. A larger tree reports peak RSS as unsupported instead
-// of under-reporting it.
+// includes descendants whether or not anyone waited for them; the process is
+// in the job from before it ran, so nothing escapes it. Windows keeps no peak
+// working set for a job, only per process, and a descendant's handle is gone
+// by the time the command exits; peak RSS is therefore the peak working set
+// of the started process and is reported only when the job ran that single
+// process. A larger tree reports peak RSS as unsupported instead of
+// under-reporting it.
 func (p *usageProbe) collect(_ *exec.Cmd, t *tree) Usage {
 	var u Usage
-	if t != nil && t.job != 0 {
-		acct, err := jobAccountingInfo(t.job)
-		if err != nil {
-			u.CPUErr = fmt.Errorf("query job accounting: %w", err)
-			u.MemoryErr = u.CPUErr
-			return u
-		}
-		u.UserCPU = filetimeUnits(acct.TotalUserTime)
-		u.SystemCPU = filetimeUnits(acct.TotalKernelTime)
-		u.Processes = int(acct.TotalProcesses)
-	} else {
-		// The process exited before it could be assigned to a job, within
-		// microseconds of starting; only its own counters exist.
-		user, kernel, err := p.processTimes()
-		if err != nil {
-			u.CPUErr = err
-			u.MemoryErr = err
-			return u
-		}
-		u.UserCPU, u.SystemCPU, u.Processes = user, kernel, 1
+	acct, err := jobAccountingInfo(t.job)
+	if err != nil {
+		u.CPUErr = fmt.Errorf("query job accounting: %w", err)
+		u.MemoryErr = u.CPUErr
+		return u
 	}
+	u.UserCPU = filetimeUnits(acct.TotalUserTime)
+	u.SystemCPU = filetimeUnits(acct.TotalKernelTime)
+	u.Processes = int(acct.TotalProcesses)
 	if u.Processes > 1 {
 		u.MemoryErr = &UnsupportedError{
 			What:   "peak rss",
@@ -76,17 +65,6 @@ func (p *usageProbe) collect(_ *exec.Cmd, t *tree) Usage {
 	}
 	u.PeakRSS, u.MemoryErr = p.peakWorkingSet()
 	return u
-}
-
-func (p *usageProbe) processTimes() (user, kernel time.Duration, err error) {
-	if p.process == 0 {
-		return 0, 0, errors.New("no handle to the process to read its CPU time")
-	}
-	var creation, exit, k, us windows.Filetime
-	if err := windows.GetProcessTimes(p.process, &creation, &exit, &k, &us); err != nil {
-		return 0, 0, fmt.Errorf("GetProcessTimes: %w", err)
-	}
-	return filetimeDuration(us), filetimeDuration(k), nil
 }
 
 // processMemoryCounters mirrors PROCESS_MEMORY_COUNTERS.
@@ -124,7 +102,9 @@ func (p *usageProbe) peakWorkingSet() (int64, error) {
 // filetimeUnits converts a count of 100-nanosecond intervals.
 func filetimeUnits(v int64) time.Duration { return time.Duration(v) * 100 }
 
-// filetimeDuration converts a FILETIME that holds a duration, not a date.
-func filetimeDuration(ft windows.Filetime) time.Duration {
-	return filetimeUnits(int64(ft.HighDateTime)<<32 | int64(ft.LowDateTime))
+func platformCollection(memory bool) Collection {
+	if memory {
+		return Collection{Source: SourceProcessMemoryCounters, ProcessAggregation: AggregationStartedProcess}
+	}
+	return Collection{Source: SourceJobObject, ProcessAggregation: AggregationSumJob}
 }

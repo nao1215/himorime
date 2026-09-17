@@ -1,13 +1,14 @@
 // Package proc starts processes so that a whole process tree can be stopped,
 // and measures their wall-clock duration.
 //
-// On Unix every child is placed in its own process group, and stopping it
-// sends SIGKILL to the group. On Windows every child is assigned to a Job
-// Object, and stopping it terminates the job. The tree is stopped on timeout,
-// on cancellation, and also when the command exits: a process a command leaves
-// running in the background is stopped with it on every platform, so a
-// benchmark cannot leak processes and a temporary directory is never still in
-// use when yahiko removes it.
+// On Unix every child is placed in its own process group before it executes
+// anything, and stopping it sends SIGKILL to the group. On Windows every child
+// is created suspended, assigned to a Job Object, and only then resumed, so no
+// descendant can start outside the job; stopping it terminates the job. The
+// tree is stopped on timeout, on cancellation, and also when the command
+// exits: a process a command leaves running in the background is stopped with
+// it on every platform, so a benchmark cannot leak processes and a temporary
+// directory is never still in use when yahiko removes it.
 package proc
 
 import (
@@ -60,6 +61,12 @@ type Result struct {
 // permission denied, bad working directory).
 var ErrStart = errors.New("start process")
 
+// ErrProcessTree wraps a failure to place a started process under a handle
+// that covers its whole tree (a Job Object on Windows). The process is killed
+// before it runs any code of its own: without the handle, neither stopping
+// its descendants nor their CPU accounting could be trusted.
+var ErrProcessTree = errors.New("attach the process tree")
+
 // Clock returns the current time. Tests replace it.
 type Clock func() time.Time
 
@@ -68,6 +75,12 @@ type Clock func() time.Time
 // Result, not as an error; the error is non-nil only when the process could
 // not be started or waited for.
 func Run(ctx context.Context, s Spec, now Clock) (Result, error) {
+	return run(ctx, s, now, attach)
+}
+
+// run is Run with the function that attaches the tree handle, which tests
+// replace to simulate a platform failure.
+func run(ctx context.Context, s Spec, now Clock, attachTree func(*exec.Cmd) (*tree, error)) (Result, error) {
 	if now == nil {
 		now = time.Now
 	}
@@ -97,10 +110,27 @@ func Run(ctx context.Context, s Spec, now Clock) (Result, error) {
 	if err := cmd.Start(); err != nil {
 		return Result{}, fmt.Errorf("%w: %w", ErrStart, err)
 	}
-	// A process that exits within microseconds can be gone before it is
-	// attached to its tree handle. That is not an error: the watcher falls
-	// back to killing the process itself, and there is nothing left to stop.
-	tree, _ := attach(cmd)
+	// Where the process starts suspended (Windows), attach puts it in its
+	// tree handle before it runs anything and then resumes it, so no
+	// descendant can escape. The process runs no code of its own meanwhile,
+	// so the time attach takes is not part of its latency.
+	attachStart := start
+	if suspendedUntilAttached {
+		attachStart = now()
+	}
+	tree, err := attachTree(cmd)
+	var paused time.Duration
+	if suspendedUntilAttached {
+		paused = now().Sub(attachStart)
+	}
+	if err != nil {
+		// Without the tree handle neither stopping the command's descendants
+		// nor their CPU accounting could be trusted, so the process is killed
+		// (where it is suspended, before it ran anything) and reaped.
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return Result{}, fmt.Errorf("%w: %w", ErrProcessTree, err)
+	}
 	var probe *usageProbe
 	if s.CollectUsage {
 		probe = newUsageProbe(cmd, tree)
@@ -112,16 +142,12 @@ func Run(ctx context.Context, s Spec, now Clock) (Result, error) {
 	go func() {
 		defer close(watcherDone)
 		watch(ctx, s.Timeout, done, killed, func() {
-			if tree != nil {
-				_ = tree.kill()
-				return
-			}
-			_ = cmd.Process.Kill()
+			_ = tree.kill()
 		})
 	}()
 
 	waitErr := cmd.Wait()
-	elapsed := now().Sub(start)
+	elapsed := now().Sub(start) - paused
 	close(done)
 	// The watcher may be killing the tree right now; the tree handle is only
 	// released after it has finished.
@@ -133,9 +159,7 @@ func Run(ctx context.Context, s Spec, now Clock) (Result, error) {
 		usage = probe.collect(cmd, tree)
 		probe.close()
 	}
-	if tree != nil {
-		tree.close()
-	}
+	tree.close()
 
 	res := Result{Elapsed: elapsed, ExitCode: exitCode(cmd, waitErr), Usage: usage}
 	select {

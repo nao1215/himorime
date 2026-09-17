@@ -17,8 +17,9 @@ defaults:
   warmup: 2
   runs: 15
   regression:
-    max_percent: 15
     confidence: 0.95
+    latency:
+      max_percent: 15
 
 benchmarks:
   - name: version

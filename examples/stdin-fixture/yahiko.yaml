@@ -18,7 +18,7 @@ defaults:
 benchmarks:
   - name: access log on stdin
     # The fixture is reopened for every run, so each run reads it from the
-    # first byte. Relative paths are relative to this file.
+    # first byte. Relative paths are relative to this file's directory, ${root}.
     stdin: testdata/access.log
     baseline: scanner
     commands:

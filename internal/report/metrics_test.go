@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"encoding/csv"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/nao1215/yahiko/internal/config"
 	"github.com/nao1215/yahiko/internal/exitcode"
 	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/yahiko/internal/proc"
 	"github.com/nao1215/yahiko/internal/runner"
 )
 
@@ -34,10 +36,7 @@ func metricsResult(name string, n int, lat, user, system time.Duration, rss int6
 }
 
 func regressionAll() config.Regression {
-	r := regression()
-	d := config.MetricRegression{Metric: config.MetricMedian, MaxPercent: 10}
-	r.Throughput, r.CPU, r.Memory = d, d, d
-	return r
+	return regression()
 }
 
 func TestJudgeMetricsSummaries(t *testing.T) {
@@ -234,8 +233,8 @@ func TestJudgeCompareDirections(t *testing.T) {
 	if _, ok := c.Comparisons["cpu_utilization"]; ok {
 		t.Error("cpu utilization must not be compared")
 	}
-	if c.Result != ResultRegression || c.Comparison == nil || c.Comparison.Verdict != "regression" {
-		t.Fatalf("result = %s, legacy %+v", c.Result, c.Comparison)
+	if c.Result != ResultRegression {
+		t.Fatalf("result = %s", c.Result)
 	}
 
 	// Faster head: throughput rises, which is an improvement, not a regression.
@@ -391,5 +390,147 @@ func TestAnnotations(t *testing.T) {
 	}
 	if escapeData("100%\r\nx") != "100%25%0D%0Ax" || escapeProperty("a:b,c") != "a%3Ab%2Cc" {
 		t.Fatal("escaping")
+	}
+}
+
+// TestJudgeCompareGate: a metric with gate: false is compared and reported,
+// but its regression or inconclusive verdict never decides the result, is
+// never shown as a plain PASS or REGRESSION, and is counted apart.
+func TestJudgeCompareGate(t *testing.T) {
+	t.Parallel()
+	// Latency doubles, CPU time and memory are unchanged.
+	base := metricsResult("x", 20, 100*time.Millisecond, 100*time.Millisecond, 10*time.Millisecond, 32<<20, 1000)
+	head := metricsResult("x", 20, 200*time.Millisecond, 100*time.Millisecond, 10*time.Millisecond, 32<<20, 1000)
+	b := pairSides("latency info", base, head)
+	b.Benchmark.Metrics.Throughput = nil
+	b.Benchmark.Regression.Latency.Gate = false
+
+	r := judge(ModeCompare, true, b)
+	c := r.Suites[0].Benchmarks[0].Commands[0]
+	lat := c.Comparisons["latency"]
+	if lat.Verdict != "regression" || lat.Gate || !c.Comparisons["cpu_total"].Gate || c.Comparisons["cpu_total"].Verdict != "pass" {
+		t.Fatalf("comparisons = latency %+v, cpu %+v", lat, c.Comparisons["cpu_total"])
+	}
+	if c.Result != ResultPass || r.Summary.ExitCode != exitcode.OK || r.Summary.Regression != 0 {
+		t.Fatalf("a regression of a metric that is not gated failed the run: result %s, summary %+v", c.Result, r.Summary)
+	}
+	if want := (VerdictCounts{Regression: 1}); r.Summary.NotGated != want {
+		t.Fatalf("not gated = %+v, want %+v", r.Summary.NotGated, want)
+	}
+
+	var out bytes.Buffer
+	_ = WriteTerminal(&out, r, TerminalOptions{})
+	for _, want := range []string{"REGRESSION (NOT GATED)", "(NOT GATED) marks a metric with gate: false", "not gated: 1 regressed", "exit 0"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("terminal lacks %q:\n%s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "REGRESSION\n") {
+		t.Errorf("a not gated regression is shown as a plain REGRESSION:\n%s", out.String())
+	}
+	out.Reset()
+	_ = WriteGitHubSummary(&out, r)
+	if !strings.HasPrefix(out.String(), "## ⚠️ yahiko benchmark comparison: no regression in gated metrics") || !strings.Contains(out.String(), "REGRESSION (NOT GATED)") {
+		t.Errorf("summary:\n%s", out.String())
+	}
+	out.Reset()
+	_ = WriteAnnotations(&out, r)
+	if got := strings.TrimSpace(out.String()); !strings.HasPrefix(got, "::notice file=yahiko.yaml,title=yahiko%3A performance regression (not gated)::latency info / tool: latency") {
+		t.Errorf("annotations = %q", got)
+	}
+	out.Reset()
+	_ = WriteCSV(&out, r)
+	rows, err := csv.NewReader(&out).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, row := range rows[1:] {
+		if row[csvCol("record")] == "comparison" && row[csvCol("metric")] == "latency" {
+			found = row[csvCol("gate")] == "false" && row[csvCol("verdict")] == "regression"
+		}
+	}
+	if !found {
+		t.Errorf("no latency comparison row with gate false in %q", rows)
+	}
+
+	// The same change with latency gated fails the run.
+	gated := pairSides("latency gated", base, head)
+	gated.Benchmark.Metrics.Throughput = nil
+	r = judge(ModeCompare, false, gated)
+	if c := r.Suites[0].Benchmarks[0].Commands[0]; c.Result != ResultRegression || r.Summary.ExitCode != exitcode.Failed || r.Summary.NotGated.Total() != 0 {
+		t.Fatalf("gated: result %s, summary %+v", c.Result, r.Summary)
+	}
+}
+
+// TestFailOnInconclusiveIgnoresNotGated: --fail-on-inconclusive applies to
+// gated comparisons only.
+func TestFailOnInconclusiveIgnoresNotGated(t *testing.T) {
+	t.Parallel()
+	noisy := func(name string, gate bool) runner.BenchmarkResult {
+		base := runResult(name, "", map[string][]time.Duration{"a": samples(100*time.Millisecond, 20, 0.8)}, "a")
+		head := runResult(name, "", map[string][]time.Duration{"a": samples(100*time.Millisecond, 20, 0.8)}, "a")
+		b := pairSides(name, base, head)
+		b.Benchmark.Regression.MaxCV = 0.1
+		b.Benchmark.Regression.Latency.Gate = gate
+		return b
+	}
+	r := judge(ModeCompare, true, noisy("info", false))
+	if r.Summary.ExitCode != exitcode.OK || r.Summary.Inconclusive != 0 || r.Summary.NotGated.Inconclusive != 1 {
+		t.Fatalf("not gated inconclusive with --fail-on-inconclusive: %+v", r.Summary)
+	}
+	r = judge(ModeCompare, true, noisy("gated", true))
+	if r.Summary.ExitCode != exitcode.Failed || r.Summary.Inconclusive != 1 {
+		t.Fatalf("gated inconclusive with --fail-on-inconclusive: %+v", r.Summary)
+	}
+}
+
+// TestSkippedChecksAreCounted: a budget and a comparison skipped for an
+// unsupported metric do not fail the run, but are counted and shown.
+func TestSkippedChecksAreCounted(t *testing.T) {
+	t.Parallel()
+	skipped := pairSides("s", metricsResult("x", 20, 100*time.Millisecond, 100*time.Millisecond, 10*time.Millisecond, 32<<20, 1000),
+		metricsResult("x", 20, 100*time.Millisecond, 100*time.Millisecond, 10*time.Millisecond, 32<<20, 1000))
+	skipped.Benchmark.Metrics.Unsupported = config.UnsupportedSkip
+	skipped.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.PeakRSS, "max", "<= 1GiB")}
+	for _, side := range skipped.Commands[0].Sides {
+		side.Unsupported = map[metric.Group]string{metric.GroupMemory: "no"}
+		side.PeakRSS = nil
+	}
+	r := judge(ModeCompare, false, skipped)
+	if r.Summary.Skipped != 2 || r.Summary.ExitCode != exitcode.OK {
+		t.Fatalf("summary = %+v", r.Summary)
+	}
+	var out bytes.Buffer
+	_ = WriteTerminal(&out, r, TerminalOptions{})
+	if !strings.Contains(out.String(), "2 checks skipped (unsupported metric)") || !strings.Contains(out.String(), "SKIPPED") {
+		t.Errorf("terminal:\n%s", out.String())
+	}
+}
+
+// TestMetricCollectionIsRecorded: every metric says where its values come
+// from and how the processes of the tree are combined.
+func TestMetricCollectionIsRecorded(t *testing.T) {
+	t.Parallel()
+	r := judge(ModeRun, false, metricsResult("all", 10, 100*time.Millisecond, 120*time.Millisecond, 30*time.Millisecond, 64<<20, 1000))
+	ms := r.Suites[0].Benchmarks[0].Commands[0].Head.Metrics
+	cpu, mem := proc.CPUCollection(), proc.MemoryCollection()
+	for name, want := range map[string][2]string{
+		"latency":         {SourceWallClock, proc.AggregationNone},
+		"throughput":      {SourceDeclaredWork, proc.AggregationNone},
+		"cpu_total":       {cpu.Source, cpu.ProcessAggregation},
+		"cpu_utilization": {cpu.Source, cpu.ProcessAggregation},
+		"peak_rss":        {mem.Source, mem.ProcessAggregation},
+	} {
+		if got := [2]string{ms[name].Source, ms[name].ProcessAggregation}; got != want {
+			t.Errorf("%s collection = %v, want %v", name, got, want)
+		}
+	}
+	if mem.ProcessAggregation == proc.AggregationMaxProcess {
+		var out bytes.Buffer
+		_ = WriteTerminal(&out, r, TerminalOptions{})
+		if !strings.Contains(out.String(), "not the combined memory of processes running at the same time") {
+			t.Errorf("terminal does not explain how peak RSS combines processes:\n%s", out.String())
+		}
 	}
 }
