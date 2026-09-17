@@ -141,6 +141,52 @@ would, and collecting it adds no work while the command runs. `ru_maxrss` is
 reported in kilobytes on Linux and the BSDs and in bytes on macOS; himorime
 converts both to bytes.
 
+### The floor
+
+On Linux a command's peak RSS cannot be lower than the peak RSS of the
+process that started it: when the command starts, the kernel counts that
+process's peak as part of the command's. A command started by himorime
+directly would never be reported below himorime's own peak, about 10MiB and
+growing with every allocation himorime makes. himorime treats macOS and the
+BSDs the same way, since `ru_maxrss` there may carry the starting process's
+peak too.
+
+So when a benchmark measures memory, himorime does not start the command
+itself. It starts it from a spawner: a copy of the himorime executable that
+runs next to himorime for as long as himorime runs, does nothing but start
+commands, and stays at a few MiB. The spawner measures latency around the
+start and the exit exactly as himorime does, and stops the process tree on a
+timeout, an interrupt, or when himorime itself goes away. On Linux it also
+resets its own recorded peak right before each start, so the floor is its
+current RSS rather than the largest it ever was. If the spawner cannot be
+started, himorime starts the command itself, and the floor is its own peak.
+Benchmarks that do not measure memory start commands directly: the spawner
+costs about a millisecond once and tens of microseconds per run, never inside
+the measured interval.
+
+What remains is the floor: the peak RSS of the process that started a run,
+read right before the start. Every report records it. `metrics.peak_rss` in
+JSON has `floor`, the largest floor of the runs in bytes, and
+`samples_at_floor`, the runs whose peak RSS was at or below their floor. For
+those runs the command's real peak is unknown, only that it is at most the
+floor. Statistics are still computed from the raw values.
+
+- Tables show a statistic at or below the floor as `<= 6.30MiB`, the floor,
+  with a sentence under the table.
+- In a comparison, a side whose compared statistic is at or below its floor
+  is compared as if it used the whole floor. A regression from a base at its
+  floor, or an improvement to a head at its floor, is still reported, because
+  the real change can only be larger. Any other verdict is inconclusive: "the
+  peak RSS is at or below the measurement floor".
+- A budget on a peak RSS at or below the floor passes when it is an upper
+  bound (`<` or `<=`) that the floor itself meets, since the real value is
+  lower still. Otherwise it is `skipped` with the same reason.
+
+To measure a command smaller than the floor, measure a larger input, or use
+a tool that reads the command's memory from inside it. Windows reads the peak
+working set of the started process itself, which the process that started it
+does not raise: its floor is always 0.
+
 ## Process tree
 
 CPU time and peak RSS cover the process himorime starts and its descendants.
@@ -196,7 +242,10 @@ Latency is measured around the process only. CPU time and peak RSS come from
 statistics the operating system already keeps for an exited process, read
 after the measured interval ends; nothing samples the command while it runs.
 On Windows collection is two system calls per run, also after the measured
-interval.
+interval. On other platforms, a benchmark that measures memory starts its
+commands from the spawner described under [The floor](#the-floor): about a
+millisecond to start it once, and two messages per run, before and after the
+measured interval.
 
 The `collector overhead` benchmark in `bench/` measures what collection costs
 end to end: the same small suite run by himorime with latency only and with

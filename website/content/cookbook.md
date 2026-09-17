@@ -272,6 +272,7 @@ A `peak rss` comparison table in MiB. When the head holds clearly more memory th
 - Peak RSS is the largest resident set size of any single process in the tree, as the operating system recorded it. It is not the heap size or the allocation count of a language runtime, and it is not the sum of processes running at the same time.
 - Memory samples are often identical run to run, so the comparison is usually decisive. `min_difference` stops a few hundred KiB of allocator noise from failing CI.
 - A budget on `max` is a hard ceiling for the worst run; a budget on `median` tolerates an outlier.
+- On Unix a peak RSS cannot be measured below a floor of a few MiB, the memory of the process that starts the command. A streaming base at the floor still shows a regression when the head clearly exceeds the floor; see [The floor](/metrics/#the-floor).
 
 Example: [`examples/memory-regression`](https://github.com/nao1215/himorime/tree/main/examples/memory-regression)
 
