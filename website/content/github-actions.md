@@ -47,29 +47,15 @@ jobs:
 
 `himorime ci`:
 
-1. Finds the base commit: `--against`, else `$HIMORIME_BASE_REF`, else the event
-   payload — `pull_request.base.sha` for `pull_request` (and pull request
-   reviews), `merge_group.base_sha` for merge queues, `before` for `push`.
-2. Checks the base out into a temporary worktree and compares it with the
-   checked-out head, exactly like `himorime compare`.
-3. Writes the table to the log without colors, and appends the Markdown
-   summary to `$GITHUB_STEP_SUMMARY`.
-4. Prints an annotation for every missed budget, regression, inconclusive
-   comparison and failure, so they show on the pull request. A regression of a
-   metric with `gate: false` is a notice, not an error.
-5. Exits 1 on a confirmed regression of a gated metric or an exceeded budget,
-   0 otherwise. Add `--fail-on-inconclusive` to fail on inconclusive gated
-   comparisons too. See
-   [What fails the run](/regression-detection/#what-fails-the-run).
+1. Finds the base commit: `--against`, else `$HIMORIME_BASE_REF`, else the event payload — `pull_request.base.sha` for `pull_request` (and pull request reviews), `merge_group.base_sha` for merge queues, `before` for `push`.
+2. Checks the base out into a temporary worktree and compares it with the checked-out head, exactly like `himorime compare`.
+3. Writes the table to the log without colors, and appends the Markdown summary to `$GITHUB_STEP_SUMMARY`.
+4. Prints an annotation for every missed budget, regression, inconclusive comparison and failure, so they show on the pull request. A regression of a metric with `gate: false` is a notice, not an error.
+5. Exits 1 on a confirmed regression of a gated metric or an exceeded budget, 0 otherwise. Add `--fail-on-inconclusive` to fail on inconclusive gated comparisons too. See [What fails the run](/regression-detection/#what-fails-the-run).
 
-On the pull request that adds the suite, the base revision has no suite
-directory yet. The job passes, and the log, the job summary and a notice
-annotation say the suite is new in this revision; comparisons start with the
-next pull request.
+On the pull request that adds the suite, the base revision has no suite directory yet. The job passes, and the log, the job summary and a notice annotation say the suite is new in this revision; comparisons start with the next pull request.
 
-The same suite file and the same command work on a laptop: `himorime compare
---against main` does steps 1 to 3 and 5 against a branch you name, and
-`himorime run` checks the budgets without a base revision.
+The same suite file and the same command work on a laptop: `himorime compare --against main` does steps 1 to 3 and 5 against a branch you name, and `himorime run` checks the budgets without a base revision.
 
 ## Why did the job fail?
 
@@ -80,34 +66,23 @@ The same suite file and the same command work on a laptop: `himorime compare
 | `6` | `himorime: exit 6: a requested metric could not be measured; ...` | `himorime: metric could not be measured` | The platform cannot measure a requested metric, or did not report it. |
 | `2`, `3` | the validation or usage error | none | The suite or the command line is wrong; nothing ran. |
 
-To keep performance advisory while still failing when the measurement breaks,
-accept only status 1 in the step: `himorime ci || [ $? -eq 1 ]`. The job summary
-and annotations still report the regression.
+To keep performance advisory while still failing when the measurement breaks, accept only status 1 in the step: `himorime ci || [ $? -eq 1 ]`. The job summary and annotations still report the regression.
 
 ## Security
 
-- The workflow needs only `contents: read`. himorime never calls the GitHub API,
-  never comments on the pull request, and needs no secret.
-- It runs on `pull_request`, so a pull request from a fork runs with a
-  read-only token and no secrets. himorime refuses to run for
-  `pull_request_target`, which would execute the pull request's commands with
-  the base repository's secrets and a write token.
-- The suite executes commands. On `pull_request`, those commands come from the
-  pull request itself, like its tests do; that is why the job must not have
-  secrets or write access.
+- The workflow needs only `contents: read`. himorime never calls the GitHub API, never comments on the pull request, and needs no secret.
+- It runs on `pull_request`, so a pull request from a fork runs with a read-only token and no secrets. himorime refuses to run for `pull_request_target`, which would execute the pull request's commands with the base repository's secrets and a write token.
+- The suite executes commands. On `pull_request`, those commands come from the pull request itself, like its tests do; that is why the job must not have secrets or write access.
 
 ## Checkout
 
-The base commit must exist in the clone. Use `fetch-depth: 0`, or fetch the
-base explicitly. With the default shallow clone, himorime stops with:
+The base commit must exist in the clone. Use `fetch-depth: 0`, or fetch the base explicitly. With the default shallow clone, himorime stops with:
 
 ```text
 himorime ci: revision "…" is not a commit in …; fetch it first (in GitHub Actions, check out with fetch-depth: 0)
 ```
 
-For a `pull_request` event, `actions/checkout` checks out the merge commit of
-the pull request into its base branch, so the head measured is what would be
-merged.
+For a `pull_request` event, `actions/checkout` checks out the merge commit of the pull request into its base branch, so the head measured is what would be merged.
 
 ## Keeping the report
 
@@ -122,8 +97,7 @@ merged.
 
 ## Other CI systems
 
-Nothing in himorime depends on GitHub except reading the event payload. On any
-CI, name the base yourself:
+Nothing in himorime depends on GitHub except reading the event payload. On any CI, name the base yourself:
 
 ```console
 $ himorime ci --against origin/main
@@ -132,12 +106,4 @@ $ HIMORIME_BASE_REF=origin/main himorime ci
 
 ## Runner noise
 
-Hosted runners are shared virtual machines. Expect inconclusive results for
-small tolerances on fast commands, and read
-[Regression detection](/regression-detection/) before tightening
-`max_percent`. Budgets are best kept generous in CI, as a guard against
-order-of-magnitude slowdowns; set `min_difference` so tiny absolute changes
-never fail a pull request, and `gate: false` on a metric you want reported but
-not enforced, such as latency when CPU time is the gate. The recipe
-[Cope with noise on GitHub-hosted runners](/cookbook/#cope-with-noise-on-github-hosted-runners)
-has a runnable example.
+Hosted runners are shared virtual machines. Expect inconclusive results for small tolerances on fast commands, and read [Regression detection](/regression-detection/) before tightening `max_percent`. Budgets are best kept generous in CI, as a guard against order-of-magnitude slowdowns; set `min_difference` so tiny absolute changes never fail a pull request, and `gate: false` on a metric you want reported but not enforced, such as latency when CPU time is the gate. The recipe [Cope with noise on GitHub-hosted runners](/cookbook/#cope-with-noise-on-github-hosted-runners) has a runnable example.

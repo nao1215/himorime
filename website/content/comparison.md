@@ -3,8 +3,7 @@ title: Comparison
 description: Where himorime sits next to hyperfine, Bencher, CodSpeed and github-action-benchmark, and when to use which.
 ---
 
-Benchmarking tools answer different questions at different layers. Several of
-them work well together.
+Benchmarking tools answer different questions at different layers. Several of them work well together.
 
 | Tool | What it is | Use it when |
 |---|---|---|
@@ -17,45 +16,29 @@ them work well together.
 
 ## himorime and hyperfine
 
-Both measure end-to-end process time. hyperfine is built for the terminal: you
-name commands on the command line and get a detailed measurement. himorime is
-built for the repository: the commands, inputs, hooks, budgets and tolerances
-live in a reviewed file; a comparison builds two revisions and interleaves
-them; the result is a verdict with an exit status designed for CI.
+Both measure end-to-end process time. hyperfine is built for the terminal: you name commands on the command line and get a detailed measurement. himorime is built for the repository: the commands, inputs, hooks, budgets and tolerances live in a reviewed file; a comparison builds two revisions and interleaves them; the result is a verdict with an exit status designed for CI.
 
 If you only need a one-off measurement, hyperfine is the better tool.
 
 ## himorime and hosted services
 
-himorime keeps no history and runs no server. Each run compares two revisions
-measured side by side in the same job, which works without storing results
-and without trusting that yesterday's runner was the same machine as today's.
-If you also want trends over months, export `--format json` and feed a service
-that stores history.
+himorime keeps no history and runs no server. Each run compares two revisions measured side by side in the same job, which works without storing results and without trusting that yesterday's runner was the same machine as today's. If you also want trends over months, export `--format json` and feed a service that stores history.
 
 ## Layers
 
-- In-process benchmarks of functions (`go test -bench`, criterion) measure
-  code paths without process start-up. They are the right tool below the
-  command line.
-- himorime measures the command line as users run it: start-up, I/O, the whole
-  process tree.
+- In-process benchmarks of functions (`go test -bench`, criterion) measure code paths without process start-up. They are the right tool below the command line.
+- himorime measures the command line as users run it: start-up, I/O, the whole process tree.
 - History and dashboards belong to a service.
 
 ## What himorime does not do
 
-These are deliberate non-goals, so the tool stays small and its results stay
-easy to trust:
+These are deliberate non-goals, so the tool stays small and its results stay easy to trust:
 
 - HTTP load testing, distributed or concurrent load generation.
-- Monitoring long-running daemons or services, system-wide CPU or memory, or
-  network service SLOs.
-- Continuous profiling, heap allocation or garbage collection statistics,
-  hardware counters and energy measurement.
-- A hosted service, an API, a web UI, a results database or history
-  dashboards.
+- Monitoring long-running daemons or services, system-wide CPU or memory, or network service SLOs.
+- Continuous profiling, heap allocation or garbage collection statistics, hardware counters and energy measurement.
+- A hosted service, an API, a web UI, a results database or history dashboards.
 - CPU profiling or flame graphs.
 - Orchestrating Docker or Kubernetes environments.
 - Asserting on a command's output; use a test tool for that.
-- Commenting on pull requests; the job summary and exit status carry the
-  result.
+- Commenting on pull requests; the job summary and exit status carry the result.

@@ -4,9 +4,7 @@ description: Install himorime with go install, Homebrew, GitHub Releases or the 
 toc: true
 ---
 
-himorime is a single binary with no runtime dependencies. `git` is needed for
-`himorime compare` and `himorime ci`; `himorime run` uses it only to record
-the commit in the report, and works without it.
+himorime is a single binary with no runtime dependencies. `git` is needed for `himorime compare` and `himorime ci`; `himorime run` uses it only to record the commit in the report, and works without it.
 
 ## go install
 
@@ -28,9 +26,7 @@ The cask installs the shell completions for bash, zsh and fish.
 
 ## GitHub Actions
 
-[setup-himorime](https://github.com/nao1215/setup-himorime) installs a
-prebuilt release on Linux, macOS and Windows runners and verifies it against
-`checksums.txt`:
+[setup-himorime](https://github.com/nao1215/setup-himorime) installs a prebuilt release on Linux, macOS and Windows runners and verifies it against `checksums.txt`:
 
 ```yaml
 - uses: nao1215/setup-himorime@v0
@@ -41,10 +37,7 @@ See [GitHub Actions](/github-actions/) for a complete workflow.
 
 ## GitHub Releases
 
-Every release on [GitHub Releases](https://github.com/nao1215/himorime/releases)
-carries archives for Linux, macOS and Windows on amd64 and arm64, `.deb`,
-`.rpm` and `.apk` packages for Linux, shell completions, checksums, SBOMs,
-a signature and build provenance.
+Every release on [GitHub Releases](https://github.com/nao1215/himorime/releases) carries archives for Linux, macOS and Windows on amd64 and arm64, `.deb`, `.rpm` and `.apk` packages for Linux, shell completions, checksums, SBOMs, a signature and build provenance.
 
 ```console
 $ VERSION=0.1.0
@@ -53,9 +46,7 @@ $ tar -xzf "himorime_${VERSION}_linux_amd64.tar.gz" himorime
 $ ./himorime version
 ```
 
-Windows archives are `.zip` files and contain `himorime.exe`. The archives also
-hold completion scripts under `completions/`; the Linux packages install them
-into the standard bash, zsh and fish locations.
+Windows archives are `.zip` files and contain `himorime.exe`. The archives also hold completion scripts under `completions/`; the Linux packages install them into the standard bash, zsh and fish locations.
 
 ## Shell completion
 
@@ -65,15 +56,11 @@ $ himorime completion zsh > "${fpath[1]}/_himorime"
 $ himorime completion fish > ~/.config/fish/completions/himorime.fish
 ```
 
-In PowerShell, add `himorime completion powershell | Out-String | Invoke-Expression`
-to your profile.
+In PowerShell, add `himorime completion powershell | Out-String | Invoke-Expression` to your profile.
 
 ## Verify a release
 
-Every release is built by GoReleaser in GitHub Actions from the tag.
-`checksums.txt` lists the SHA-256 of every archive and package. It is signed
-with [cosign](https://github.com/sigstore/cosign) keyless signing, so the
-signature proves it was produced by the release workflow of this repository.
+Every release is built by GoReleaser in GitHub Actions from the tag. `checksums.txt` lists the SHA-256 of every archive and package. It is signed with [cosign](https://github.com/sigstore/cosign) keyless signing, so the signature proves it was produced by the release workflow of this repository.
 
 1. Check the file you downloaded against the checksums:
 
@@ -99,5 +86,4 @@ signature proves it was produced by the release workflow of this repository.
    $ gh attestation verify "himorime_${VERSION}_linux_amd64.tar.gz" --repo nao1215/himorime
    ```
 
-Each archive has an SPDX SBOM next to it, `<archive>.sbom.json`, listing the
-Go modules compiled into the binary.
+Each archive has an SPDX SBOM next to it, `<archive>.sbom.json`, listing the Go modules compiled into the binary.

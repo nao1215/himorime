@@ -4,23 +4,17 @@ description: The himorime.yaml suite format, version 1. Every key, its default, 
 toc: true
 ---
 
-A suite is a YAML file, `himorime.yaml` by default. `himorime run`, `compare`,
-`ci`, `list` and `validate` take files and directories as arguments; a
-directory contributes its `himorime.yaml` and every `*.himorime.yaml` in it.
+A suite is a YAML file, `himorime.yaml` by default. `himorime run`, `compare`, `ci`, `list` and `validate` take files and directories as arguments; a directory contributes its `himorime.yaml` and every `*.himorime.yaml` in it.
 
 ## Editor support
 
-The format is described by a JSON Schema. Put this comment on the first line
-and editors using the YAML language server (VS Code with the YAML extension,
-Neovim, JetBrains IDEs) complete keys and flag mistakes as you type:
+The format is described by a JSON Schema. Put this comment on the first line and editors using the YAML language server (VS Code with the YAML extension, Neovim, JetBrains IDEs) complete keys and flag mistakes as you type:
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
 ```
 
-himorime validates every suite against the same schema, embedded in the
-binary, before it looks at anything else. What the editor accepts and what
-himorime accepts cannot drift apart; a test in the repository keeps them equal.
+himorime validates every suite against the same schema, embedded in the binary, before it looks at anything else. What the editor accepts and what himorime accepts cannot drift apart; a test in the repository keeps them equal.
 
 ## A complete example
 
@@ -75,18 +69,8 @@ benchmarks:
 
 `command` is either a list of arguments or, with `shell: true`, a string.
 
-- A list runs the program directly with those arguments: no shell, no word
-  splitting, no globbing, the same on every operating system. This is the
-  default and the recommended form.
-- A string with `shell: true` runs through `/bin/sh -c` on Unix and
-  `cmd.exe /d /s /c` on Windows. Every variable substituted into the string
-  is quoted for that shell first, so a path or an environment value cannot
-  become shell syntax. On Windows, a value holding `"`, `%` or a line break is
-  refused, because `cmd.exe` cannot quote it, and so is a value ending in `\`.
-Write variables without quotes of your own, such as `cat ${workdir}/in.txt`:
-a variable inside quotes you wrote is a validation error, because two layers
-of quoting would change what the inner quotes mean. The measured time includes
-  starting the shell; himorime does not subtract it.
+- A list runs the program directly with those arguments: no shell, no word splitting, no globbing, the same on every operating system. This is the default and the recommended form.
+- A string with `shell: true` runs through `/bin/sh -c` on Unix and `cmd.exe /d /s /c` on Windows. Every variable substituted into the string is quoted for that shell first, so a path or an environment value cannot become shell syntax. On Windows, a value holding `"`, `%` or a line break is refused, because `cmd.exe` cannot quote it, and so is a value ending in `\`. Write variables without quotes of your own, such as `cat ${workdir}/in.txt`: a variable inside quotes you wrote is a validation error, because two layers of quoting would change what the inner quotes mean. The measured time includes starting the shell; himorime does not subtract it.
 
 A string without `shell: true`, or a list with it, is rejected.
 
@@ -95,27 +79,15 @@ A string without `shell: true`, or a list with it, is rejected.
 Each benchmark runs a number of unmeasured warmup runs, then measured runs.
 
 - With `runs`, every command runs exactly that many times.
-- Without `runs`, himorime measures adaptively: it keeps going until every
-  command has at least `min_runs` samples and at least `min_time` of total
-  measured time, and stops at `max_runs` regardless. In a revision comparison
-  it also keeps going until every compared command has
-  `regression.min_samples` samples on each revision, because fewer could only
-  be inconclusive; a plain `himorime run` ignores `min_samples`.
+- Without `runs`, himorime measures adaptively: it keeps going until every command has at least `min_runs` samples and at least `min_time` of total measured time, and stops at `max_runs` regardless. In a revision comparison it also keeps going until every compared command has `regression.min_samples` samples on each revision, because fewer could only be inconclusive; a plain `himorime run` ignores `min_samples`.
 
-Commands of one benchmark run interleaved: each round runs every command
-once, in an order shuffled with the seed (`--seed`, printed in every report).
-In a revision comparison the base and head builds of a command are
-interleaved the same way. A slow period on the machine therefore lands on
-all commands instead of on whichever ran last.
+Commands of one benchmark run interleaved: each round runs every command once, in an order shuffled with the seed (`--seed`, printed in every report). In a revision comparison the base and head builds of a command are interleaved the same way. A slow period on the machine therefore lands on all commands instead of on whichever ran last.
 
-`--runs` and `--warmup` on the command line override the suite, which is
-handy for a quick smoke run.
+`--runs` and `--warmup` on the command line override the suite, which is handy for a quick smoke run.
 
 ## Metrics, budgets and tolerances
 
-Latency is always measured. `metrics` switches on throughput, CPU time and
-peak RSS; see [Metrics](/metrics/) for what each one means and covers on
-each platform.
+Latency is always measured. `metrics` switches on throughput, CPU time and peak RSS; see [Metrics](/metrics/) for what each one means and covers on each platform.
 
 ```yaml
 metrics:
@@ -127,15 +99,9 @@ metrics:
   unsupported: fail        # or skip
 ```
 
-`cpu`, `memory` and `unsupported` can be set under `defaults.metrics` and
-overridden per benchmark (`cpu: false` turns an inherited setting off).
-Throughput is declared per benchmark, because its work belongs to the
-benchmark's input.
+`cpu`, `memory` and `unsupported` can be set under `defaults.metrics` and overridden per benchmark (`cpu: false` turns an inherited setting off). Throughput is declared per benchmark, because its work belongs to the benchmark's input.
 
-A budget is an absolute limit on one aggregation of one metric of one command,
-checked on every run of `run`, `compare` and `ci`. It is keyed by command name,
-then metric, then aggregation: `min`, `max`, `mean`, `median`, or a percentile
-from `p1` to `p99.9`.
+A budget is an absolute limit on one aggregation of one metric of one command, checked on every run of `run`, `compare` and `ci`. It is keyed by command name, then metric, then aggregation: `min`, `max`, `mean`, `median`, or a percentile from `p1` to `p99.9`.
 
 ```yaml
 budget:
@@ -152,17 +118,9 @@ budget:
       peak_rss: {max: "<= 64MiB"}
 ```
 
-The operator follows the metric's direction. Latency, CPU time and peak RSS
-are better when lower, so their budgets are upper bounds (`<`, `<=`).
-Throughput is better when higher, so its budgets are lower bounds (`>`,
-`>=`). CPU utilization has no better direction and takes either. A budget on a
-metric the benchmark does not measure is a validation error.
+The operator follows the metric's direction. Latency, CPU time and peak RSS are better when lower, so their budgets are upper bounds (`<`, `<=`). Throughput is better when higher, so its budgets are lower bounds (`>`, `>=`). CPU utilization has no better direction and takes either. A budget on a metric the benchmark does not measure is a validation error.
 
-`regression` sets how a comparison judges each metric. `confidence`,
-`min_samples`, `max_cv` and `commands` apply to every metric. `latency`,
-`throughput`, `cpu` (total CPU time) and `memory` (peak RSS) each take the
-same four keys, and each metric is compared whenever the benchmark measures
-it:
+`regression` sets how a comparison judges each metric. `confidence`, `min_samples`, `max_cv` and `commands` apply to every metric. `latency`, `throughput`, `cpu` (total CPU time) and `memory` (peak RSS) each take the same four keys, and each metric is compared whenever the benchmark measures it:
 
 ```yaml
 regression:
@@ -173,47 +131,27 @@ regression:
 ```
 
 - `metric` is the compared statistic, `median` or `mean`.
-- `max_percent` is the tolerated degradation in the metric's worse direction:
-  an increase for latency, CPU time and peak RSS, a decrease for throughput.
+- `max_percent` is the tolerated degradation in the metric's worse direction: an increase for latency, CPU time and peak RSS, a decrease for throughput.
 - `min_difference` is the smallest absolute change that can count at all.
-- `gate` (default `true`) says whether the metric's verdict decides the
-  result and the exit status. With `gate: false` the metric is still compared
-  and reported with its verdict, marked as not gated, but a regression or an
-  inconclusive result never fails the run.
+- `gate` (default `true`) says whether the metric's verdict decides the result and the exit status. With `gate: false` the metric is still compared and reported with its verdict, marked as not gated, but a regression or an inconclusive result never fails the run.
 
-See [Regression detection](/regression-detection/) for how budgets, gates,
-`--fail-on-inconclusive` and unsupported metrics decide the exit status.
+See [Regression detection](/regression-detection/) for how budgets, gates, `--fail-on-inconclusive` and unsupported metrics decide the exit status.
 
 ## Hooks
 
-- `setup` runs once per benchmark, before warmup. In a comparison it runs
-  once for each revision, with that revision's `${artifact}`, `${root}` and
-  its own `${workdir}`.
-- `prepare_each` runs before every warmup and measured run. It is not
-  measured. Use it to reset state, such as deleting a cache to measure a cold
-  start.
-- `cleanup` runs after the benchmark, whether it passed, a command failed,
-  setup failed, or the run was interrupted with Ctrl+C.
+- `setup` runs once per benchmark, before warmup. In a comparison it runs once for each revision, with that revision's `${artifact}`, `${root}` and its own `${workdir}`.
+- `prepare_each` runs before every warmup and measured run. It is not measured. Use it to reset state, such as deleting a cache to measure a cold start.
+- `cleanup` runs after the benchmark, whether it passed, a command failed, setup failed, or the run was interrupted with Ctrl+C.
 
-After Ctrl+C, running commands are stopped and cleanup runs; interrupt a
-second time to quit at once, skipping the remaining cleanup.
+After Ctrl+C, running commands are stopped and cleanup runs; interrupt a second time to quit at once, skipping the remaining cleanup.
 
-A process a command or hook leaves running in the background is stopped when
-that command or hook exits, on every platform. himorime measures commands, it
-does not manage services: a hook cannot start a server that outlives it.
+A process a command or hook leaves running in the background is stopped when that command or hook exits, on every platform. himorime measures commands, it does not manage services: a hook cannot start a server that outlives it.
 
-A failing `setup` or `cleanup` fails the benchmark. A failing `prepare_each`
-fails the command it prepared. Hook output is not shown unless the hook fails,
-in which case the tail of its standard error is.
+A failing `setup` or `cleanup` fails the benchmark. A failing `prepare_each` fails the command it prepared. Hook output is not shown unless the hook fails, in which case the tail of its standard error is.
 
 ## Reports
 
-`report.outputs` lists report files written after every run, relative to the
-suite file. A Markdown output with `section` does not replace the file: it
-updates the section of that name in an existing page, between the lines
-`<!-- himorime:begin NAME -->` and `<!-- himorime:end NAME -->`, and keeps the
-rest of the page. `report.versions` names the tools whose versions every
-report records:
+`report.outputs` lists report files written after every run, relative to the suite file. A Markdown output with `section` does not replace the file: it updates the section of that name in an existing page, between the lines `<!-- himorime:begin NAME -->` and `<!-- himorime:end NAME -->`, and keeps the rest of the page. `report.versions` names the tools whose versions every report records:
 
 ```yaml
 report:
@@ -228,31 +166,17 @@ report:
     jo: [jo, -v]
 ```
 
-- A section name uses lowercase letters, digits and `-`. `section` is only
-  allowed with `format: markdown`.
-- Each version command is a list of arguments, run once without a shell in the
-  suite directory of the working tree, before anything is built or measured.
-  It inherits himorime's environment with `LC_ALL=C`, so the version line does
-  not change language with the locale. It may use `${root}`, `${head_root}`,
-  `${exe}` and `${env:NAME}`, and has 30 seconds. The first non-empty line it
-  prints on standard output, or else on standard error, is recorded.
-- A version command that fails, times out or prints nothing fails the suite
-  like a failed setup, and the run exits 4.
+- A section name uses lowercase letters, digits and `-`. `section` is only allowed with `format: markdown`.
+- Each version command is a list of arguments, run once without a shell in the suite directory of the working tree, before anything is built or measured. It inherits himorime's environment with `LC_ALL=C`, so the version line does not change language with the locale. It may use `${root}`, `${head_root}`, `${exe}` and `${env:NAME}`, and has 30 seconds. The first non-empty line it prints on standard output, or else on standard error, is recorded.
+- A version command that fails, times out or prints nothing fails the suite like a failed setup, and the run exits 4.
 
-See [Reports](/reports/#publish-results-in-documentation) for what a section
-looks like.
+See [Reports](/reports/#publish-results-in-documentation) for what a section looks like.
 
 ## Standard input and output
 
-`stdin` is a fixture path (`stdin: testdata/input.txt`), `stdin: {file: ...}`,
-or inline text (`stdin: {content: "..."}`). The file is reopened for every
-run, so every run reads it from the first byte.
+`stdin` is a fixture path (`stdin: testdata/input.txt`), `stdin: {file: ...}`, or inline text (`stdin: {content: "..."}`). The file is reopened for every run, so every run reads it from the first byte.
 
-A command's standard output and standard error are discarded by default and
-never mixed with himorime's own report. Set `stdout` or `stderr` to a path
-inside `${workdir}` to keep the latest run's output. When a run fails, the
-last lines of its standard error are shown in the report either way, with
-secrets masked.
+A command's standard output and standard error are discarded by default and never mixed with himorime's own report. Set `stdout` or `stderr` to a path inside `${workdir}` to keep the latest run's output. When a run fails, the last lines of its standard error are shown in the report either way, with secrets masked.
 
 ## Variables
 
@@ -270,16 +194,11 @@ Commands, `cwd`, `env` values, `stdin` and hooks may use these variables:
 | `$${` | A literal `${`. |
 <!-- END GENERATED: variables -->
 
-An unknown variable is a validation error. `${artifact}` without a build and
-`${workdir}` inside the build are validation errors too.
+An unknown variable is a validation error. `${artifact}` without a build and `${workdir}` inside the build are validation errors too.
 
 ## Paths
 
-Every relative path of a suite is relative to `${root}`, the directory holding
-the suite file inside the tree being measured. In a plain run that is the
-directory of the suite file. In a comparison it is that directory in the base
-revision's temporary worktree for the base, and in your working tree for the
-head, so each revision runs its own code:
+Every relative path of a suite is relative to `${root}`, the directory holding the suite file inside the tree being measured. In a plain run that is the directory of the suite file. In a comparison it is that directory in the base revision's temporary worktree for the base, and in your working tree for the head, so each revision runs its own code:
 
 | Setting | Relative to | Default |
 |---|---|---|
@@ -292,10 +211,7 @@ head, so each revision runs its own code:
 | `report.outputs[].path` | the suite file in the working tree | |
 | a relative program of `report.versions` | the directory of the suite file in the working tree | |
 
-`${head_root}` is the same directory inside the working tree, for both
-revisions. Use it when both revisions must read the same file, such as a
-fixture that changed or was added in the working tree, or run the same
-helper:
+`${head_root}` is the same directory inside the working tree, for both revisions. Use it when both revisions must read the same file, such as a fixture that changed or was added in the working tree, or run the same helper:
 
 ```yaml
 benchmarks:
@@ -306,24 +222,14 @@ benchmarks:
         command: [sh, parse.sh]                # each revision's own parse.sh
 ```
 
-A relative path that exists only in the working tree fails the base revision,
-with a hint to use `${head_root}`. The suite directory itself must exist in
-the base revision. A suite with a `build` measures `${artifact}`, which each
-revision builds from its own tree.
+A relative path that exists only in the working tree fails the base revision, with a hint to use `${head_root}`. The suite directory itself must exist in the base revision. A suite with a `build` measures `${artifact}`, which each revision builds from its own tree.
 
-- Paths may start with `${root}`, `${head_root}` or `${workdir}`. Absolute
-  paths, `~`, and `..` after a variable are rejected.
-- After symbolic links are resolved, a path must stay inside the Git
-  repository (or the suite's directory outside Git), the base worktree, or
-  `${workdir}`. `stdout`, `stderr` and report paths may not climb out of their
-  base directory at all.
+- Paths may start with `${root}`, `${head_root}` or `${workdir}`. Absolute paths, `~`, and `..` after a variable are rejected.
+- After symbolic links are resolved, a path must stay inside the Git repository (or the suite's directory outside Git), the base worktree, or `${workdir}`. `stdout`, `stderr` and report paths may not climb out of their base directory at all.
 
 ## Environment
 
-Commands inherit himorime's environment, with `env` from `defaults`, the
-benchmark and the command layered on top, in that order. Reports never
-contain the environment, and command lines are shown as written, before
-`${env:NAME}` is substituted.
+Commands inherit himorime's environment, with `env` from `defaults`, the benchmark and the command layered on top, in that order. Reports never contain the environment, and command lines are shown as written, before `${env:NAME}` is substituted.
 
 ## Defaults
 
@@ -352,8 +258,7 @@ contain the environment, and command lines are shown as written, before
 | `metrics.throughput.work.unit` | `operations (value), bytes (file_size)` |
 <!-- END GENERATED: defaults -->
 
-A benchmark inherits `defaults`; a command inherits its benchmark. The most
-specific value wins.
+A benchmark inherits `defaults`; a command inherits its benchmark. The most specific value wins.
 
 ## Values and units
 
@@ -366,31 +271,19 @@ Every value is typed; himorime never compares a formatted string.
 | Rate | a number, the work unit and `/s`, such as `50MiB/s` or `"1000 records/s"` | throughput budgets, `throughput.min_difference` |
 | Percentage | a number (`10`) or a string with a percent sign (`"10%"`) | `max_percent`, CPU utilization budgets |
 
-A bare number is rejected where a unit is expected, because `10` could mean
-ten of anything. Units are case-sensitive: `64mib` is an error. Durations may
-not exceed `24h`; a budget's limit and a work value must be greater than zero.
+A bare number is rejected where a unit is expected, because `10` could mean ten of anything. Units are case-sensitive: `64mib` is an error. Durations may not exceed `24h`; a budget's limit and a work value must be greater than zero.
 
-A budget is an operator followed by a value, such as `"< 20ms"`,
-`"<= 64MiB"` or `">= 50MiB/s"`. Quote it: YAML reads a leading `<` fine, but a
-leading `>` starts a folded block.
+A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or `">= 50MiB/s"`. Quote it: YAML reads a leading `<` fine, but a leading `>` starts a folded block.
 
 ## Validation
 
 `himorime validate` checks, without running anything:
 
 1. YAML syntax and duplicate keys.
-2. The schema: unknown keys, types, required keys, durations, budgets,
-   percentages, names and path shapes. Every problem is listed at once.
-3. Semantic rules: unique benchmark names, baselines, budgets and
-   `regression.commands` that name real commands, `max_runs` not below
-   `min_runs`, known variables used where they exist, budgets and tolerances
-   only for metrics the benchmark measures, operators in the metric's
-   direction, and throughput units that match the declared work.
+2. The schema: unknown keys, types, required keys, durations, budgets, percentages, names and path shapes. Every problem is listed at once.
+3. Semantic rules: unique benchmark names, baselines, budgets and `regression.commands` that name real commands, `max_runs` not below `min_runs`, known variables used where they exist, budgets and tolerances only for metrics the benchmark measures, operators in the metric's direction, and throughput units that match the declared work.
 
-`himorime compare` and `himorime ci` additionally refuse a benchmark whose `runs`,
-`max_runs` or `--runs` is below `regression.min_samples`, because such a
-comparison could never be conclusive; adaptive runs of a comparison continue
-until `min_samples`.
+`himorime compare` and `himorime ci` additionally refuse a benchmark whose `runs`, `max_runs` or `--runs` is below `regression.min_samples`, because such a comparison could never be conclusive; adaptive runs of a comparison continue until `min_samples`.
 
 ## Field reference
 
