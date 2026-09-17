@@ -651,14 +651,17 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_user.samples", length: 4}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.samples", length: 4}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.samples", length: 4}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.work.measured_min", gt: 0}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.work.measured_max", gt: 0}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.percentiles.p99", gt: 0}
       - run:
           command: e2ehelper csv-shape out/report.csv
       - assert:
           exit_code: 0
           # A header, 10 statistics of each of 7 metrics, the floor and the
-          # runs at the floor of peak RSS, the relative speed and the budget.
-          stdout: {equals: "rows=75 columns=29\n"}
+          # runs at the floor of peak RSS, the smallest and largest measured
+          # work of throughput, the relative speed and the budget.
+          stdout: {equals: "rows=77 columns=29\n"}
       - assert:
           file:
             path: out/report.csv
@@ -666,6 +669,8 @@ scenarios:
               - "suite,benchmark,command,result,record,side,metric,unit,scope,source,process_aggregation,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,gate,reason,error_kind,error_message\n"
               - "reports,all metrics,app,pass,stat,head,peak_rss,bytes,process_tree,"
               - "reports,all metrics,app,pass,stat,head,throughput,records/s,wall_clock,declared_work,none,measured,median,"
+              - "reports,all metrics,app,pass,stat,head,throughput,records/s,wall_clock,declared_work,none,measured,measured_work_min,"
+              - "reports,all metrics,app,pass,stat,head,throughput,records/s,wall_clock,declared_work,none,measured,measured_work_max,"
               - "reports,all metrics,app,pass,budget,head,latency,ns,,,,,p99,"
       - run:
           command: e2ehelper csv-shape out/samples.csv

@@ -214,6 +214,11 @@ func statRows(s Suite, b Benchmark, c Command, side sideMeasurement, def metric.
 			base().set("statistic", "floor").set("value", strconv.FormatInt(ms.Floor, 10)).row,
 			base().set("statistic", "samples_at_floor").set("value", strconv.Itoa(ms.SamplesAtFloor)).row)
 	}
+	if def.Name == metric.Throughput && ms.Work != nil && ms.Work.MeasuredMin != nil {
+		rows = append(rows,
+			base().set("statistic", "measured_work_min").set("value", floatCell(*ms.Work.MeasuredMin)).row,
+			base().set("statistic", "measured_work_max").set("value", floatCell(*ms.Work.MeasuredMax)).row)
+	}
 	return rows
 }
 

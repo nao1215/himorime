@@ -456,3 +456,48 @@ scenarios:
       - assert:
           stdout:
             contains: ["(NOT GATED) marks a metric with gate: false", "not gated: 1 regressed"]
+
+  - name: a fixture of a different size makes the throughput comparison inconclusive
+    steps:
+      - fixture: {file: repo/input.txt, content: "0123456789012345678901234567890123456789\n"}
+      - fixture:
+          file: repo/himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: work}
+            defaults: {warmup: 0, runs: 10, regression: {min_samples: 5}}
+            benchmarks:
+              - name: sleepy
+                metrics:
+                  throughput:
+                    work: {file_size: input.txt}
+                commands:
+                  app: {command: [e2ehelper, sleep, 20ms]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      # The command ignores the file and sleeps for the same time in both
+      # revisions. Only the declared work shrinks, from 41 bytes to 11.
+      - fixture: {file: repo/input.txt, content: "0123456789\n"}
+      - run:
+          command: himorime compare --against main --quiet --format json
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.verdict", equals: "inconclusive"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.reason", matches: "^the work differs between the revisions"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.throughput.work.measured_min", equals: 41}
+              - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.throughput.work.measured_max", equals: 41}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.work.measured_min", equals: 11}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.work.measured_max", equals: 11}
+      - run:
+          command: himorime compare --against main --quiet
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "the work differs between the revisions: 41 bytes in the base, 11 bytes in the head"

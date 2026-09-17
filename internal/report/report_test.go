@@ -15,6 +15,7 @@ import (
 	"github.com/nao1215/himorime/internal/exitcode"
 	"github.com/nao1215/himorime/internal/metric"
 	"github.com/nao1215/himorime/internal/runner"
+	"github.com/nao1215/himorime/internal/stats"
 	"github.com/nao1215/himorime/schema"
 )
 
@@ -760,5 +761,88 @@ func TestRenderSuiteNewInHead(t *testing.T) {
 	}
 	if decoded.Suites[0].NewInHead == nil || *decoded.Suites[0].NewInHead || !*decoded.Suites[1].NewInHead || decoded.Summary.NewSuites == nil || *decoded.Summary.NewSuites != 1 {
 		t.Errorf("json:\n%s", js.String())
+	}
+}
+
+// throughputCompareResult builds a comparison whose throughput divides the
+// work of each side by its latency, as a suite with metrics.throughput.work
+// does.
+func throughputCompareResult(name string, baseWork, headWork float64, base, head []time.Duration) runner.BenchmarkResult {
+	c := cmd("tool")
+	b := config.Benchmark{Name: name, Commands: []config.Command{c}, Regression: regression()}
+	b.Metrics = config.Metrics{Throughput: &config.Work{FileSize: "input.txt", Unit: "bytes"}}
+	work := func(w float64, n int) []float64 {
+		out := make([]float64, n)
+		for i := range out {
+			out[i] = w
+		}
+		return out
+	}
+	return runner.BenchmarkResult{
+		Benchmark: b,
+		Rounds:    len(head),
+		Commands: []runner.CommandResult{{Command: c, Sides: map[string]*runner.Measurement{
+			runner.SideBase: {Samples: base, Work: work(baseWork, len(base))},
+			runner.SideHead: {Samples: head, Work: work(headWork, len(head))},
+		}}},
+	}
+}
+
+func TestMetricSummaryRecordsTheWorkThatWasMeasured(t *testing.T) {
+	t.Parallel()
+	b := throughputCompareResult("work", 1000, 250, samples(10*time.Millisecond, 20, 0.02), samples(10*time.Millisecond, 20, 0.02))
+	r := judge(ModeCompare, false, b)
+	c := r.Suites[0].Benchmarks[0].Commands[0]
+	for _, tc := range []struct {
+		side *Measurement
+		want float64
+		name string
+	}{{c.Base, 1000, "base"}, {c.Head, 250, "head"}} {
+		w := tc.side.Metrics["throughput"].Work
+		if w == nil {
+			t.Fatalf("%s: throughput has no work", tc.name)
+		}
+		if w.MeasuredMin == nil || w.MeasuredMax == nil {
+			t.Fatalf("%s: work = %+v, want the measured amount", tc.name, w)
+		}
+		if *w.MeasuredMin != tc.want || *w.MeasuredMax != tc.want {
+			t.Errorf("%s: measured work = %v..%v, want %v", tc.name, *w.MeasuredMin, *w.MeasuredMax, tc.want)
+		}
+	}
+}
+
+func TestCompareRefusesAVerdictWhenTheWorkDiffers(t *testing.T) {
+	t.Parallel()
+	b := throughputCompareResult("shrunk", 1000, 250, samples(10*time.Millisecond, 20, 0.02), samples(10*time.Millisecond, 20, 0.02))
+	r := judge(ModeCompare, false, b)
+	c := r.Suites[0].Benchmarks[0].Commands[0]
+	tp := c.Comparisons["throughput"]
+	if tp == nil {
+		t.Fatal("no throughput comparison")
+	}
+	if tp.Verdict != string(stats.VerdictInconclusive) {
+		t.Errorf("verdict = %s, want inconclusive; a smaller input is not a slower program", tp.Verdict)
+	}
+	if !strings.Contains(tp.Reason, "1000") || !strings.Contains(tp.Reason, "250") {
+		t.Errorf("reason = %q, want both amounts of work", tp.Reason)
+	}
+	if lat := c.Comparisons["latency"]; lat == nil || lat.Verdict != string(stats.VerdictPass) {
+		t.Errorf("latency comparison = %+v, want it untouched", lat)
+	}
+	if r.Summary.ExitCode != exitcode.OK {
+		t.Errorf("exit code = %d, want 0; the throughput change is not a regression", r.Summary.ExitCode)
+	}
+}
+
+func TestCompareKeepsTheVerdictWhenTheWorkIsTheSame(t *testing.T) {
+	t.Parallel()
+	b := throughputCompareResult("slower", 1000, 1000, samples(10*time.Millisecond, 20, 0.02), samples(20*time.Millisecond, 20, 0.02))
+	r := judge(ModeCompare, false, b)
+	tp := r.Suites[0].Benchmarks[0].Commands[0].Comparisons["throughput"]
+	if tp == nil || tp.Verdict != string(stats.VerdictRegression) {
+		t.Fatalf("throughput comparison = %+v, want a regression", tp)
+	}
+	if r.Summary.ExitCode != exitcode.Failed {
+		t.Errorf("exit code = %d, want 1", r.Summary.ExitCode)
 	}
 }

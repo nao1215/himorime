@@ -256,6 +256,20 @@ func series(m *runner.Measurement, cfg config.Benchmark) map[metric.Name][]float
 	return out
 }
 
+// workRange returns the smallest and largest work of the measured runs. It
+// reports false when no run was measured, so that a report never carries a
+// zero that could be read as an amount of work.
+func workRange(work []float64) (float64, float64, bool) {
+	if len(work) == 0 {
+		return 0, 0, false
+	}
+	lo, hi := work[0], work[0]
+	for _, v := range work[1:] {
+		lo, hi = math.Min(lo, v), math.Max(hi, v)
+	}
+	return lo, hi, true
+}
+
 func metricSummaries(m *runner.Measurement, cfg config.Benchmark, percentiles []metric.Aggregation) map[string]*MetricSummary {
 	values := series(m, cfg)
 	out := map[string]*MetricSummary{}
@@ -278,6 +292,9 @@ func metricSummaries(m *runner.Measurement, cfg config.Benchmark, percentiles []
 			if w.FileSize == "" {
 				v := w.Value
 				ms.Work.Value = &v
+			}
+			if lo, hi, ok := workRange(m.Work); ok {
+				ms.Work.MeasuredMin, ms.Work.MeasuredMax = &lo, &hi
 			}
 		}
 		if !cfg.Metrics.Collects(def.Group) {
@@ -566,7 +583,31 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 			mc.Verdict, mc.Reason = string(stats.VerdictInconclusive), ReasonAtFloor
 		}
 	}
+	if def.Name == metric.Throughput && !base.Work.sameWork(head.Work) {
+		// Throughput is work divided by latency, so a revision that declares
+		// a different amount of work changes it without the command running
+		// any faster or slower. Comparing the two would report the change of
+		// input as a change of the program.
+		mc.Verdict = string(stats.VerdictInconclusive)
+		mc.Reason = reasonWorkDiffers(base.Work, head.Work)
+	}
 	return mc
+}
+
+// reasonWorkDiffers explains a throughput comparison whose sides did
+// different amounts of work.
+func reasonWorkDiffers(base, head *Work) string {
+	return "the work differs between the revisions: " + workAmount(base) + " in the base, " + workAmount(head) + " in the head"
+}
+
+// workAmount renders the work of one side, as a range when it varied between
+// that side's runs.
+func workAmount(w *Work) string {
+	unit := " " + w.Unit
+	if *w.MeasuredMin == *w.MeasuredMax {
+		return trimFloat(*w.MeasuredMin) + unit
+	}
+	return trimFloat(*w.MeasuredMin) + " to " + trimFloat(*w.MeasuredMax) + unit
 }
 
 // statOf is the compared statistic of a measured metric.

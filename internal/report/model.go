@@ -230,6 +230,21 @@ type Work struct {
 	// FileSize is the path whose size was used, as written in the suite.
 	FileSize string `json:"file_size"`
 	Unit     string `json:"unit"`
+	// MeasuredMin and MeasuredMax, in Unit, are the smallest and largest work
+	// of a measured run. A file_size read before every run can differ between
+	// runs and between revisions, so throughput means nothing without them.
+	// Both are null when no run was measured.
+	MeasuredMin *float64 `json:"measured_min"`
+	MeasuredMax *float64 `json:"measured_max"`
+}
+
+// sameWork reports whether two sides did the same work, so that their
+// throughput describes the same job.
+func (w *Work) sameWork(other *Work) bool {
+	if w == nil || other == nil || w.MeasuredMin == nil || other.MeasuredMin == nil {
+		return true
+	}
+	return *w.MeasuredMin == *other.MeasuredMin && *w.MeasuredMax == *other.MeasuredMax
 }
 
 // Relative compares medians within one benchmark of a plain run.
