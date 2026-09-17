@@ -100,9 +100,12 @@ func markdownRun(sb *strings.Builder, s Suite, level int) {
 			t.note = withProcessNote(cpuFootnote, s, g)
 		case metric.GroupMemory:
 			t = markdownGroup(s, g, result, []string{"Peak RSS (median)", "Peak RSS (max)"}, func(m *Measurement) []string {
-				return []string{statCell(m, metric.PeakRSS, medianOf), statCell(m, metric.PeakRSS, maxOf)}
+				return []string{EscapeMarkdown(statCell(m, metric.PeakRSS, medianOf)), EscapeMarkdown(statCell(m, metric.PeakRSS, maxOf))}
 			})
 			t.note = withProcessNote("Peak RSS is a resident set size, not the heap size of a language runtime.", s, g)
+			if memoryShowsFloor(s) {
+				t.note += " " + EscapeMarkdown(FloorNote)
+			}
 		}
 		if len(t.rows) > 0 {
 			tables = append(tables, t)
@@ -266,6 +269,9 @@ func markdownBudgets(sb *strings.Builder, s Suite) {
 		}
 	}
 	sb.WriteString("\n")
+	if budgetsShowFloor(s) {
+		sb.WriteString(EscapeMarkdown(FloorNote) + "\n\n")
+	}
 }
 
 func markdownCompare(sb *strings.Builder, s Suite, level int) {

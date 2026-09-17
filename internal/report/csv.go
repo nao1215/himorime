@@ -209,6 +209,11 @@ func statRows(s Suite, b Benchmark, c Command, side sideMeasurement, def metric.
 	for _, p := range percentiles {
 		rows = append(rows, base().set("statistic", p).set("value", floatCell(ms.Stats.Percentiles[p])).row)
 	}
+	if def.Name == metric.PeakRSS {
+		rows = append(rows,
+			base().set("statistic", "floor").set("value", strconv.FormatInt(ms.Floor, 10)).row,
+			base().set("statistic", "samples_at_floor").set("value", strconv.Itoa(ms.SamplesAtFloor)).row)
+	}
 	return rows
 }
 

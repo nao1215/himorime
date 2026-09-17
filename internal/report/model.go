@@ -189,6 +189,24 @@ type MetricSummary struct {
 	Samples []float64 `json:"samples"`
 	// Work is the declared work of throughput; null for other metrics.
 	Work *Work `json:"work"`
+	// Floor, in bytes, is the largest peak RSS the process starting the
+	// command already had before one of the runs. On Unix the kernel counts
+	// that process's peak as part of the command's, so a peak RSS at or below
+	// the floor only says the command used at most that much. 0 for other
+	// metrics and where the platform has no floor.
+	Floor int64 `json:"floor"`
+	// SamplesAtFloor counts the runs whose peak RSS is at or below that run's
+	// floor.
+	SamplesAtFloor int `json:"samples_at_floor"`
+}
+
+// ReasonAtFloor explains a comparison or budget whose peak RSS statistic is
+// at or below the floor: the command's true value is unknown.
+const ReasonAtFloor = "the peak RSS is at or below the measurement floor"
+
+// atFloor reports whether a statistic of the metric is at or below its floor.
+func (m *MetricSummary) atFloor(v float64) bool {
+	return m != nil && m.Floor > 0 && v <= float64(m.Floor)
 }
 
 // MetricStats summarizes the samples of one metric.
@@ -277,7 +295,8 @@ type BudgetCheck struct {
 	Limit  float64  `json:"limit"`
 	Actual *float64 `json:"actual"`
 	Unit   string   `json:"unit"`
-	// Status is pass, fail, skipped (the metric was unsupported) or no_data
+	// Status is pass, fail, skipped (the metric was unsupported, or a peak
+	// RSS at the floor could not be judged against the budget) or no_data
 	// (the command produced no successful run).
 	Status string `json:"status"`
 	Pass   bool   `json:"pass"`
@@ -313,7 +332,8 @@ type Summary struct {
 	// They never change a command's result, so they are counted apart.
 	NotGated VerdictCounts `json:"not_gated"`
 	// Skipped counts the budgets and comparisons skipped because their
-	// metric is unsupported on this platform (metrics.unsupported: skip).
+	// metric is unsupported on this platform (metrics.unsupported: skip), and
+	// the budgets a peak RSS at the measurement floor cannot decide.
 	Skipped int `json:"skipped"`
 	// NewSuites counts the suites with new_in_head: suites the base revision
 	// does not have, so nothing of them was compared.

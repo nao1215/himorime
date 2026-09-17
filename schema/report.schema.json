@@ -679,7 +679,7 @@
           }
         },
         "skipped": {
-          "description": "Budgets and comparisons skipped because their metric is unsupported on this platform (metrics.unsupported: skip).",
+          "description": "Budgets and comparisons skipped because their metric is unsupported on this platform (metrics.unsupported: skip), and budgets a peak RSS at the measurement floor cannot decide.",
           "type": "integer",
           "minimum": 0
         },
@@ -705,7 +705,9 @@
         "reason",
         "stats",
         "samples",
-        "work"
+        "work",
+        "floor",
+        "samples_at_floor"
       ],
       "additionalProperties": false,
       "properties": {
@@ -830,6 +832,16 @@
               "type": "string"
             }
           }
+        },
+        "floor": {
+          "description": "peak_rss only: the largest peak RSS, in bytes, that the process starting the command already had before one of the runs. On Unix the kernel counts that process's peak as part of the command's, so a peak RSS at or below the floor only says the command used at most that much. 0 for other metrics and on Windows, which has no floor.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "samples_at_floor": {
+          "description": "peak_rss only: the runs whose peak RSS is at or below that run's floor; their true peak is unknown. 0 for other metrics.",
+          "type": "integer",
+          "minimum": 0
         }
       }
     },

@@ -98,6 +98,9 @@ func runTable(sb *strings.Builder, s Suite, o TerminalOptions) {
 				return []string{statCell(m, metric.PeakRSS, medianOf), statCell(m, metric.PeakRSS, maxOf)}
 			})
 			sb.WriteString("PEAK RSS is the median over runs; MAX is the highest run.\n")
+			if memoryShowsFloor(s) {
+				sb.WriteString(FloorNote + "\n")
+			}
 			if note := processNote(s, g); note != "" {
 				sb.WriteString(note + "\n")
 			}
@@ -184,6 +187,9 @@ func budgetTable(sb *strings.Builder, s Suite, o TerminalOptions) {
 		}
 	}
 	renderColored(sb, t, results, o.Color)
+	if budgetsShowFloor(s) {
+		sb.WriteString(FloorNote + "\n")
+	}
 }
 
 func compareTable(sb *strings.Builder, s Suite, o TerminalOptions) {

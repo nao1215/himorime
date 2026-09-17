@@ -300,8 +300,28 @@ func metricSummaries(m *runner.Measurement, cfg config.Benchmark, percentiles []
 		ms.Status = StatusMeasured
 		ms.Samples = samples
 		ms.Stats = metricStats(samples, percentiles)
+		if def.Name == metric.PeakRSS {
+			ms.Floor, ms.SamplesAtFloor = floorOf(m)
+		}
 	}
 	return out
+}
+
+// floorOf returns the largest peak RSS floor of a measurement's runs and the
+// number of runs whose peak RSS is at or below its own floor.
+func floorOf(m *runner.Measurement) (int64, int) {
+	if len(m.PeakRSSFloor) != len(m.PeakRSS) {
+		return 0, 0
+	}
+	var floor int64
+	at := 0
+	for i, f := range m.PeakRSSFloor {
+		floor = max(floor, f)
+		if f > 0 && m.PeakRSS[i] <= f {
+			at++
+		}
+	}
+	return floor, at
 }
 
 // Collection sources of the metrics himorime derives itself.
@@ -429,10 +449,20 @@ func budgets(c *Command, cfg config.Benchmark) {
 		default:
 			actual, _ := stats.Aggregate(ms.Samples, bud.Aggregation)
 			check.Actual = &actual
-			check.Pass = bud.Threshold.Allows(actual)
-			check.Status = BudgetFail
-			if check.Pass {
-				check.Status = BudgetPass
+			switch {
+			case ms.atFloor(actual):
+				// The true value is at most the floor. An upper bound the
+				// floor meets is met; anything else cannot be decided.
+				check.Status, check.Reason = BudgetSkipped, ReasonAtFloor
+				if bud.Threshold.Op.Upper() && bud.Threshold.Allows(float64(ms.Floor)) {
+					check.Status, check.Pass = BudgetPass, true
+				}
+			default:
+				check.Pass = bud.Threshold.Allows(actual)
+				check.Status = BudgetFail
+				if check.Pass {
+					check.Status = BudgetPass
+				}
 			}
 		}
 		if check.Status == BudgetFail && !c.Result.isError() {
@@ -502,7 +532,8 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 	if reg.Metric == config.MetricMean {
 		statistic = stats.Mean
 	}
-	res := stats.Compare(base.Samples, head.Samples, stats.CompareOptions{
+	baseAtFloor, headAtFloor := base.atFloor(statOf(base, statistic)), head.atFloor(statOf(head, statistic))
+	res := stats.Compare(raiseToFloor(base, baseAtFloor), raiseToFloor(head, headAtFloor), stats.CompareOptions{
 		Metric:         statistic,
 		HigherIsBetter: def.Better == metric.HigherIsBetter,
 		MaxPercent:     reg.MaxPercent,
@@ -523,7 +554,43 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 	mc.ProbImprovement = res.ProbImprovement
 	mc.Verdict = string(res.Verdict)
 	mc.Reason = res.Reason
+	if res.Base.Count > 0 && res.Head.Count > 0 && (baseAtFloor || headAtFloor) {
+		// A side at its floor is compared as if it used the whole floor,
+		// the most it can have used. That can only understate a change away
+		// from that side, so a regression from a base at its floor, or an
+		// improvement to a head at its floor, still holds. Every other
+		// verdict could be wrong, as the real value may be anywhere below.
+		regression := res.Verdict == stats.VerdictRegression && !headAtFloor
+		improvement := res.Verdict == stats.VerdictImproved && !baseAtFloor
+		if !regression && !improvement {
+			mc.Verdict, mc.Reason = string(stats.VerdictInconclusive), ReasonAtFloor
+		}
+	}
 	return mc
+}
+
+// statOf is the compared statistic of a measured metric.
+func statOf(ms *MetricSummary, statistic stats.Metric) float64 {
+	if ms.Stats == nil {
+		return 0
+	}
+	if statistic == stats.Mean {
+		return ms.Stats.Mean
+	}
+	return ms.Stats.Median
+}
+
+// raiseToFloor returns the samples of a side, with every value below the
+// floor raised to it when the side's statistic is at its floor.
+func raiseToFloor(ms *MetricSummary, atFloor bool) []float64 {
+	if !atFloor {
+		return ms.Samples
+	}
+	out := make([]float64, len(ms.Samples))
+	for i, v := range ms.Samples {
+		out[i] = math.Max(v, float64(ms.Floor))
+	}
+	return out
 }
 
 // comparisonSeed derives a per-comparison bootstrap seed, so a comparison's
@@ -768,7 +835,8 @@ func summarize(r *Report) {
 }
 
 // countChecks counts the comparisons that are not gated, by verdict, and the
-// budgets and comparisons skipped because their metric is unsupported.
+// budgets and comparisons skipped because their metric is unsupported or a
+// peak RSS at the floor cannot decide them.
 func countChecks(r *Report) {
 	sum := &r.Summary
 	for _, s := range r.Suites {

@@ -183,7 +183,48 @@ func statCell(m *Measurement, n metric.Name, pick func(*MetricStats) float64) st
 		return "-"
 	}
 	def := metric.MustLookup(n)
-	return metric.Format(def.Kind, pick(ms.Stats), workUnitOf(ms))
+	v := pick(ms.Stats)
+	if ms.atFloor(v) {
+		return floorCell(ms.Floor)
+	}
+	return metric.Format(def.Kind, v, workUnitOf(ms))
+}
+
+// floorCell shows a peak RSS at or below the floor as the most it can be.
+func floorCell(floor int64) string {
+	return "<= " + metric.Format(metric.KindBytes, float64(floor), "")
+}
+
+// FloorNote explains floorCell under a table that shows one.
+const FloorNote = "<= marks a peak RSS at or below what the process starting the command already used; the command used at most that much."
+
+// memoryShowsFloor reports whether the memory table of a plain run shows a
+// peak RSS as <= its floor.
+func memoryShowsFloor(s Suite) bool {
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			ms := metricSummary(c.Head, metric.PeakRSS)
+			if ms != nil && ms.Stats != nil && (ms.atFloor(ms.Stats.Median) || ms.atFloor(ms.Stats.Max)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// budgetsShowFloor reports whether the budget table shows a measured value as
+// <= its floor.
+func budgetsShowFloor(s Suite) bool {
+	for _, b := range s.Benchmarks {
+		for _, c := range b.Commands {
+			for _, bc := range c.Budgets {
+				if bc.Actual != nil && metricSummary(c.Head, metric.Name(bc.Metric)).atFloor(*bc.Actual) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func workUnitOf(ms *MetricSummary) string {
@@ -224,6 +265,9 @@ func budgetView(c Command, bc BudgetCheck) budgetRow {
 	}
 	if bc.Actual != nil {
 		row.actual = metric.Format(def.Kind, *bc.Actual, unit)
+		if ms := metricSummary(c.Head, def.Name); ms.atFloor(*bc.Actual) {
+			row.actual = floorCell(ms.Floor)
+		}
 	}
 	switch bc.Status {
 	case BudgetPass:
@@ -390,16 +434,7 @@ func commandNotes(mode Mode, b Benchmark, c Command) []string {
 			}
 		}
 	}
-	for _, bc := range c.Budgets {
-		switch bc.Status {
-		case BudgetPass:
-		case BudgetFail:
-			row := budgetView(c, bc)
-			notes = append(notes, fmt.Sprintf("%s: budget %s %s not met (measured %s)", label, budgetName(bc), row.limit, row.actual))
-		case BudgetSkipped:
-			notes = append(notes, fmt.Sprintf("%s: budget %s skipped: the metric is unsupported here", label, budgetName(bc)))
-		}
-	}
+	notes = append(notes, budgetNotes(label, c)...)
 	for _, def := range metric.Defs() {
 		mc := c.Comparisons[string(def.Name)]
 		if mc == nil {
@@ -418,6 +453,25 @@ func commandNotes(mode Mode, b Benchmark, c Command) []string {
 			notes = append(notes, fmt.Sprintf("%s: %sinconclusive: %s", label, name, mc.Reason))
 		case mc.Verdict == string(ResultRegression) && !mc.Gate:
 			notes = append(notes, fmt.Sprintf("%s: %s regressed beyond its tolerance, but gate: false keeps it from failing the run", label, def.Label))
+		}
+	}
+	return notes
+}
+
+// budgetNotes explains the budgets of a command that failed or were skipped.
+func budgetNotes(label string, c Command) []string {
+	var notes []string
+	for _, bc := range c.Budgets {
+		switch bc.Status {
+		case BudgetFail:
+			row := budgetView(c, bc)
+			notes = append(notes, fmt.Sprintf("%s: budget %s %s not met (measured %s)", label, budgetName(bc), row.limit, row.actual))
+		case BudgetSkipped:
+			reason := "the metric is unsupported here"
+			if bc.Reason == ReasonAtFloor {
+				reason = bc.Reason
+			}
+			notes = append(notes, fmt.Sprintf("%s: budget %s skipped: %s", label, budgetName(bc), reason))
 		}
 	}
 	return notes
