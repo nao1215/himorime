@@ -78,12 +78,12 @@ Builds the suite's artifact when a build section exists, then measures every sel
 yahiko compare --against REF [flags] [PATH...]
 ```
 
-Checks REF out into a temporary Git worktree, builds both REF and the current working tree (uncommitted changes included), and measures them interleaved on this machine. Every measured metric is compared in the direction that is worse for it. The working tree, index and branches are never modified. Exits 1 on a confirmed regression or an exceeded budget.
+Checks REF out into a temporary Git worktree, builds both REF and the current working tree (uncommitted changes included), and measures them interleaved on this machine. Commands run in ${root} of each revision, so each runs its own code; ${head_root} names the working tree's copy for shared fixtures. Every measured metric is compared in the direction that is worse for it; a metric with regression.<metric>.gate: false is reported but never fails. The working tree, index and branches are never modified. Exits 1 on a gated regression or an exceeded budget.
 
 | Flag | Description |
 |---|---|
 | `--against REVISION` | the Git revision to compare the working tree with (required) |
-| `--fail-on-inconclusive` | exit 1 when a comparison is inconclusive |
+| `--fail-on-inconclusive` | exit 1 when a gated comparison is inconclusive |
 | `--filter REGEXP` | select benchmarks whose name matches this regexp |
 | `--format FORMAT` | report format written to stdout or --output: table, json, csv, markdown, github, samples-csv (default table) |
 | `--no-color` | disable colors in the table (also honored: NO_COLOR) |
@@ -107,7 +107,7 @@ Like compare, with CI defaults: no colors, and a Markdown summary appended to $G
 | Flag | Description |
 |---|---|
 | `--against REVISION` | the base revision; defaults to $YAHIKO_BASE_REF, then the GitHub Actions event |
-| `--fail-on-inconclusive` | exit 1 when a comparison is inconclusive |
+| `--fail-on-inconclusive` | exit 1 when a gated comparison is inconclusive |
 | `--filter REGEXP` | select benchmarks whose name matches this regexp |
 | `--format FORMAT` | report format written to stdout or --output: table, json, csv, markdown, github, samples-csv (default table) |
 | `--no-color` | disable colors in the table (also honored: NO_COLOR) |

@@ -13,24 +13,31 @@ The differences are:
 | Behavior | Linux, macOS | Windows |
 |---|---|---|
 | `shell: true` | `/bin/sh -c` | `cmd.exe /d /s /c` (`%ComSpec%`); values holding `"`, `%` or a line break cannot be substituted |
-| Stopping a process tree on timeout, Ctrl+C, or when the command exits | the command runs in its own process group, which receives SIGKILL | the command is assigned to a Job Object, which is terminated; yahiko waits until the job is empty |
+| Stopping a process tree on timeout, Ctrl+C, or when the command exits | the command joins its own process group before it runs, and the group receives SIGKILL | the command is created suspended, assigned to a Job Object and only then resumed; the job is terminated, and yahiko waits until it is empty |
 | `${artifact}` and `${exe}` | no suffix | `.exe` |
 | Program lookup | `PATH` | `PATH` and `PATHEXT` |
 
-On Windows a process can start a child in the instant between its creation and
-its assignment to the Job Object; such a child is not stopped with the tree
-and its CPU time is not counted. The window is microseconds wide.
+Because a Windows command runs no code before it belongs to its Job Object,
+every process it starts is in the job too: nothing escapes being stopped or
+having its CPU time counted, however quickly it starts. The time between
+creating the suspended process and resuming it is not counted as latency. If
+the process cannot be assigned to a job, for example because a parent job
+forbids it, yahiko kills the still suspended process and reports the run as
+an `internal` error instead of measuring it without the guarantees. On Unix a
+descendant that moves itself into another process group or session (a daemon
+does) leaves the group and is not stopped with it.
 
 ## Metrics per platform
 
 | Metric | Linux | macOS | Windows | FreeBSD, OpenBSD, NetBSD |
 |---|---|---|---|---|
 | Latency, throughput | monotonic clock | monotonic clock | monotonic clock | monotonic clock |
-| CPU time, utilization | `wait4` usage of the process and waited-for descendants | same as Linux | Job Object accounting of every process in the job | same as Linux |
-| Peak RSS | `ru_maxrss`, kilobytes, largest waited-for process | `ru_maxrss`, bytes, largest waited-for process | peak working set of the started process; unsupported when it started other processes | `ru_maxrss`, kilobytes |
+| CPU time, utilization | `wait4` usage of the process and waited-for descendants (`rusage`, `sum_of_waited_descendants`) | same as Linux | Job Object accounting of every process in the job (`job_object`, `sum_of_job_processes`) | same as Linux |
+| Peak RSS | `ru_maxrss`, kilobytes, largest peak of a single waited-for process (`rusage`, `max_of_single_process_peaks`) | `ru_maxrss`, bytes, same as Linux | peak working set of the started process; unsupported when it started other processes (`process_memory_counters`, `started_process_only`) | `ru_maxrss`, kilobytes, same as Linux |
 
 Every value is read after the process exits, without polling. `ru_maxrss` is
-normalized to bytes on every platform. Other Unix systems (Solaris, illumos,
+normalized to bytes on every platform. The names in parentheses are the
+`source` and `process_aggregation` every report records for the metric. Other Unix systems (Solaris, illumos,
 AIX) build, but report CPU time and peak RSS as unsupported, because their
 `wait4` does not fill `ru_maxrss` the same way. See [Metrics](/metrics/) for
 what each value includes.

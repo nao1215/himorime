@@ -9,7 +9,27 @@ toc: true
 The measurements are too noisy, or there are too few of them, for the
 tolerance you set. See [Regression detection](/regression-detection/#noise-and-inconclusive-results):
 raise `runs`, widen `max_percent`, measure a heavier workload, or use a quieter
-machine. The reason is printed under the table.
+machine. The reason is printed under the table. A reason of "measurements are
+noisier than max_cv" with a few very slow runs means outliers: with the median
+statistic, `max_cv: 0` may be the better setting. A metric you want to see but
+not gate on can have `gate: false`; see
+[What fails the run](/regression-detection/#what-fails-the-run).
+
+## A comparison passes although the working tree is clearly slower
+
+Check that both revisions run their own code. A command reads files relative
+to `${root}` of each revision; a path that starts with `${head_root}`, or an
+absolute program outside the repository, is the same for both revisions. A
+program installed on `PATH` is also the same for both: build it from the tree
+with a `build` section and measure `${artifact}`, or run it from the tree with
+a relative path.
+
+## The base revision fails with "does not exist in the base revision"
+
+A relative path, such as a `stdin` fixture or a `file_size`, is relative to
+`${root}` of each revision, and the base revision does not have that file,
+usually because this change added it. Write it as `${head_root}/path` to give
+both revisions the working tree's copy.
 
 ## Exit 6: "metrics.memory cannot be measured on this platform"
 
@@ -25,7 +45,7 @@ unsupported for commands that start child processes, which includes
 The platform supports the metric but did not report it for a run, or the
 throughput `file_size` does not exist or is empty when the run starts. Create
 the file in `setup` or `prepare_each`, and check its path: it is relative to
-the suite file. A collection failure is never skipped, because it cannot be
+`${root}`, the suite's directory in the revision being measured. A collection failure is never skipped, because it cannot be
 told apart from a broken measurement.
 
 ## "the budget is in bytes/s but the declared work unit is records"

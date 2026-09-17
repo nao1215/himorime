@@ -39,8 +39,12 @@ make check     # fmt, vet, lint, test, test-race, e2e
 - The suite schema (`schema/yahiko.schema.json`) and the Go loader must agree.
   When you add a key, add it to both, and extend
   `internal/config/testdata/parity`.
-- The JSON report is a contract: add fields, never rename or remove them within
-  `schema_version` `"1"`, and update `schema/report.schema.json`.
+- The JSON report is a contract: once released, add fields, never rename or
+  remove them within `schema_version` `"1"`, and update
+  `schema/report.schema.json`. Until the first release the format may still be
+  cleaned up; record such a change under `### Changed` in `CHANGELOG.md`.
+- Changes to the regression classifier come with `make calibration` numbers
+  before and after (`internal/stats/calibration_test.go`).
 - Exit codes (`internal/exitcode`) are a contract too.
 - Documentation sections marked `BEGIN GENERATED` and example blocks are
   generated. Edit the source (command table, schema, example suites) and run

@@ -53,10 +53,12 @@ jobs:
 3. Writes the table to the log without colors, and appends the Markdown
    summary to `$GITHUB_STEP_SUMMARY`.
 4. Prints an annotation for every missed budget, regression, inconclusive
-   comparison and failure, so they show on the pull request.
-5. Exits 1 on a confirmed regression or exceeded budget on any metric, 0
-   otherwise. Add `--fail-on-inconclusive` to fail on inconclusive results
-   too.
+   comparison and failure, so they show on the pull request. A regression of a
+   metric with `gate: false` is a notice, not an error.
+5. Exits 1 on a confirmed regression of a gated metric or an exceeded budget,
+   0 otherwise. Add `--fail-on-inconclusive` to fail on inconclusive gated
+   comparisons too. See
+   [What fails the run](/regression-detection/#what-fails-the-run).
 
 The same suite file and the same command work on a laptop: `yahiko compare
 --against main` does steps 1 to 3 and 5 against a branch you name, and
@@ -128,6 +130,7 @@ small tolerances on fast commands, and read
 [Regression detection](/regression-detection/) before tightening
 `max_percent`. Budgets are best kept generous in CI, as a guard against
 order-of-magnitude slowdowns; set `min_difference` so tiny absolute changes
-never fail a pull request. The recipe
+never fail a pull request, and `gate: false` on a metric you want reported but
+not enforced, such as latency when CPU time is the gate. The recipe
 [Cope with noise on GitHub-hosted runners](/cookbook/#cope-with-noise-on-github-hosted-runners)
 has a runnable example.

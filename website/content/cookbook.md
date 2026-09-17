@@ -14,7 +14,7 @@ The examples measure two small programs in `examples/tools`: `wordcount`, a word
 | I want to | Recipes |
 |---|---|
 | keep a CLI within a budget | [Protect the startup latency of a CLI](#protect-the-startup-latency-of-a-cli), [Protect the throughput of large CSV and JSON processing](#protect-the-throughput-of-large-csv-and-json-processing) |
-| catch regressions against a base revision | [Detect a CPU time regression](#detect-a-cpu-time-regression), [Detect a peak RSS regression](#detect-a-peak-rss-regression), [Compare the Git base and head on every metric](#compare-the-git-base-and-head-on-every-metric) |
+| catch regressions against a base revision | [Detect a CPU time regression](#detect-a-cpu-time-regression), [Detect a peak RSS regression](#detect-a-peak-rss-regression), [Compare the Git base and head on every metric](#compare-the-git-base-and-head-on-every-metric), [Compare a script-based CLI without a build step](#compare-a-script-based-cli-without-a-build-step), [Gate on CPU time and memory, report latency only](#gate-on-cpu-time-and-memory-report-latency-only) |
 | run it in CI | [Fail a GitHub Actions job when a performance budget is violated](#fail-a-github-actions-job-when-a-performance-budget-is-violated), [Cope with noise on GitHub-hosted runners](#cope-with-noise-on-github-hosted-runners) |
 | compare programs or inputs | [Compare similar CLIs on the same input](#compare-similar-clis-on-the-same-input), [Compare parsers on a stdin fixture](#compare-parsers-on-a-stdin-fixture), [Compare small, medium and large inputs](#compare-small-medium-and-large-inputs), [Understand the geometric mean](#understand-the-geometric-mean) |
 | understand the numbers | [Understand CPU utilization above 100%](#understand-cpu-utilization-above-100), [Understand process tree measurement on each OS](#understand-process-tree-measurement-on-each-os), [Handle a metric this platform cannot measure](#handle-a-metric-this-platform-cannot-measure) |
@@ -195,7 +195,8 @@ benchmarks:
     regression:
       # Latency and CPU time get separate tolerances. CPU time ignores time
       # spent waiting, so it moves less when the runner is busy.
-      max_percent: 25
+      latency:
+        max_percent: 25
       cpu:
         max_percent: 20
         # A difference smaller than this is never a regression, however large
@@ -255,7 +256,8 @@ benchmarks:
           peak_rss:
             max: "<= 512MiB"
     regression:
-      max_percent: 50
+      latency:
+        max_percent: 50
       memory:
         max_percent: 20
         min_difference: 4MiB
@@ -356,9 +358,10 @@ defaults:
   warmup: 2
   runs: 20
   regression:
-    metric: median
-    max_percent: 10
     confidence: 0.95
+    latency:
+      metric: median
+      max_percent: 10
 
 benchmarks:
   - name: count 50k lines
@@ -399,6 +402,121 @@ One comparison table per metric: `latency`, `throughput`, `cpu total` and `peak 
 
 Example: [`examples/git-compare`](https://github.com/nao1215/yahiko/tree/main/examples/git-compare)
 
+## Compare a script-based CLI without a build step
+
+Your CLI is a script run by an interpreter, so there is nothing to build, and you still want `main` and your working tree compared, each running its own script on the same input.
+
+<!-- example: examples/script-compare/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: compare a script-based CLI without a build step.
+# https://nao1215.github.io/yahiko/cookbook/#compare-a-script-based-cli-without-a-build-step
+#
+#   yahiko compare --against main examples/script-compare
+version: "1"
+
+suite:
+  name: script compare
+  description: A shell script measured as the base revision has it and as the working tree has it, with no build step.
+
+defaults:
+  warmup: 1
+  runs: 15
+
+benchmarks:
+  - name: count records
+    # Commands and hooks run in ${root}, this directory inside the revision
+    # being measured, and relative paths are relative to it. The base
+    # revision therefore runs the base's work.sh, and the head the working
+    # tree's.
+    #
+    # ${head_root} is this directory inside the working tree for both
+    # revisions: both read exactly the same records, even when the fixture
+    # changed or is new in the working tree.
+    stdin: "${head_root}/testdata/records.txt"
+    commands:
+      script:
+        command: [sh, work.sh]
+    regression:
+      latency:
+        max_percent: 20
+        min_difference: 20ms
+```
+
+```console
+$ yahiko compare --against main examples/script-compare
+```
+
+One `count records` row. A slower `work.sh` in the working tree is a `REGRESSION`; an unchanged one passes.
+
+- Commands and hooks run in `${root}` of each revision, and relative paths such as `work.sh` resolve there, so the base worktree runs the base's script. A command that ran from the working tree in both revisions would compare your changes with themselves.
+- `${head_root}` is the suite directory in the working tree for both revisions. Use it for a fixture both must read, as `stdin` does here, or for a tool you do not want compared.
+- A relative path the base revision does not have, such as a fixture added in this change, fails the base with a hint to use `${head_root}`.
+- The script needs `sh`; on Windows, point `command` at an interpreter that exists there.
+
+Example: [`examples/script-compare`](https://github.com/nao1215/yahiko/tree/main/examples/script-compare)
+
+## Gate on CPU time and memory, report latency only
+
+Your program spends most of its time waiting, so its latency follows the runner's load, and you want CI to fail only when it uses more CPU time or memory while still seeing how latency moved.
+
+<!-- example: examples/gate-cpu-memory/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: gate on CPU time and memory, report latency only.
+# https://nao1215.github.io/yahiko/cookbook/#gate-on-cpu-time-and-memory-report-latency-only
+#
+#   yahiko compare --against main examples/gate-cpu-memory
+version: "1"
+
+suite:
+  name: gate cpu and memory
+  description: A program that mostly waits, compared on CPU time and peak RSS; its latency is shown but decides nothing.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/sleepy]
+
+defaults:
+  warmup: 1
+  runs: 15
+
+benchmarks:
+  - name: wait for input
+    metrics:
+      cpu: true
+      memory: true
+    commands:
+      sleepy:
+        command: ["${artifact}"]
+    regression:
+      # Latency is still measured, compared and reported with its verdict,
+      # marked NOT GATED, but a latency regression or an inconclusive latency
+      # comparison never fails the run.
+      latency:
+        gate: false
+      # CPU time and peak RSS decide the result and the exit status.
+      cpu:
+        max_percent: 25
+        min_difference: 5ms
+      memory:
+        max_percent: 25
+        min_difference: 4MiB
+```
+
+```console
+$ yahiko compare --against main examples/gate-cpu-memory
+```
+
+Three comparison tables. The `latency` row reads `PASS (NOT GATED)`, or `REGRESSION (NOT GATED)` when the program got slower; `cpu total` and `peak rss` decide the exit status.
+
+- `gate: false` keeps a metric measured, compared and reported, verdict included; it only stops that verdict from failing the run. No extreme `max_percent` is needed to switch a metric off.
+- The summary line counts what was not gated, such as `not gated: 1 regressed`, the JSON report has `gate: false` on the comparison and `summary.not_gated`, and GitHub Actions shows a notice instead of an error.
+- `--fail-on-inconclusive` applies to gated comparisons only. Budgets are always enforced; leave out a budget you do not want to fail on.
+
+Example: [`examples/gate-cpu-memory`](https://github.com/nao1215/yahiko/tree/main/examples/gate-cpu-memory)
+
 ## Fail a GitHub Actions job when a performance budget is violated
 
 Every pull request must stay within its budgets and must not regress against its base branch, and the job log has to say whether a failure is about performance or about the measurement.
@@ -425,8 +543,9 @@ defaults:
   warmup: 2
   runs: 20
   regression:
-    max_percent: 15
     confidence: 0.95
+    latency:
+      max_percent: 15
 
 benchmarks:
   - name: count 50k lines
@@ -737,8 +856,9 @@ benchmarks:
       sleepy:
         command: ["${artifact}", -ms, "10", -jitter-ms, "50", -state, "${workdir}/calls"]
     regression:
-      max_percent: 10
       confidence: 0.95
+      latency:
+        max_percent: 10
       # The alternating run time gives a coefficient of variation near 0.7.
       # Above max_cv a comparison is inconclusive instead of pass or fail.
       max_cv: 0.3
@@ -753,8 +873,9 @@ benchmarks:
       # A wider tolerance than the default 10%, and an absolute floor: a
       # change of less than 2ms is never a regression on a shared runner,
       # however large it is in percent.
-      max_percent: 20
-      min_difference: 2ms
+      latency:
+        max_percent: 20
+        min_difference: 2ms
       cpu:
         max_percent: 50
         min_difference: 5ms
@@ -854,7 +975,7 @@ defaults:
 benchmarks:
   - name: access log on stdin
     # The fixture is reopened for every run, so each run reads it from the
-    # first byte. Relative paths are relative to this file.
+    # first byte. Relative paths are relative to this file's directory, ${root}.
     stdin: testdata/access.log
     baseline: scanner
     commands:

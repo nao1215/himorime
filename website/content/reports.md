@@ -52,6 +52,8 @@ memory
 BENCHMARK  COMMAND  PEAK RSS       MAX  RESULT
 df large   jsonize   9.82MiB  10.07MiB  PASS
 df large   jc       31.40MiB  31.52MiB  OVER BUDGET
+PEAK RSS is the median over runs; MAX is the highest run.
+Peak RSS is the largest peak of any single process of the tree (rusage ru_maxrss), not the combined memory of processes running at the same time.
 
 budgets
 BENCHMARK  COMMAND  METRIC              BUDGET  MEASURED  RESULT
@@ -68,7 +70,8 @@ yahiko: exit 1: performance check failed: a budget or regression threshold was v
   is set.
 - CPU values are medians over runs; `UTILIZATION` above 100% means more than
   one CPU was busy. `PEAK RSS` is the median of the runs' peaks and `MAX` the
-  highest run.
+  highest run. The sentence under the CPU and memory tables says which
+  processes the values cover and how they were combined on this platform.
 - Each table's `RESULT` is about that metric group: `PASS`, `OVER BUDGET`,
   `UNSUPPORTED` (skipped on this platform), `METRIC ERROR` or `ERROR`. The
   budgets table says `PASS`, `FAIL`, `SKIPPED` or `NO DATA` per budget.
@@ -97,7 +100,10 @@ df large   72.10MiB/s  62.40MiB/s  -9.70MiB/s  -13.5%       97.2%        -8%  RE
 - `CONFIDENCE` is the bootstrap probability that the change exceeds the
   tolerance in the direction it went, shown as `low` below 50%.
 - `RESULT` is `PASS`, `IMPROVED`, `REGRESSION`, `INCONCLUSIVE`, `SKIPPED`,
-  `OVER BUDGET` or an error. See [Regression detection](/regression-detection/).
+  `OVER BUDGET` or an error. A metric with `gate: false` adds `(NOT GATED)`,
+  such as `REGRESSION (NOT GATED)`: the verdict is shown but did not decide
+  the result, and the summary line counts it as `not gated: 1 regressed`. See
+  [What fails the run](/regression-detection/#what-fails-the-run).
 
 Values are rounded for reading: durations in ns, µs, ms or s, sizes in B, KiB,
 MiB or GiB, rates with a k, M or G prefix, all with two decimals. Colors are
@@ -123,9 +129,13 @@ out.
 `--format json` is the complete, machine-readable report, described by
 [report.schema.json](https://raw.githubusercontent.com/nao1215/yahiko/main/schema/report.schema.json).
 
-- `schema_version` is `"1"`. Fields are only added within a version.
+- `schema_version` is `"1"`. Until the first release the format may still
+  change; afterwards fields are only added within a version.
 - For every command and side, `metrics` holds all seven metrics by name. Each
-  has `unit`, `better` (`lower`, `higher` or `neutral`), `scope`, `status`
+  has `unit`, `better` (`lower`, `higher` or `neutral`), `scope`, `source`
+  and `process_aggregation` (how the value was collected and how the
+  processes of the tree were combined; see [Metrics](/metrics/#process-tree)),
+  `status`
   (`measured`, `not_requested`, `unsupported` or `failed`), `reason`, `stats`
   (count, min, max, mean, median, stddev, cv and `percentiles` keyed by
   `p90`, `p95`, `p99` and any percentile a budget uses), every raw sample in
@@ -133,22 +143,27 @@ out.
   Values are unrounded numbers in the canonical unit: ns, bytes, work per
   second, percent. A metric that was not measured has `stats: null` and no
   samples, never zeros.
-- `mean_ns`, `median_ns`, `stddev_ns`, `min_ns`, `max_ns`, `cv` and
-  `samples_ns` repeat latency in integer nanoseconds.
+- Latency is described there once, like every other metric: its samples are
+  `metrics.latency.samples` in nanoseconds, and `count` and `warmups` are the
+  measured and warmup runs.
 - `budgets` lists every budget with `metric`, `aggregation`, `operator`,
   `limit`, `actual`, `unit`, `status` (`pass`, `fail`, `skipped`, `no_data`)
   and `reason`.
 - `comparisons` holds each compared metric with `statistic`, `base`, `head`,
   `difference`, `change_percent`, the bootstrap interval, both tail
-  probabilities, `max_percent`, `min_difference`, the verdict and its reason.
-  `comparison` repeats the latency comparison.
+  probabilities, `max_percent`, `min_difference`, the verdict, its reason, and
+  `gate`: `false` when the metric has `gate: false` and its verdict did not
+  decide the result. `comparisons` is `null` outside a comparison.
 - `environment` records the operating system, architecture, CPU model, logical
   CPU count, Go version and CI provider. `yahiko_version`, `seed` and `git`
   (head and base commits, and whether the working tree was dirty) complete what
   is needed to reproduce a run. Host names, user names and environment
   variables are never recorded.
-- `summary` counts results, `metric_error` among them, and `exit_code` is the
-  exit status of the run.
+- `summary` counts command results, `metric_error` among them, and
+  `exit_code` is the exit status of the run. `not_gated` counts the
+  comparisons with `gate: false` by verdict, and `skipped` the budgets and
+  comparisons skipped because their metric is unsupported; neither changes a
+  result.
 
 ```console
 $ yahiko run --format json --output result.json
@@ -162,11 +177,12 @@ comparison of one metric, so a spreadsheet can filter and pivot on it without
 parsing a cell. The header is fixed:
 
 ```text
-suite,benchmark,command,result,record,side,metric,unit,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,reason,error_kind,error_message
+suite,benchmark,command,result,record,side,metric,unit,scope,source,process_aggregation,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,gate,reason,error_kind,error_message
 ```
 
 - `record` is `stat`, `budget`, `comparison` or `error`.
-- A `stat` row has `side` (`base` or `head`), `metric`, `unit`, `status`,
+- A `stat` row has `side` (`base` or `head`), `metric`, `unit`, `scope`,
+  `source`, `process_aggregation`, `status`,
   `statistic` (`count`, `min`, `median`, `mean`, `max`, `stddev`, `cv`,
   percentiles, and `relative_to_baseline` or `relative_to_fastest` for
   latency) and `value`. A requested metric that was not measured has one row
@@ -174,7 +190,8 @@ suite,benchmark,command,result,record,side,metric,unit,status,statistic,value,op
 - A `budget` row has `statistic` (the aggregation), `value` (the measured
   value), `operator`, `limit` and `verdict`.
 - A `comparison` row has `base`, `head`, `difference`, `change_percent`, the
-  interval, `probability_regression`, `max_percent` and `verdict`.
+  interval, `probability_regression`, `max_percent`, `verdict` and `gate`
+  (`true` or `false`).
 - Numbers are unrounded, in the canonical unit, without exponents. Fields
   holding commas, quotes or line breaks are quoted.
 

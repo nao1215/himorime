@@ -128,7 +128,10 @@ the largest peak of any single process in the tree. It is:
 - not the heap size, the allocation count or the garbage collector's view of
   a language runtime: a Go, Java or Node.js program reserves and frees
   memory on its own schedule;
-- not the sum of processes running at the same time;
+- not the sum of processes running at the same time: a command that runs two
+  children of 100MiB each at the same time reports about 100MiB, not 200MiB.
+  A report records this as `process_aggregation: max_of_single_process_peaks`;
+  `scope: process_tree` only says which processes are candidates;
 - counting shared libraries and files mapped into memory, and not counting
   memory that was reserved but never touched, or swapped out.
 
@@ -148,13 +151,26 @@ What "descendants" means depends on the operating system:
 | Source | `wait4` resource usage of the started process | Job Object accounting, and the process's own memory counters |
 | CPU time includes | the process and every descendant whose parent waited for it | every process that was part of the job |
 | Peak RSS includes | the largest peak among the process and descendants whose parent waited for them | the peak working set of the started process, only when it started no other process |
-| Not included | a descendant still running when the command exits, or orphaned before it exits | a child started in the microseconds before the process joined the job |
+| Not included | a descendant still running when the command exits, or orphaned before it exits | nothing: the command is suspended until it belongs to the job |
 
 On Windows, a command that starts child processes has CPU time but no peak
 RSS: Windows keeps no peak working set for a job, and reporting only the
 parent would under-report. yahiko reports it as unsupported for that run
 instead. A process a command leaves running in the background is stopped when
 the command exits, on every platform.
+
+Every metric of every report says how it was collected, so a value can be
+read without knowing which platform produced it:
+
+| Field | Values |
+|---|---|
+| `scope` | `wall_clock` (latency, throughput) or `process_tree` (CPU, memory) |
+| `source` | `wall_clock`, `declared_work`, `rusage`, `job_object`, `process_memory_counters`, or `unavailable` on a platform that does not read the metric |
+| `process_aggregation` | `none` (not a per-process value), `sum_of_waited_descendants`, `sum_of_job_processes`, `max_of_single_process_peaks`, `started_process_only` |
+
+Tables and Markdown repeat the aggregation in a sentence under the CPU and
+memory tables. yahiko does not measure the combined memory of a process tree
+or a container; a cgroup's memory peak is outside what it reads.
 
 ## Unsupported, failed and not requested
 

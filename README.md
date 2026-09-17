@@ -100,6 +100,9 @@ every metric:
 $ yahiko compare --against main
 ```
 
+Each revision runs its own build or scripts, and each metric can gate the
+result or, with `regression.<metric>.gate: false`, only be reported.
+
 ## The same suite in GitHub Actions
 
 <!-- example: examples/github-actions/benchmark.yml -->

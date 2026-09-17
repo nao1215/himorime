@@ -64,9 +64,8 @@ benchmarks:
         cpu: {total: {median: "<= 25ms"}}
         memory: {peak_rss: {max: "<= 64MiB"}}
     regression:
-      metric: median
-      max_percent: 10
       confidence: 0.95
+      latency: {metric: median, max_percent: 10}
       throughput: {max_percent: 8}
       cpu: {max_percent: 10, min_difference: 2ms}
       memory: {max_percent: 5, min_difference: 1MiB}
@@ -98,7 +97,10 @@ Each benchmark runs a number of unmeasured warmup runs, then measured runs.
 - With `runs`, every command runs exactly that many times.
 - Without `runs`, yahiko measures adaptively: it keeps going until every
   command has at least `min_runs` samples and at least `min_time` of total
-  measured time, and stops at `max_runs` regardless.
+  measured time, and stops at `max_runs` regardless. In a revision comparison
+  it also keeps going until every compared command has
+  `regression.min_samples` samples on each revision, because fewer could only
+  be inconclusive; a plain `yahiko run` ignores `min_samples`.
 
 Commands of one benchmark run interleaved: each round runs every command
 once, in an order shuffled with the seed (`--seed`, printed in every report).
@@ -156,14 +158,31 @@ Throughput is better when higher, so its budgets are lower bounds (`>`,
 `>=`). CPU utilization has no better direction and takes either. A budget on a
 metric the benchmark does not measure is a validation error.
 
-`regression` sets how a comparison judges each metric. The top-level
-`metric`, `max_percent` and `min_difference` apply to latency; `throughput`,
-`cpu` (total CPU time) and `memory` (peak RSS) have their own, and each is
-compared whenever the benchmark measures it. `max_percent` is the tolerated
-degradation in the metric's worse direction: an increase for latency, CPU time
-and peak RSS, a decrease for throughput. `min_difference` is the smallest
-absolute change that can count at all. See
-[Regression detection](/regression-detection/).
+`regression` sets how a comparison judges each metric. `confidence`,
+`min_samples`, `max_cv` and `commands` apply to every metric. `latency`,
+`throughput`, `cpu` (total CPU time) and `memory` (peak RSS) each take the
+same four keys, and each metric is compared whenever the benchmark measures
+it:
+
+```yaml
+regression:
+  confidence: 0.95
+  latency: {gate: false}                  # compared and reported, never fails
+  cpu: {max_percent: 15, min_difference: 5ms}
+  memory: {max_percent: 5, min_difference: 1MiB}
+```
+
+- `metric` is the compared statistic, `median` or `mean`.
+- `max_percent` is the tolerated degradation in the metric's worse direction:
+  an increase for latency, CPU time and peak RSS, a decrease for throughput.
+- `min_difference` is the smallest absolute change that can count at all.
+- `gate` (default `true`) says whether the metric's verdict decides the
+  result and the exit status. With `gate: false` the metric is still compared
+  and reported with its verdict, marked as not gated, but a regression or an
+  inconclusive result never fails the run.
+
+See [Regression detection](/regression-detection/) for how budgets, gates,
+`--fail-on-inconclusive` and unsupported metrics decide the exit status.
 
 ## Hooks
 
@@ -207,7 +226,8 @@ Commands, `cwd`, `env` values, `stdin` and hooks may use these variables:
 | Variable | Expands to |
 |---|---|
 | `${artifact}` | The file the build step writes. In a comparison each revision has its own. Only available when the suite has a build section. On Windows it ends in .exe. |
-| `${root}` | The directory holding the suite file, inside the tree being measured: the working tree, or the temporary worktree of the base revision. |
+| `${root}` | The directory holding the suite file, inside the tree being measured: the working tree, or the temporary worktree of the base revision. Relative paths are relative to it, so each revision runs its own scripts and reads its own files. |
+| `${head_root}` | The directory holding the suite file inside the working tree, the same for every revision. Use it for a fixture or tool both revisions must share. Equal to ${root} in a plain run. |
 | `${workdir}` | A fresh, empty directory created for each benchmark (and each revision in a comparison) and removed after cleanup. Not available in build. |
 | `${exe}` | `.exe` on Windows, empty elsewhere. |
 | `${env:NAME}` | The environment variable NAME. A variable that is not set is an execution error. |
@@ -219,12 +239,43 @@ An unknown variable is a validation error. `${artifact}` without a build and
 
 ## Paths
 
-- Relative `cwd` and `stdin` paths are relative to the suite file. In a
-  comparison both revisions read the same fixtures from your working tree;
-  only the build and `${root}` differ.
-- A relative build `cwd` is relative to `${root}` of the revision being built.
-- Paths may start with `${root}` or `${workdir}`. Absolute paths, `~`, and
-  `..` after a variable are rejected.
+Every relative path of a suite is relative to `${root}`, the directory holding
+the suite file inside the tree being measured. In a plain run that is the
+directory of the suite file. In a comparison it is that directory in the base
+revision's temporary worktree for the base, and in your working tree for the
+head, so each revision runs its own code:
+
+| Setting | Relative to | Default |
+|---|---|---|
+| `cwd` of commands, `setup`, `prepare_each`, `cleanup` | `${root}` of the revision measured | `${root}` |
+| `cwd` of `build` | `${root}` of the revision built | `${root}` |
+| `stdin` file | `${root}` of the revision measured | |
+| `metrics.throughput.work.file_size` | `${root}` of the revision measured | |
+| a relative program or argument, such as `[sh, work.sh]` | the command's working directory | |
+| `stdout`, `stderr` | `${workdir}` | discarded |
+| `report.outputs[].path` | the suite file in the working tree | |
+
+`${head_root}` is the same directory inside the working tree, for both
+revisions. Use it when both revisions must read the same file, such as a
+fixture that changed or was added in the working tree, or run the same
+helper:
+
+```yaml
+benchmarks:
+  - name: parse the large log
+    stdin: "${head_root}/testdata/large.log"   # the same input for base and head
+    commands:
+      parser:
+        command: [sh, parse.sh]                # each revision's own parse.sh
+```
+
+A relative path that exists only in the working tree fails the base revision,
+with a hint to use `${head_root}`. The suite directory itself must exist in
+the base revision. A suite with a `build` measures `${artifact}`, which each
+revision builds from its own tree.
+
+- Paths may start with `${root}`, `${head_root}` or `${workdir}`. Absolute
+  paths, `~`, and `..` after a variable are rejected.
 - After symbolic links are resolved, a path must stay inside the Git
   repository (or the suite's directory outside Git), the base worktree, or
   `${workdir}`. `stdout`, `stderr` and report paths may not climb out of their
@@ -252,14 +303,13 @@ contain the environment, and command lines are shown as written, before
 | `timeout (build)` | `10m` |
 | `stdout, stderr` | `discard` |
 | `exit_codes` | `[0]` |
-| `regression.metric` | `median` |
-| `regression.max_percent` | `10` |
 | `regression.confidence` | `0.95` |
 | `regression.min_samples` | `10` |
 | `regression.max_cv` | `0.5` |
-| `regression.min_difference` | `unset (none)` |
-| `regression.throughput, cpu, memory: metric` | `median` |
-| `regression.throughput, cpu, memory: max_percent` | `10` |
+| `regression.latency, throughput, cpu, memory: metric` | `median` |
+| `regression.latency, throughput, cpu, memory: max_percent` | `10` |
+| `regression.latency, throughput, cpu, memory: min_difference` | `unset (none)` |
+| `regression.latency, throughput, cpu, memory: gate` | `true` |
 | `metrics.cpu, metrics.memory` | `false` |
 | `metrics.unsupported` | `fail` |
 | `metrics.throughput.work.unit` | `operations (value), bytes (file_size)` |
@@ -300,9 +350,10 @@ leading `>` starts a folded block.
    only for metrics the benchmark measures, operators in the metric's
    direction, and throughput units that match the declared work.
 
-`yahiko compare` and `yahiko ci` additionally refuse a benchmark whose `runs`
-(or `max_runs`) is below `regression.min_samples`, because such a comparison
-could never be conclusive.
+`yahiko compare` and `yahiko ci` additionally refuse a benchmark whose `runs`,
+`max_runs` or `--runs` is below `regression.min_samples`, because such a
+comparison could never be conclusive; adaptive runs of a comparison continue
+until `min_samples`.
 
 ## Field reference
 
@@ -335,7 +386,7 @@ could never be conclusive.
 | `max_runs` |  | Adaptive runs: the most runs per command. Default 100. |
 | `min_time` |  | Adaptive runs: keep measuring until each command has run for at least this long in total. Default 2s. |
 | `timeout` |  | Per-run time limit. A run that exceeds it is stopped with its whole process tree and fails the benchmark. Default 1m. |
-| `cwd` |  | Working directory: relative to the suite file, or starting with ${root} or ${workdir}. Default: the suite file's directory. |
+| `cwd` |  | Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files. |
 | `env` |  | Environment variables added to the inherited environment. Values may use variables. |
 | `stdout` |  | "discard" (default), or a path inside ${workdir} that receives the standard output of the latest run. |
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
@@ -349,7 +400,7 @@ could never be conclusive.
 |---|---|---|
 | `command` | yes | The command: a list of arguments (no shell), or a string when shell is true. |
 | `shell` |  | Run the command string through /bin/sh -c (cmd.exe /d /s /c on Windows). Variables substituted into the string are quoted for that shell. |
-| `cwd` |  | Working directory. For build, a relative path is relative to ${root} of the revision being built (the default); for hooks, to the suite file (the default). May start with ${root}, or ${workdir} in hooks. |
+| `cwd` |  | Working directory: relative to ${root} of the revision being built or measured (the default), or starting with ${root}, ${head_root}, or ${workdir} in hooks. |
 | `env` |  | Environment variables added to the inherited environment. Values may use variables. |
 | `timeout` |  | Time limit for this process. Default 10m for build, 5m for hooks. |
 
@@ -366,7 +417,7 @@ could never be conclusive.
 | `max_runs` |  | Adaptive runs: the most runs per command. Default 100. |
 | `min_time` |  | Adaptive runs: keep measuring until each command has run for at least this long in total. Default 2s. |
 | `timeout` |  | Per-run time limit. A run that exceeds it is stopped with its whole process tree and fails the benchmark. Default 1m. |
-| `cwd` |  | Working directory: relative to the suite file, or starting with ${root} or ${workdir}. Default: the suite file's directory. |
+| `cwd` |  | Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files. |
 | `env` |  | Environment variables added to the inherited environment. Values may use variables. |
 | `stdout` |  | "discard" (default), or a path inside ${workdir} that receives the standard output of the latest run. |
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
@@ -387,7 +438,7 @@ could never be conclusive.
 |---|---|---|
 | `command` | yes | The command: a list of arguments (no shell), or a string when shell is true. |
 | `shell` |  | Run the command string through /bin/sh -c (cmd.exe /d /s /c on Windows). Variables substituted into the string are quoted for that shell. |
-| `cwd` |  | Working directory: relative to the suite file, or starting with ${root} or ${workdir}. Default: the suite file's directory. |
+| `cwd` |  | Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files. |
 | `env` |  | Environment variables added to the inherited environment. Values may use variables. |
 | `timeout` |  | Per-run time limit. A run that exceeds it is stopped with its whole process tree and fails the benchmark. Default 1m. |
 | `stdout` |  | "discard" (default), or a path inside ${workdir} that receives the standard output of the latest run. |
@@ -409,7 +460,7 @@ could never be conclusive.
 | Key | Required | Description |
 |---|---|---|
 | `value` |  | A fixed amount of work per run, greater than zero, such as 100000. |
-| `file_size` |  | A file whose size in bytes is the work of each run: relative to the suite file, or starting with ${root} or ${workdir}. Read before every run, outside the measured time. |
+| `file_size` |  | A file whose size in bytes is the work of each run: relative to ${root} of the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Read before every run, outside the measured time. |
 | `unit` |  | The unit of work, such as records, lines or bytes. Default: operations for value, bytes for file_size. |
 
 ### benchmarks[].budget.NAME
@@ -444,24 +495,23 @@ could never be conclusive.
 
 | Key | Required | Description |
 |---|---|---|
-| `metric` |  | Statistic compared: median (default) or mean. |
-| `max_percent` |  | Tolerated latency slowdown in percent: a number such as 10, or a string such as "10%". Default 10. |
-| `min_difference` |  | The smallest latency difference that can be a regression or an improvement, such as 1ms; smaller differences pass. Default: none. |
 | `confidence` |  | Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95. |
-| `min_samples` |  | Fewest samples per side for a verdict; fewer is inconclusive. Default 10. |
+| `min_samples` |  | Fewest samples per side for a verdict. In a comparison, adaptive runs keep measuring until every compared command has this many; fewer is inconclusive. Default 10. |
 | `max_cv` |  | A side whose coefficient of variation exceeds this is inconclusive; 0 disables the check. Default 0.5. |
 | `commands` |  | Compare only these commands. Default: every command. |
+| `latency` |  | How latency (wall-clock time; lower is better) is compared. |
 | `throughput` |  | How throughput (higher is better, so a drop is a degradation) is compared. |
-| `cpu` |  | How total CPU time is compared. |
-| `memory` |  | How peak RSS is compared. |
+| `cpu` |  | How total CPU time (lower is better) is compared. |
+| `memory` |  | How peak RSS (lower is better) is compared. |
 
-### regression.throughput, regression.cpu, regression.memory
+### regression.latency, regression.throughput, regression.cpu, regression.memory
 
 | Key | Required | Description |
 |---|---|---|
 | `metric` |  | Statistic compared: median (default) or mean. |
-| `max_percent` |  | Tolerated degradation in percent. Default 10. |
-| `min_difference` |  | The smallest absolute difference that can be a regression or an improvement, such as 1ms. Default: none. |
+| `max_percent` |  | Tolerated degradation in percent: a number such as 10, or a string such as "10%". Default 10. |
+| `min_difference` |  | The smallest absolute difference that can be a regression or an improvement; smaller differences pass. A duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory, a rate in the work unit such as "1000 records/s" for throughput. Default: none. |
+| `gate` |  | Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run. |
 
 ### report
 
