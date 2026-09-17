@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-17
+
 ### Changed
 
 - `compare` and `ci` no longer fail with exit 4 on the pull request that adds
