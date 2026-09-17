@@ -473,7 +473,9 @@ const versionOutputBytes = 64 << 10
 // config.DefaultVersionTimeout or prints nothing is a setup failure.
 func (r *Runner) Version(ctx context.Context, tool config.ToolVersion, side Side) (string, *Failure) {
 	label := "report.versions." + tool.Name
-	e := config.Exec{Argv: tool.Argv, Timeout: config.DefaultVersionTimeout}
+	// LC_ALL=C keeps the version line in English, so a page generated on a
+	// machine with another locale does not change language.
+	e := config.Exec{Argv: tool.Argv, Env: []config.EnvVar{{Name: "LC_ALL", Value: "C"}}, Timeout: config.DefaultVersionTimeout}
 	vars := config.Vars{Root: side.Root, HeadRoot: side.HeadRoot, Exe: exeSuffix(), LookupEnv: r.lookupEnv}
 	var files []*os.File
 	defer func() {

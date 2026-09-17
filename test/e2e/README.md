@@ -42,7 +42,7 @@ has its own speed), `alternate` (bimodal noise), `copy`, `exit`, `gen`,
 `counter`, `cache`, `write`, `remove`, `require`, `replace`, `consume`,
 `event` (a GitHub event payload for a repository's HEAD), `interrupt`,
 `burn` (CPU time on N threads), `alloc` (resident memory held for a while),
-`records` (hash N records), `tree` (run children and wait for them), `print`,
+`records` (hash N records), `tree` (run children and wait for them), `print`, `getenv`,
 `pad` (a file of exact size), `args-from` (a build copies a revision's
 subcommand to `${artifact}`), `json-schema` (validate a report against its
 schema) and `csv-shape` (parse a CSV strictly).

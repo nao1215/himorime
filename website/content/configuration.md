@@ -232,7 +232,8 @@ report:
   allowed with `format: markdown`.
 - Each version command is a list of arguments, run once without a shell in the
   suite directory of the working tree, before anything is built or measured.
-  It inherits himorime's environment, may use `${root}`, `${head_root}`,
+  It inherits himorime's environment with `LC_ALL=C`, so the version line does
+  not change language with the locale. It may use `${root}`, `${head_root}`,
   `${exe}` and `${env:NAME}`, and has 30 seconds. The first non-empty line it
   prints on standard output, or else on standard error, is recorded.
 - A version command that fails, times out or prints nothing fails the suite
