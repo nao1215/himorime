@@ -190,13 +190,14 @@ func statCell(m *Measurement, n metric.Name, pick func(*MetricStats) float64) st
 	return metric.Format(def.Kind, v, workUnitOf(ms))
 }
 
-// floorCell shows a peak RSS at or below the floor as the most it can be.
+// floorCell shows a peak RSS at or below the floor as the most it can be. It
+// uses ≤ rather than <=, which a budget column already uses for a threshold.
 func floorCell(floor int64) string {
-	return "<= " + metric.Format(metric.KindBytes, float64(floor), "")
+	return "≤ " + metric.Format(metric.KindBytes, float64(floor), "")
 }
 
 // FloorNote explains floorCell under a table that shows one.
-const FloorNote = "<= marks a peak RSS at or below what the process starting the command already used; the command used at most that much."
+const FloorNote = "≤ marks a peak RSS at or below what the process starting the command already used; the command used at most that much."
 
 // memoryShowsFloor reports whether the memory table of a plain run shows a
 // peak RSS as <= its floor.

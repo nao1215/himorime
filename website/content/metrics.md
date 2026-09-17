@@ -171,7 +171,7 @@ JSON has `floor`, the largest floor of the runs in bytes, and
 those runs the command's real peak is unknown, only that it is at most the
 floor. Statistics are still computed from the raw values.
 
-- Tables show a statistic at or below the floor as `<= 6.30MiB`, the floor,
+- Tables show a statistic at or below the floor as `≤ 6.30MiB`, the floor,
   with a sentence under the table.
 - In a comparison, a side whose compared statistic is at or below its floor
   is compared as if it used the whole floor. A regression from a base at its

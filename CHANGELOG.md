@@ -42,7 +42,7 @@ and this project follows [Semantic Versioning](https://semver.org/).
   now start from a small spawner process, which on Linux also resets its own
   peak before each start: `/usr/bin/true` is reported at 5.6 to 6.8MiB. The
   remaining floor is recorded, and a peak at or below it is shown as
-  `<= floor`. A comparison of such a peak reports only a regression or an
+  `≤ floor`. A comparison of such a peak reports only a regression or an
   improvement that holds whatever the real value below the floor is, and is
   inconclusive otherwise; a budget on it passes only when the floor itself is
   within the budget, and is skipped otherwise. Windows was not affected.

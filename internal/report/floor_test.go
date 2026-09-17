@@ -55,7 +55,7 @@ func TestJudgePeakRSSFloor(t *testing.T) {
 	}
 }
 
-const floorNote = "<= marks a peak RSS at or below what the process starting the command already used; the command used at most that much."
+const floorNote = "≤ marks a peak RSS at or below what the process starting the command already used; the command used at most that much."
 
 func TestRenderPeakRSSAtTheFloor(t *testing.T) {
 	t.Parallel()
@@ -70,7 +70,7 @@ func TestRenderPeakRSSAtTheFloor(t *testing.T) {
 	term := out.String()
 	_, memory, _ := strings.Cut(term, "\nmemory\n")
 	tiny := lineWith(t, memory, "tiny")
-	if !strings.Contains(tiny, "<= 5.00MiB  <= 5.00MiB") {
+	if !strings.Contains(tiny, "≤ 5.00MiB  ≤ 5.00MiB") {
 		t.Errorf("a peak at the floor is not shown as <= the floor: %q", tiny)
 	}
 	if large := lineWith(t, memory, "large"); strings.Contains(large, "<=") || !strings.Contains(large, "64.00MiB") {
@@ -81,7 +81,7 @@ func TestRenderPeakRSSAtTheFloor(t *testing.T) {
 	}
 
 	md := markdownOf(t, r)
-	if !strings.Contains(md, "| tiny | tool | &lt;= 5.00MiB | &lt;= 5.00MiB |") || strings.Count(md, EscapeMarkdown(floorNote)) != 1 {
+	if !strings.Contains(md, "| tiny | tool | ≤ 5.00MiB | ≤ 5.00MiB |") || strings.Count(md, EscapeMarkdown(floorNote)) != 1 {
 		t.Errorf("markdown memory table:\n%s", md)
 	}
 
@@ -188,7 +188,7 @@ func TestBudgetOnPeakRSSAtTheFloor(t *testing.T) {
 			}
 			var out bytes.Buffer
 			_ = WriteTerminal(&out, r, TerminalOptions{})
-			if !strings.Contains(out.String(), "<= 5.00MiB") {
+			if !strings.Contains(out.String(), "≤ 5.00MiB") {
 				t.Errorf("budget table does not show the floor:\n%s", out.String())
 			}
 			if tt.status == BudgetSkipped && !strings.Contains(out.String(), "skipped: the peak RSS is at or below the measurement floor") {
