@@ -2,6 +2,7 @@
 
 [![UnitTest](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml)
 [![E2E](https://github.com/nao1215/himorime/actions/workflows/e2e.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/e2e.yml)
+[![tested with atago](https://img.shields.io/badge/tested%20with-atago-7c3aed?logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTMuNiA0LjIgMTEuOSAxMmwtOC4zIDcuOC0xLjktMi4yTDcuOSAxMiAxLjcgNi40eiIvPjxyZWN0IGZpbGw9IiNmZmYiIHg9IjEyLjYiIHk9IjE3LjIiIHdpZHRoPSI5LjciIGhlaWdodD0iMi44IiByeD0iMS40Ii8%2BPC9zdmc%2B&logoColor=white)](https://github.com/nao1215/atago)
 [![Lint](https://github.com/nao1215/himorime/actions/workflows/lint.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/lint.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/nao1215/himorime.svg)](https://pkg.go.dev/github.com/nao1215/himorime)
 
@@ -168,17 +169,11 @@ the [metrics](https://nao1215.github.io/himorime/metrics/#process-tree) page.
 
 ## The name
 
-### English
-
 `himorime` was inspired by `atago`, whose name is associated with protection
-from fire. It is named after the Maiden in Black (*Hi no Bōjo*, 火防女) from
+from fire. It is named after the Maiden in Black (*Hi no Bōjo*) from
 *Demon's Souls*, who manages the player's stats through leveling.
 The name also fits the tool's role of measuring performance stats and
 detecting regressions.
-
-### 日本語
-
-`himorime` は、防火に由来する `atago` の姉妹ツールとして、「火防女」から連想して名付けました。『Demon's Souls』の火防女がレベルアップを通じてステータスを扱うことも、性能指標を測定し、劣化を検出するこのツールの役割と重なっています。
 
 ## License
 
