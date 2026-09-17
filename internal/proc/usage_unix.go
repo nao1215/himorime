@@ -21,7 +21,7 @@ func (*usageProbe) close() {}
 
 // rusageSupported lists the systems whose wait4 fills ru_utime, ru_stime and
 // ru_maxrss. Solaris and illumos leave ru_maxrss at zero, AIX reports it in
-// another unit, and yahiko does not guess.
+// another unit, and himorime does not guess.
 func rusageSupported() bool {
 	switch runtime.GOOS {
 	case "linux", "android", "darwin", "ios", "freebsd", "openbsd", "netbsd", "dragonfly":
@@ -32,7 +32,7 @@ func rusageSupported() bool {
 
 func platformCapabilities() (cpu, memory error) {
 	if !rusageSupported() {
-		reason := fmt.Sprintf("yahiko does not read resource usage on %s", runtime.GOOS)
+		reason := fmt.Sprintf("himorime does not read resource usage on %s", runtime.GOOS)
 		return &UnsupportedError{What: "cpu time", Reason: reason}, &UnsupportedError{What: "peak rss", Reason: reason}
 	}
 	return nil, nil

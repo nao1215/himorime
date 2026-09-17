@@ -1,16 +1,16 @@
 ---
-description: yahiko checks whether a command-line program stays within its performance budget — latency, throughput, CPU time and peak RSS — from a YAML suite kept in your repository, locally and in CI.
+description: himorime checks whether a command-line program stays within its performance budget — latency, throughput, CPU time and peak RSS — from a YAML suite kept in your repository, locally and in CI.
 ---
 
-yahiko answers one question for a command-line program: **does this CLI stay
+himorime answers one question for a command-line program: **does this CLI stay
 within its performance budget?** You keep the benchmarks, budgets and
-tolerances in a `yahiko.yaml` next to your code. The same file and the same
+tolerances in a `himorime.yaml` next to your code. The same file and the same
 command run on a laptop and in GitHub Actions, and the exit status tells CI
 whether performance got worse.
 
 ```console
-$ yahiko compare --against main
-suite: jsonize benchmarks (yahiko.yaml)
+$ himorime compare --against main
+suite: jsonize benchmarks (himorime.yaml)
 latency
 BENCHMARK     BASE     HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
 df small    1.84ms   1.89ms  +50.00µs   +2.7%         low       +10%  PASS
@@ -46,13 +46,13 @@ direction that is worse for it.
 | understand PASS, REGRESSION and INCONCLUSIVE | [Regression detection](/regression-detection/) |
 | run it on pull requests | [GitHub Actions](/github-actions/) |
 | copy a working example | [Cookbook](/cookbook/) |
-| decide whether yahiko fits | [Comparison](/comparison/) |
+| decide whether himorime fits | [Comparison](/comparison/) |
 | script around exit statuses | [Exit codes](/exit-codes/) |
 | fix a problem | [Troubleshooting](/troubleshooting/) |
 
-## What yahiko measures, and what it does not
+## What himorime measures, and what it does not
 
-yahiko runs the command exactly as you wrote it, measures the whole process
+himorime runs the command exactly as you wrote it, measures the whole process
 from start to reaping, and reads CPU time and peak memory from the operating
 system when it exits. It does not profile, it does not see inside a language
 runtime, and it cannot remove the noise of a shared CI runner. It reduces the
@@ -62,5 +62,5 @@ reported as inconclusive rather than passed or failed. Its results are
 evidence for a decision in a pull request, not a guarantee. See
 [Regression detection](/regression-detection/) and [Metrics](/metrics/).
 
-yahiko checks performance. To check that a CLI *behaves* correctly — exit
+himorime checks performance. To check that a CLI *behaves* correctly — exit
 codes, output, files — use [atago](https://github.com/nao1215/atago).

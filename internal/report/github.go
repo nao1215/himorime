@@ -35,7 +35,7 @@ func WriteGitHubSummary(w io.Writer, r *Report) error {
 	if r.Mode == ModeCompare {
 		title = "benchmark comparison"
 	}
-	fmt.Fprintf(&sb, "## %s yahiko %s: %s\n\n", icon, title, verdict)
+	fmt.Fprintf(&sb, "## %s himorime %s: %s\n\n", icon, title, verdict)
 	fmt.Fprintf(&sb, "%d passed · %d improved · %d inconclusive · %d over budget · %d regressed · %d metric errors · %d errored",
 		s.Pass, s.Improved, s.Inconclusive, s.OverBudget, s.Regression, s.MetricError, s.Error)
 	if note := checksNote(s); note != "" {
@@ -44,7 +44,7 @@ func WriteGitHubSummary(w io.Writer, r *Report) error {
 	sb.WriteString("\n\n")
 	writeMarkdownBody(&sb, r, 3)
 	if r.Mode == ModeCompare {
-		sb.WriteString("\n<sub>Shared CI runners are noisy. A regression is reported only when the bootstrap confidence reaches the configured level; see https://nao1215.github.io/yahiko/regression-detection/.</sub>\n")
+		sb.WriteString("\n<sub>Shared CI runners are noisy. A regression is reported only when the bootstrap confidence reaches the configured level; see https://nao1215.github.io/himorime/regression-detection/.</sub>\n")
 	}
 	_, err := io.WriteString(w, sb.String())
 	return err

@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: understand CPU utilization above 100%.
-# https://nao1215.github.io/yahiko/cookbook/#understand-cpu-utilization-above-100
+# https://nao1215.github.io/himorime/cookbook/#understand-cpu-utilization-above-100
 version: "1"
 
 suite:

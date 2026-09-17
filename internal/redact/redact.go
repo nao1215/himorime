@@ -1,6 +1,6 @@
-// Package redact removes secret values from text yahiko prints.
+// Package redact removes secret values from text himorime prints.
 //
-// yahiko never writes the environment into a report, but a failing command's
+// himorime never writes the environment into a report, but a failing command's
 // standard error or an error message can still carry a secret the command was
 // given. Every such text passes through a Redactor first, which replaces the
 // values of secret-looking environment variables with "***".

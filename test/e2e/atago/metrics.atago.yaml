@@ -2,7 +2,7 @@
 version: "1"
 
 suite:
-  name: yahiko metrics
+  name: himorime metrics
 
 # Latency, throughput, CPU time and peak RSS measured on the portable helper.
 # The helper burns CPU, holds memory and sleeps in amounts far apart from
@@ -12,9 +12,9 @@ suite:
 defaults:
   scenario:
     env:
-      GIT_AUTHOR_NAME: yahiko-e2e
+      GIT_AUTHOR_NAME: himorime-e2e
       GIT_AUTHOR_EMAIL: e2e@example.com
-      GIT_COMMITTER_NAME: yahiko-e2e
+      GIT_COMMITTER_NAME: himorime-e2e
       GIT_COMMITTER_EMAIL: e2e@example.com
       GIT_CONFIG_NOSYSTEM: "1"
 
@@ -22,7 +22,7 @@ scenarios:
   - name: latency budgets on percentiles pass and fail
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: latency}
@@ -39,11 +39,11 @@ scenarios:
                   app:
                     latency: {p90: "< 10ms"}
       - run:
-          command: yahiko run --quiet --format json --output report.json
+          command: himorime run --quiet --format json --output report.json
       - assert:
           exit_code: 1
           stderr:
-            contains: "yahiko: exit 1: performance check failed: a budget or regression threshold was violated (the measurement itself succeeded)"
+            contains: "himorime: exit 1: performance check failed: a budget or regression threshold was violated (the measurement itself succeeded)"
       - assert:
           file:
             path: report.json
@@ -65,7 +65,7 @@ scenarios:
       - run: {command: "e2ehelper pad 1048576 \"${workdir}/my suite/input data/large file.bin\""}
       - assert: {exit_code: 0}
       - fixture:
-          file: my suite/yahiko.yaml
+          file: my suite/himorime.yaml
           content: |
             version: "1"
             suite: {name: throughput}
@@ -96,7 +96,7 @@ scenarios:
                   app:
                     throughput: {median: ">= 1KiB/s"}
       - run:
-          command: yahiko run --format json --output report.json "my suite"
+          command: himorime run --format json --output report.json "my suite"
       - assert:
           exit_code: 1
       - assert:
@@ -118,7 +118,7 @@ scenarios:
               - {path: "$.suites[0].benchmarks[2].commands[0].head.metrics.throughput.work.file_size", equals: "input data/large file.bin"}
               - {path: "$.suites[0].benchmarks[2].commands[0].head.metrics.throughput.work.value", equals: null}
       - run:
-          command: yahiko run --quiet "my suite"
+          command: himorime run --quiet "my suite"
       - assert:
           stdout:
             contains: ["throughput\nBENCHMARK", "records/s", "MiB/s", "unreachable floor / app: budget throughput min >= 1.00M records/s not met"]
@@ -126,7 +126,7 @@ scenarios:
   - name: cpu time and utilization separate a busy command from a sleeping one
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: cpu}
@@ -150,7 +150,7 @@ scenarios:
                   burn:
                     cpu: {user: {max: "< 1ms"}}
       - run:
-          command: yahiko run --quiet --format json --output report.json
+          command: himorime run --quiet --format json --output report.json
       - assert:
           exit_code: 1
       - assert:
@@ -173,7 +173,7 @@ scenarios:
               - {path: "$.suites[0].benchmarks[1].commands[0].result", equals: "over_budget"}
               - {path: "$.suites[0].benchmarks[1].commands[0].budgets[0].metric", equals: "cpu_user"}
       - run:
-          command: yahiko run --quiet
+          command: himorime run --quiet
       - assert:
           stdout:
             contains: ["cpu\nBENCHMARK", "UTILIZATION", "above 100% means more than one CPU was busy", "over budget / burn: budget cpu user max < 1.00ms not met"]
@@ -181,7 +181,7 @@ scenarios:
   - name: peak rss reflects the memory a command holds
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: memory}
@@ -200,7 +200,7 @@ scenarios:
                   app:
                     memory: {peak_rss: {max: "<= 1GiB"}}
       - run:
-          command: yahiko run --quiet --format json --output report.json
+          command: himorime run --quiet --format json --output report.json
       - assert:
           exit_code: 1
       - assert:
@@ -214,7 +214,7 @@ scenarios:
               - {path: "$.suites[0].benchmarks[1].commands[0].result", equals: "pass"}
               - {path: "$.suites[0].benchmarks[1].commands[0].head.metrics.peak_rss.stats.max", lt: 100663296}
       - run:
-          command: yahiko run --quiet
+          command: himorime run --quiet
       - assert:
           stdout:
             matches: "(?m)^holds 96MiB +app +[0-9.]+MiB +[0-9.]+MiB +OVER BUDGET$"
@@ -222,7 +222,7 @@ scenarios:
   - name: several metrics are judged together and the failing one is named
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: together}
@@ -242,7 +242,7 @@ scenarios:
                     cpu: {total: {p95: "<= 60s"}}
                     memory: {peak_rss: {median: "< 16MiB"}}
       - run:
-          command: yahiko run --quiet
+          command: himorime run --quiet
       - assert:
           exit_code: 1
           stdout:
@@ -261,7 +261,7 @@ scenarios:
   - name: cpu time covers the whole process tree
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: tree}
@@ -272,7 +272,7 @@ scenarios:
                 commands:
                   parent: {command: [e2ehelper, tree, "2", "--", burn, 150ms]}
       - run:
-          command: yahiko run --quiet --format json
+          command: himorime run --quiet --format json
       - assert:
           exit_code: 0
           stdout:
@@ -286,7 +286,7 @@ scenarios:
     skip: {os: windows}
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: tree}
@@ -297,7 +297,7 @@ scenarios:
                 commands:
                   parent: {command: [e2ehelper, tree, "1", "--", alloc, "96"]}
       - run:
-          command: yahiko run --quiet --format json
+          command: himorime run --quiet --format json
       - assert:
           exit_code: 0
           stdout:
@@ -308,7 +308,7 @@ scenarios:
     only: {os: windows}
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: tree}
@@ -319,7 +319,7 @@ scenarios:
                 commands:
                   parent: {command: [e2ehelper, tree, "1", "--", alloc, "8"]}
       - fixture:
-          file: skip.yahiko.yaml
+          file: skip.himorime.yaml
           content: |
             version: "1"
             suite: {name: tree}
@@ -333,13 +333,13 @@ scenarios:
                   parent:
                     memory: {peak_rss: {max: "<= 1MiB"}}
       - run:
-          command: yahiko run --quiet
+          command: himorime run --quiet
       - assert:
           exit_code: 6
           stdout: {contains: ["metric unsupported", "peak rss is not supported"]}
-          stderr: {contains: "yahiko: exit 6: a requested metric could not be measured"}
+          stderr: {contains: "himorime: exit 6: a requested metric could not be measured"}
       - run:
-          command: yahiko run --quiet --format json skip.yahiko.yaml
+          command: himorime run --quiet --format json skip.himorime.yaml
       - assert:
           exit_code: 0
           stdout:
@@ -352,7 +352,7 @@ scenarios:
   - name: a metric that cannot be collected exits 6, apart from a failing command
     steps:
       - fixture:
-          file: missing.yahiko.yaml
+          file: missing.himorime.yaml
           content: |
             version: "1"
             suite: {name: missing work}
@@ -364,7 +364,7 @@ scenarios:
                     work: {file_size: does-not-exist.json}
                 commands: {app: {command: [e2ehelper, sleep, 1ms]}}
       - fixture:
-          file: failing.yahiko.yaml
+          file: failing.himorime.yaml
           content: |
             version: "1"
             suite: {name: failing command}
@@ -374,10 +374,10 @@ scenarios:
                 metrics: {cpu: true}
                 commands: {app: {command: [e2ehelper, exit, "3", "broken on purpose"]}}
       - run:
-          command: yahiko run --quiet --format json --output missing.json missing.yahiko.yaml
+          command: himorime run --quiet --format json --output missing.json missing.himorime.yaml
       - assert:
           exit_code: 6
-          stderr: {contains: "yahiko: exit 6: a requested metric could not be measured"}
+          stderr: {contains: "himorime: exit 6: a requested metric could not be measured"}
       - assert:
           file:
             path: missing.json
@@ -389,18 +389,18 @@ scenarios:
               - {path: "$.summary.metric_error", equals: 1}
               - {path: "$.summary.exit_code", equals: 6}
       - run:
-          command: yahiko run --quiet failing.yahiko.yaml
+          command: himorime run --quiet failing.himorime.yaml
       - assert:
           exit_code: 4
           stdout: {contains: ["broken / app: exit code: exited with status 3", "stderr: broken on purpose"]}
-          stderr: {contains: "yahiko: exit 4: the measurement did not complete"}
+          stderr: {contains: "himorime: exit 4: the measurement did not complete"}
 
   - name: GitHub Actions annotations tell a performance failure from a measurement failure
     env:
       GITHUB_ACTIONS: "true"
     steps:
       - fixture:
-          file: budget.yahiko.yaml
+          file: budget.himorime.yaml
           content: |
             version: "1"
             suite: {name: budget}
@@ -413,7 +413,7 @@ scenarios:
                   app:
                     memory: {peak_rss: {max: "<= 8MiB"}}
       - fixture:
-          file: broken.yahiko.yaml
+          file: broken.himorime.yaml
           content: |
             version: "1"
             suite: {name: broken}
@@ -427,21 +427,21 @@ scenarios:
               - name: crashes
                 commands: {app: {command: [e2ehelper, exit, "9"]}}
       - run:
-          command: yahiko run --quiet --format json --output budget.json budget.yahiko.yaml
+          command: himorime run --quiet --format json --output budget.json budget.himorime.yaml
       - assert:
           exit_code: 1
           stdout: {empty: true}
           stderr:
-            contains: "::error file=budget.yahiko.yaml,title=yahiko%3A performance budget exceeded::heavy / app: peak rss max budget <= 8.00MiB, measured "
+            contains: "::error file=budget.himorime.yaml,title=himorime%3A performance budget exceeded::heavy / app: peak rss max budget <= 8.00MiB, measured "
             not_contains: "could not"
       - run:
-          command: yahiko run --quiet broken.yahiko.yaml
+          command: himorime run --quiet broken.himorime.yaml
       - assert:
           exit_code: 4
           stderr:
             contains:
-              - "::error file=broken.yahiko.yaml,title=yahiko%3A metric could not be measured::no input / app: metric collection failed: throughput work file_size missing.bin"
-              - "::error file=broken.yahiko.yaml,title=yahiko%3A benchmark could not run::crashes / app: exit code: exited with status 9"
+              - "::error file=broken.himorime.yaml,title=himorime%3A metric could not be measured::no input / app: metric collection failed: throughput work file_size missing.bin"
+              - "::error file=broken.himorime.yaml,title=himorime%3A benchmark could not run::crashes / app: exit code: exited with status 9"
             not_contains: "performance budget exceeded"
 
   - name: a cpu and memory regression is detected against the base revision
@@ -449,7 +449,7 @@ scenarios:
       - fixture: {file: repo/work.txt, content: "burn 20ms\n"}
       - fixture: {file: repo/memory.txt, content: "alloc 8 100ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: compare metrics}
@@ -480,7 +480,7 @@ scenarios:
       - fixture: {file: repo/work.txt, content: "burn 300ms\n"}
       - fixture: {file: repo/memory.txt, content: "alloc 128 100ms\n"}
       - run:
-          command: yahiko compare --against main --quiet --format json --output ${workdir}/compare.json
+          command: himorime compare --against main --quiet --format json --output ${workdir}/compare.json
           cwd: repo
           timeout: 180s
       - assert:
@@ -501,7 +501,7 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: false}
               - {path: "$.summary.regression", equals: 2}
       - run:
-          command: yahiko compare --against main --quiet
+          command: himorime compare --against main --quiet
           cwd: repo
           timeout: 180s
       - assert:
@@ -516,7 +516,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "sleep 40ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: compare throughput}
@@ -537,7 +537,7 @@ scenarios:
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - fixture: {file: repo/delay.txt, content: "sleep 250ms\n"}
       - run:
-          command: yahiko compare --against main --quiet --format json
+          command: himorime compare --against main --quiet --format json
           cwd: repo
           timeout: 120s
       - assert:
@@ -554,7 +554,7 @@ scenarios:
       - run: {command: git -c commit.gpgsign=false commit -q -am slower, cwd: repo}
       - fixture: {file: repo/delay.txt, content: "sleep 40ms\n"}
       - run:
-          command: yahiko compare --against main --quiet --format json
+          command: himorime compare --against main --quiet --format json
           cwd: repo
           timeout: 120s
       - assert:
@@ -568,7 +568,7 @@ scenarios:
   - name: reports carry every metric as JSON, long CSV, raw samples and Markdown
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: reports}
@@ -591,11 +591,11 @@ scenarios:
                 - {format: samples-csv, path: out/samples.csv}
                 - {format: markdown, path: out/report.md}
       - run:
-          command: yahiko run --quiet --summary out/summary.md
+          command: himorime run --quiet --summary out/summary.md
       - assert:
           exit_code: 0
       - run:
-          command: e2ehelper json-schema ${env:YAHIKO_REPO}/schema/report.schema.json out/report.json
+          command: e2ehelper json-schema ${env:HIMORIME_REPO}/schema/report.schema.json out/report.json
       - assert:
           exit_code: 0
           stdout: {equals: "valid\n"}
@@ -641,12 +641,12 @@ scenarios:
       - assert:
           file:
             path: out/summary.md
-            contains: ["## ✅ yahiko benchmarks: no regression", "#### CPU", "#### Memory", "| all metrics | app |"]
+            contains: ["## ✅ himorime benchmarks: no regression", "#### CPU", "#### Memory", "| all metrics | app |"]
 
   - name: invalid units, directions and malformed YAML are configuration errors
     steps:
       - fixture:
-          file: units.yahiko.yaml
+          file: units.himorime.yaml
           content: |
             version: "1"
             suite: {name: units}
@@ -662,7 +662,7 @@ scenarios:
                     memory: {peak_rss: {max: "<= 64mib"}}
                     latency: {p100: "< 1s", median: ">= 1ms"}
       - fixture:
-          file: rate.yahiko.yaml
+          file: rate.himorime.yaml
           content: |
             version: "1"
             suite: {name: rate}
@@ -676,7 +676,7 @@ scenarios:
                   app:
                     throughput: {median: ">= 5MiB/s"}
       - fixture:
-          file: work.yahiko.yaml
+          file: work.himorime.yaml
           content: |
             version: "1"
             suite: {name: work}
@@ -688,40 +688,40 @@ scenarios:
                     work: {value: 0}
                 commands: {app: {command: [e2ehelper, sleep, 1ms]}}
       - fixture:
-          file: broken.yahiko.yaml
+          file: broken.himorime.yaml
           content: "version: \"1\"\nsuite: {name: broken\nbenchmarks: [\n"
       - run:
-          command: yahiko validate units.yahiko.yaml
+          command: himorime validate units.himorime.yaml
       - assert:
           exit_code: 2
           stderr:
             contains:
-              - "units.yahiko.yaml:12:34: benchmarks[0].budget.app.memory.peak_rss.max: invalid budget"
+              - "units.himorime.yaml:12:34: benchmarks[0].budget.app.memory.peak_rss.max: invalid budget"
               - 'benchmarks[0].budget.app.latency.p100: unknown aggregation "p100"'
               - "benchmarks[0].budget.app.latency.median: invalid budget"
-              - "yahiko: the suite is invalid; nothing was run"
+              - "himorime: the suite is invalid; nothing was run"
       - run:
-          command: yahiko validate rate.yahiko.yaml
+          command: himorime validate rate.himorime.yaml
       - assert:
           exit_code: 2
           stderr:
             contains: "benchmarks[0].budget.app.throughput.median: the budget is in bytes/s but the declared work unit is records"
       - run:
-          command: yahiko run work.yahiko.yaml
+          command: himorime run work.himorime.yaml
       - assert:
           exit_code: 2
           stderr:
             contains: ['benchmarks[0].metrics.gpu: unknown key "gpu"', "benchmarks[0].metrics.throughput.work.value: must be greater than 0, got 0"]
       - run:
-          command: yahiko validate broken.yahiko.yaml
+          command: himorime validate broken.himorime.yaml
       - assert:
           exit_code: 2
-          stderr: {contains: "broken.yahiko.yaml"}
+          stderr: {contains: "broken.himorime.yaml"}
 
   - name: a timeout with metrics enabled still stops the process tree
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: timeout}
@@ -734,7 +734,7 @@ scenarios:
                     command: [e2ehelper, spawn, "$${root}/grandchild-survived"]
                     timeout: 500ms
       - run:
-          command: yahiko run --quiet
+          command: himorime run --quiet
           timeout: 60s
       - assert:
           exit_code: 4
@@ -749,7 +749,7 @@ scenarios:
       PAYLOAD: "x; e2ehelper write injected-sh & e2ehelper write injected-cmd"
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: shell}
@@ -768,7 +768,7 @@ scenarios:
                     command: [e2ehelper, print, "$${env:PAYLOAD}"]
                     cwd: "$${root}"
       - run:
-          command: yahiko run --quiet
+          command: himorime run --quiet
       - assert:
           exit_code: 0
       - assert:

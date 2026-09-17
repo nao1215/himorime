@@ -11,12 +11,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/nao1215/yahiko/internal/buildinfo"
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/exitcode"
+	"github.com/nao1215/himorime/internal/buildinfo"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/exitcode"
 )
 
-// InitTemplate is the suite `yahiko init` writes. TestInitTemplateIsValid
+// InitTemplate is the suite `himorime init` writes. TestInitTemplateIsValid
 // loads it, and the E2E suite runs it.
 //
 //go:embed init.yaml
@@ -30,7 +30,7 @@ func runInit(_ context.Context, a *App, args []string) int {
 		return status
 	}
 	if len(operands) > 1 {
-		fmt.Fprintln(a.Stderr, "yahiko init: at most one PATH may be given")
+		fmt.Fprintln(a.Stderr, "himorime init: at most one PATH may be given")
 		return exitcode.Usage
 	}
 	path := config.DefaultFileName
@@ -44,19 +44,19 @@ func runInit(_ context.Context, a *App, args []string) int {
 	f, err := os.OpenFile(path, flags, 0o644) //nolint:gosec // the user names the file to create
 	if err != nil {
 		if errors.Is(err, iofs.ErrExist) {
-			fmt.Fprintf(a.Stderr, "yahiko init: %s already exists; it was not changed (use --force to overwrite it)\n", path)
+			fmt.Fprintf(a.Stderr, "himorime init: %s already exists; it was not changed (use --force to overwrite it)\n", path)
 			return exitcode.Usage
 		}
-		fmt.Fprintf(a.Stderr, "yahiko init: %v\n", err)
+		fmt.Fprintf(a.Stderr, "himorime init: %v\n", err)
 		return exitcode.Execution
 	}
 	_, werr := f.WriteString(InitTemplate)
 	cerr := f.Close()
 	if err := errors.Join(werr, cerr); err != nil {
-		fmt.Fprintf(a.Stderr, "yahiko init: write %s: %v\n", path, err)
+		fmt.Fprintf(a.Stderr, "himorime init: write %s: %v\n", path, err)
 		return exitcode.Execution
 	}
-	fmt.Fprintf(a.Stdout, "wrote %s\nnext: yahiko validate %s && yahiko run %s\n", path, path, path)
+	fmt.Fprintf(a.Stdout, "wrote %s\nnext: himorime validate %s && himorime run %s\n", path, path, path)
 	return exitcode.OK
 }
 
@@ -84,7 +84,7 @@ func plural(n int, word string) string {
 	return fmt.Sprintf("%d %ss", n, word)
 }
 
-// ListEntry is one line of `yahiko list`, and one element of its JSON output.
+// ListEntry is one line of `himorime list`, and one element of its JSON output.
 type ListEntry struct {
 	Suite     string   `json:"suite"`
 	SuiteName string   `json:"suite_name"`
@@ -105,7 +105,7 @@ func runList(_ context.Context, a *App, args []string) int {
 		return status
 	}
 	if o.format != "text" && o.format != "json" {
-		fmt.Fprintf(a.Stderr, "yahiko list: unknown --format %q; use text or json\n", o.format)
+		fmt.Fprintf(a.Stderr, "himorime list: unknown --format %q; use text or json\n", o.format)
 		return exitcode.Usage
 	}
 	sel, ok := o.selection(a.Stderr, "list")
@@ -138,7 +138,7 @@ func runList(_ context.Context, a *App, args []string) int {
 		enc := json.NewEncoder(a.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(entries); err != nil {
-			fmt.Fprintf(a.Stderr, "yahiko list: %v\n", err)
+			fmt.Fprintf(a.Stderr, "himorime list: %v\n", err)
 			return exitcode.Execution
 		}
 		return exitcode.OK
@@ -163,7 +163,7 @@ func runList(_ context.Context, a *App, args []string) int {
 	}
 	writeColumns(a, t)
 	if len(entries) == 0 {
-		fmt.Fprintln(a.Stderr, "yahiko list: no benchmark matches the selection")
+		fmt.Fprintln(a.Stderr, "himorime list: no benchmark matches the selection")
 	}
 	return exitcode.OK
 }
@@ -207,6 +207,6 @@ func runVersion(_ context.Context, a *App, args []string) int {
 	if c := buildinfo.Commit(); c != "" {
 		commit = ", commit " + c
 	}
-	fmt.Fprintf(a.Stdout, "yahiko %s (%s, %s/%s%s)\n", buildinfo.Get(), runtime.Version(), runtime.GOOS, runtime.GOARCH, commit)
+	fmt.Fprintf(a.Stdout, "himorime %s (%s, %s/%s%s)\n", buildinfo.Get(), runtime.Version(), runtime.GOOS, runtime.GOARCH, commit)
 	return exitcode.OK
 }

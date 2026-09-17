@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  # The same Go entry point on every OS: it builds yahiko and the portable
+  # The same Go entry point on every OS: it builds himorime and the portable
   # helper, runs every atago spec under test/e2e/atago, and fails if the run
   # modified the repository. Scenarios that need POSIX signals say so with
   # skip: {os: windows}.

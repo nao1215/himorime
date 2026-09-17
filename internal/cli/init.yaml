@@ -1,12 +1,12 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/yahiko/main/schema/yahiko.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
 #
-# A yahiko benchmark suite. Replace the example with the programs you want to
+# A himorime benchmark suite. Replace the example with the programs you want to
 # measure, then run:
 #
-#   yahiko validate
-#   yahiko run
+#   himorime validate
+#   himorime run
 #
-# Reference: https://nao1215.github.io/yahiko/configuration/
+# Reference: https://nao1215.github.io/himorime/configuration/
 version: "1"
 
 suite:
@@ -38,7 +38,7 @@ benchmarks:
         # cpu: {total: {median: "<= 1s"}}
         # memory: {peak_rss: {max: "<= 256MiB"}}
 
-# To compare the working tree with a Git revision (yahiko compare --against
+# To compare the working tree with a Git revision (himorime compare --against
 # main), add a build that writes ${artifact} and measure that artifact:
 #
 # build:

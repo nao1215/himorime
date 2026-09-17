@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: compare parsers on a stdin fixture.
-# https://nao1215.github.io/yahiko/cookbook/#compare-parsers-on-a-stdin-fixture
+# https://nao1215.github.io/himorime/cookbook/#compare-parsers-on-a-stdin-fixture
 version: "1"
 
 suite:

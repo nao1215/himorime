@@ -3,8 +3,8 @@ package runner
 import (
 	"time"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 // Side names. A plain run measures only the head side.

@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/nao1215/yahiko/main/schema/yahiko.schema.json",
-  "title": "yahiko benchmark suite",
-  "description": "A versioned yahiko benchmark suite. See https://nao1215.github.io/yahiko/configuration/.",
+  "$id": "https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json",
+  "title": "himorime benchmark suite",
+  "description": "A versioned himorime benchmark suite. See https://nao1215.github.io/himorime/configuration/.",
   "type": "object",
   "required": [
     "version",
@@ -355,7 +355,7 @@
       ]
     },
     "exec": {
-      "description": "A process yahiko starts: the build or a hook. `command` is a list of arguments run without a shell, or a string together with `shell: true`.",
+      "description": "A process himorime starts: the build or a hook. `command` is a list of arguments run without a shell, or a string together with `shell: true`.",
       "type": "object",
       "required": [
         "command"
@@ -505,7 +505,7 @@
       "minProperties": 1
     },
     "regression": {
-      "description": "How a base revision and the working tree are compared (yahiko compare / yahiko ci).",
+      "description": "How a base revision and the working tree are compared (himorime compare / himorime ci).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -542,7 +542,7 @@
       }
     },
     "regressionBenchmark": {
-      "description": "How a base revision and the working tree are compared (yahiko compare / yahiko ci).",
+      "description": "How a base revision and the working tree are compared (himorime compare / himorime ci).",
       "type": "object",
       "additionalProperties": false,
       "properties": {

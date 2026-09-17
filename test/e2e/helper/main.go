@@ -454,7 +454,7 @@ func records(args []string) error {
 // tree CHILDREN -- SUBCOMMAND ARGS...: run CHILDREN copies of this helper
 // with SUBCOMMAND at the same time and wait for all of them, doing no work
 // itself. It proves that CPU time and memory are measured for the process
-// tree rather than only the process yahiko started.
+// tree rather than only the process himorime started.
 func tree(args []string) error {
 	if len(args) < 3 || args[1] != "--" {
 		return errors.New("usage: helper tree CHILDREN -- SUBCOMMAND ARGS")

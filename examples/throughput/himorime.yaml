@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: protect the throughput of large CSV and JSON processing.
-# https://nao1215.github.io/yahiko/cookbook/#protect-the-throughput-of-large-csv-and-json-processing
+# https://nao1215.github.io/himorime/cookbook/#protect-the-throughput-of-large-csv-and-json-processing
 version: "1"
 
 suite:
@@ -21,7 +21,7 @@ benchmarks:
       - command: ["${artifact}", -gen, "200000", -gen-format, csv, -o, "${workdir}/input.csv"]
     metrics:
       throughput:
-        # Throughput is work divided by latency, and yahiko never guesses the
+        # Throughput is work divided by latency, and himorime never guesses the
         # work: here it is the size of the input file, read before every run.
         work:
           file_size: "${workdir}/input.csv"

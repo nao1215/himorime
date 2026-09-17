@@ -19,7 +19,7 @@ import (
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
-	"github.com/nao1215/yahiko/schema"
+	"github.com/nao1215/himorime/schema"
 )
 
 var (
@@ -252,7 +252,7 @@ func leafIssue(e *jsonschema.ValidationError, p path, emit func(path, string, st
 	case *kind.AdditionalProperties:
 		for _, name := range k.Properties {
 			emit(p.key(name), fmt.Sprintf("unknown key %q", name),
-				"check the spelling against https://nao1215.github.io/yahiko/configuration/; unknown keys are rejected so a typo cannot silently change a benchmark")
+				"check the spelling against https://nao1215.github.io/himorime/configuration/; unknown keys are rejected so a typo cannot silently change a benchmark")
 		}
 	case *kind.Required:
 		for _, name := range k.Missing {

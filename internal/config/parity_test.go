@@ -13,10 +13,10 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
-// These tests keep schema/yahiko.schema.json and the Go loader in agreement.
+// These tests keep schema/himorime.schema.json and the Go loader in agreement.
 // The loader validates against the embedded schema first, so Go can never
 // accept a document the schema rejects. What remains to check is the other
 // direction and the key inventory:
@@ -31,7 +31,7 @@ import (
 
 func diskSchema(tb testing.TB) *jsonschema.Schema {
 	tb.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "schema", "yahiko.schema.json"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "schema", "himorime.schema.json"))
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestSchemaParityValid(t *testing.T) {
 		if !schemaAccepts(t, s, src) {
 			t.Errorf("%s: rejected by the schema", name)
 		}
-		if _, err := Parse(name, filepath.Join(t.TempDir(), "yahiko.yaml"), src); err != nil {
+		if _, err := Parse(name, filepath.Join(t.TempDir(), "himorime.yaml"), src); err != nil {
 			t.Errorf("%s: rejected by Go: %v", name, err)
 		}
 	}
@@ -96,7 +96,7 @@ func TestSchemaParitySchemaInvalid(t *testing.T) {
 		if schemaAccepts(t, s, src) {
 			t.Errorf("%s: accepted by the schema, but it is in the schema-invalid corpus", name)
 		}
-		if _, err := Parse(name, filepath.Join(t.TempDir(), "yahiko.yaml"), src); !IsValidation(err) {
+		if _, err := Parse(name, filepath.Join(t.TempDir(), "himorime.yaml"), src); !IsValidation(err) {
 			t.Errorf("%s: Go did not reject it with a validation error: %v", name, err)
 		}
 	}
@@ -114,7 +114,7 @@ func TestSchemaParitySemanticInvalid(t *testing.T) {
 		if !schemaAccepts(t, s, src) {
 			t.Errorf("%s: rejected by the schema; move it to testdata/parity/schema", name)
 		}
-		_, err := Parse(name, filepath.Join(t.TempDir(), "yahiko.yaml"), src)
+		_, err := Parse(name, filepath.Join(t.TempDir(), "himorime.yaml"), src)
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: Go error = %v, want it to contain %q", name, err, want)
 		}
@@ -248,7 +248,7 @@ func FuzzLoad(f *testing.F) {
 	}
 	s := diskSchema(f)
 	f.Fuzz(func(t *testing.T, src []byte) {
-		suite, err := Parse("fuzz.yaml", filepath.Join(os.TempDir(), "fuzz", "yahiko.yaml"), src)
+		suite, err := Parse("fuzz.yaml", filepath.Join(os.TempDir(), "fuzz", "himorime.yaml"), src)
 		if err != nil {
 			return
 		}

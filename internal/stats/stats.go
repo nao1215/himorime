@@ -1,4 +1,4 @@
-// Package stats computes the summary statistics yahiko reports and the
+// Package stats computes the summary statistics himorime reports and the
 // bootstrap comparison it uses to classify a change between two revisions.
 //
 // Every function is pure: samples in, numbers out. Samples are float64 values
@@ -12,7 +12,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 // Summary describes a set of samples.

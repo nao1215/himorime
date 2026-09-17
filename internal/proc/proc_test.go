@@ -12,14 +12,15 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
 
 // The test binary doubles as the child process: TestMain dispatches on
-// YAHIKO_PROC_HELPER so every platform runs the same portable helper.
+// HIMORIME_PROC_HELPER so every platform runs the same portable helper.
 func TestMain(m *testing.M) {
-	switch os.Getenv("YAHIKO_PROC_HELPER") {
+	switch os.Getenv("HIMORIME_PROC_HELPER") {
 	case "":
 		os.Exit(m.Run())
 	case "exit":
@@ -38,7 +39,7 @@ func TestMain(m *testing.M) {
 		// write the marker.
 		exe, _ := os.Executable()
 		cmd := exec.Command(exe)
-		cmd.Env = append(os.Environ(), "YAHIKO_PROC_HELPER=marker")
+		cmd.Env = append(os.Environ(), "HIMORIME_PROC_HELPER=marker")
 		if err := cmd.Start(); err != nil {
 			os.Exit(3)
 		}
@@ -49,7 +50,7 @@ func TestMain(m *testing.M) {
 		// stdout, then exit at once.
 		exe, _ := os.Executable()
 		cmd := exec.Command(exe)
-		cmd.Env = append(os.Environ(), "YAHIKO_PROC_HELPER=marker")
+		cmd.Env = append(os.Environ(), "HIMORIME_PROC_HELPER=marker")
 		cmd.Stdout = os.Stdout
 		if err := cmd.Start(); err != nil {
 			os.Exit(3)
@@ -73,7 +74,7 @@ func TestMain(m *testing.M) {
 		// Run the burn helper as a child and wait for it, doing nothing itself.
 		exe, _ := os.Executable()
 		cmd := exec.Command(exe)
-		cmd.Env = append(os.Environ(), "YAHIKO_PROC_HELPER=burn")
+		cmd.Env = append(os.Environ(), "HIMORIME_PROC_HELPER=burn")
 		if err := cmd.Run(); err != nil {
 			os.Exit(3)
 		}
@@ -95,7 +96,7 @@ func helper(t *testing.T, mode string, env ...string) Spec {
 	}
 	return Spec{
 		Path:   exe,
-		Env:    append(append(os.Environ(), "YAHIKO_PROC_HELPER="+mode), env...),
+		Env:    append(append(os.Environ(), "HIMORIME_PROC_HELPER="+mode), env...),
 		Stdout: io.Discard,
 		Stderr: io.Discard,
 	}
@@ -121,12 +122,12 @@ func TestRunPassesStdinAndCapturesStdout(t *testing.T) {
 	t.Parallel()
 	s := helper(t, "cat")
 	var out bytes.Buffer
-	s.Stdin = strings.NewReader("hello yahiko")
+	s.Stdin = strings.NewReader("hello himorime")
 	s.Stdout = &out
 	if _, err := Run(context.Background(), s, nil); err != nil {
 		t.Fatal(err)
 	}
-	if out.String() != "hello yahiko" {
+	if out.String() != "hello himorime" {
 		t.Fatalf("stdout = %q", out.String())
 	}
 }
@@ -251,7 +252,7 @@ func TestRunAlreadyCanceledContextStartsNothing(t *testing.T) {
 
 func TestRunMissingProgramIsAStartError(t *testing.T) {
 	t.Parallel()
-	_, err := Run(context.Background(), Spec{Path: "yahiko-definitely-missing-program", Env: os.Environ()}, nil)
+	_, err := Run(context.Background(), Spec{Path: "himorime-definitely-missing-program", Env: os.Environ()}, nil)
 	if !errors.Is(err, ErrStart) {
 		t.Fatalf("err = %v, want ErrStart", err)
 	}
@@ -268,7 +269,7 @@ func TestRunLooksUpProgramInChildPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := "yahiko-proc-helper"
+	name := "himorime-proc-helper"
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
@@ -279,8 +280,18 @@ func TestRunLooksUpProgramInChildPath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, name), data, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	env := append(os.Environ(), "PATH="+dir, "YAHIKO_PROC_HELPER=exit", "HELPER_CODE=4")
-	res, err := Run(context.Background(), Spec{Path: "yahiko-proc-helper", Env: env, Stdout: io.Discard, Stderr: io.Discard}, nil)
+	env := append(os.Environ(), "PATH="+dir, "HIMORIME_PROC_HELPER=exit", "HELPER_CODE=4")
+	// A parallel test forking while the copy was open for writing holds the
+	// file until its child execs, and executing it meanwhile fails with
+	// ETXTBSY; that is the test's race, not the lookup's, so it is retried.
+	var res Result
+	for range 50 {
+		res, err = Run(context.Background(), Spec{Path: "himorime-proc-helper", Env: env, Stdout: io.Discard, Stderr: io.Discard}, nil)
+		if !errors.Is(err, syscall.ETXTBSY) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +362,7 @@ func TestRunStopsProcessesLeftBehindAndDoesNotWaitForThem(t *testing.T) {
 	t.Parallel()
 	marker := filepath.Join(t.TempDir(), "marker")
 	s := helper(t, "background", "HELPER_MARKER="+marker)
-	// yahiko always gives commands a file or the null device, never a pipe,
+	// himorime always gives commands a file or the null device, never a pipe,
 	// so Wait returns as soon as the command itself exits.
 	out, err := os.Create(filepath.Join(t.TempDir(), "stdout"))
 	if err != nil {
@@ -383,7 +394,7 @@ func TestLookPathResolvesRelativeEntriesAgainstTheWorkingDirectory(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := "yahiko-relative-helper"
+	name := "himorime-relative-helper"
 	file := name
 	if runtime.GOOS == "windows" {
 		file += ".exe"
@@ -398,7 +409,7 @@ func TestLookPathResolvesRelativeEntriesAgainstTheWorkingDirectory(t *testing.T)
 	if err := os.WriteFile(filepath.Join(dir, "bin", file), data, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	env := append(os.Environ(), "PATH=bin", "YAHIKO_PROC_HELPER=exit", "HELPER_CODE=6")
+	env := append(os.Environ(), "PATH=bin", "HIMORIME_PROC_HELPER=exit", "HELPER_CODE=6")
 	res, err := Run(context.Background(), Spec{Path: name, Dir: dir, Env: env, Stdout: io.Discard, Stderr: io.Discard}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -506,7 +517,7 @@ func BenchmarkRunUsage(b *testing.B) {
 	}
 	for _, collect := range []bool{false, true} {
 		b.Run(fmt.Sprintf("collect=%v", collect), func(b *testing.B) {
-			s := Spec{Path: exe, Env: append(os.Environ(), "YAHIKO_PROC_HELPER=exit"), CollectUsage: collect}
+			s := Spec{Path: exe, Env: append(os.Environ(), "HIMORIME_PROC_HELPER=exit"), CollectUsage: collect}
 			for b.Loop() {
 				if _, err := Run(context.Background(), s, nil); err != nil {
 					b.Fatal(err)

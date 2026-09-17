@@ -17,7 +17,7 @@ import (
 )
 
 // configure starts the child in its own process group, so that a console
-// Ctrl+C aimed at yahiko is handled by yahiko, which then stops the job, and
+// Ctrl+C aimed at himorime is handled by himorime, which then stops the job, and
 // suspended, so that attach can put it in its Job Object before it runs.
 func configure(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {

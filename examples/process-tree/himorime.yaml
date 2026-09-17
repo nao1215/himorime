@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: understand process tree measurement on each OS.
-# https://nao1215.github.io/yahiko/cookbook/#understand-process-tree-measurement-on-each-os
+# https://nao1215.github.io/himorime/cookbook/#understand-process-tree-measurement-on-each-os
 version: "1"
 
 suite:

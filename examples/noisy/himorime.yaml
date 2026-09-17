@@ -1,10 +1,10 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: cope with noise on GitHub-hosted runners.
-# https://nao1215.github.io/yahiko/cookbook/#cope-with-noise-on-github-hosted-runners
+# https://nao1215.github.io/himorime/cookbook/#cope-with-noise-on-github-hosted-runners
 #
-#   yahiko compare --against main examples/noisy
-#   yahiko compare --against main --fail-on-inconclusive examples/noisy
+#   himorime compare --against main examples/noisy
+#   himorime compare --against main --fail-on-inconclusive examples/noisy
 version: "1"
 
 suite:

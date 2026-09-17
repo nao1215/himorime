@@ -1,10 +1,10 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: the suite .github/workflows/benchmark.yml runs, locally or in CI.
-# https://nao1215.github.io/yahiko/cookbook/#fail-a-github-actions-job-when-a-performance-budget-is-violated
+# https://nao1215.github.io/himorime/cookbook/#fail-a-github-actions-job-when-a-performance-budget-is-violated
 #
-#   yahiko run examples/github-actions
-#   YAHIKO_BASE_REF=main yahiko ci examples/github-actions
+#   himorime run examples/github-actions
+#   HIMORIME_BASE_REF=main himorime ci examples/github-actions
 version: "1"
 
 suite:

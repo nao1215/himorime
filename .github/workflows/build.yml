@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  # Cross-compile every OS and architecture yahiko supports or at least keeps
+  # Cross-compile every OS and architecture himorime supports or at least keeps
   # compiling for. Release builds cover the six published targets; the BSDs
   # are here so that a Unix-only assumption cannot slip in unnoticed.
   cross:

@@ -12,7 +12,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 // percentPattern is a percentage written as a string, such as "10%".

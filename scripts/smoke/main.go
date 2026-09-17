@@ -56,7 +56,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "smoke:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("smoke: checking yahiko %s in %s\n", version, dist)
+	fmt.Printf("smoke: checking himorime %s in %s\n", version, dist)
 
 	for _, p := range platforms {
 		host := p.goos == runtime.GOOS && p.goarch == runtime.GOARCH
@@ -84,15 +84,15 @@ func readVersion(dist string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(dist, "metadata.json"))
 	if err != nil {
 		// A per-OS job receives only archives; derive the version from them.
-		matches, _ := filepath.Glob(filepath.Join(dist, "yahiko_*_linux_amd64.tar.gz"))
+		matches, _ := filepath.Glob(filepath.Join(dist, "himorime_*_linux_amd64.tar.gz"))
 		if len(matches) == 0 {
-			matches, _ = filepath.Glob(filepath.Join(dist, "yahiko_*_*_*.*"))
+			matches, _ = filepath.Glob(filepath.Join(dist, "himorime_*_*_*.*"))
 		}
 		if len(matches) == 0 {
 			return "", fmt.Errorf("no metadata.json and no archive in %s", dist)
 		}
 		base := filepath.Base(matches[0])
-		parts := strings.Split(strings.TrimPrefix(base, "yahiko_"), "_")
+		parts := strings.Split(strings.TrimPrefix(base, "himorime_"), "_")
 		return parts[0], nil
 	}
 	var meta struct {
@@ -110,35 +110,35 @@ func checkArchive(dist, version, goos, goarch string, host bool, fail func(strin
 	if goos == "windows" {
 		exe, ext = ".exe", ".zip"
 	}
-	name := fmt.Sprintf("yahiko_%s_%s_%s%s", version, goos, goarch, ext)
+	name := fmt.Sprintf("himorime_%s_%s_%s%s", version, goos, goarch, ext)
 	path := filepath.Join(dist, name)
 	files, err := extract(path)
 	if err != nil {
 		fail("%s: %v", name, err)
 		return
 	}
-	for _, want := range []string{"yahiko" + exe, "LICENSE", "README.md", "CHANGELOG.md", "completions/yahiko.bash", "completions/yahiko.zsh", "completions/yahiko.fish", "completions/yahiko.ps1"} {
+	for _, want := range []string{"himorime" + exe, "LICENSE", "README.md", "CHANGELOG.md", "completions/himorime.bash", "completions/himorime.zsh", "completions/himorime.fish", "completions/himorime.ps1"} {
 		if len(files[want]) == 0 {
 			fail("%s lacks %s", name, want)
 		}
 	}
-	bin := files["yahiko"+exe]
+	bin := files["himorime"+exe]
 	if len(bin) == 0 {
 		return
 	}
-	tmp, err := os.MkdirTemp("", "yahiko-smoke-")
+	tmp, err := os.MkdirTemp("", "himorime-smoke-")
 	if err != nil {
 		fail("%v", err)
 		return
 	}
 	defer os.RemoveAll(tmp)
-	binPath := filepath.Join(tmp, "yahiko"+exe)
+	binPath := filepath.Join(tmp, "himorime"+exe)
 	if err := os.WriteFile(binPath, bin, 0o700); err != nil {
 		fail("%v", err)
 		return
 	}
 	checkBuildInfo(name, binPath, goos, goarch, version, fail)
-	if !strings.Contains(string(files["completions/yahiko.bash"]), "complete -o default -F _yahiko yahiko") {
+	if !strings.Contains(string(files["completions/himorime.bash"]), "complete -o default -F _himorime himorime") {
 		fail("%s: the bash completion is not the generated script", name)
 	}
 	if !host {
@@ -177,17 +177,17 @@ func checkBuildInfo(name, bin, goos, goarch, version string, fail func(string, .
 
 func runBinary(name, bin, dir, version string, fail func(string, ...any)) {
 	out, err := command(dir, bin, "version")
-	if err != nil || !strings.HasPrefix(out, "yahiko v"+version+" (") {
-		fail("%s: yahiko version = %q, %v", name, out, err)
+	if err != nil || !strings.HasPrefix(out, "himorime v"+version+" (") {
+		fail("%s: himorime version = %q, %v", name, out, err)
 	}
 	if out, err := command(dir, bin, "init"); err != nil {
-		fail("%s: yahiko init: %v\n%s", name, err, out)
+		fail("%s: himorime init: %v\n%s", name, err, out)
 	}
 	if out, err := command(dir, bin, "validate"); err != nil || !strings.Contains(out, "ok (1 benchmark") {
-		fail("%s: yahiko validate: %v\n%s", name, err, out)
+		fail("%s: himorime validate: %v\n%s", name, err, out)
 	}
 	if out, err := command(dir, bin, "run", "--runs", "2", "--warmup", "0", "--quiet", "--format", "json"); err != nil || !strings.Contains(out, `"schema_version": "1"`) {
-		fail("%s: yahiko run: %v\n%s", name, err, out)
+		fail("%s: himorime run: %v\n%s", name, err, out)
 	}
 	if _, err := command(dir, bin, "frobnicate"); !exitCode(err, 3) {
 		fail("%s: an unknown command must exit 3, got %v", name, err)
@@ -265,7 +265,7 @@ func checkPackages(dist, version string, fail func(string, ...any)) {
 	magic := map[string][]byte{"deb": []byte("!<arch>\n"), "rpm": {0xed, 0xab, 0xee, 0xdb}, "apk": {0x1f, 0x8b}}
 	for _, arch := range []string{"amd64", "arm64"} {
 		for ext, m := range magic {
-			name := fmt.Sprintf("yahiko_%s_linux_%s.%s", version, arch, ext)
+			name := fmt.Sprintf("himorime_%s_linux_%s.%s", version, arch, ext)
 			data, err := os.ReadFile(filepath.Join(dist, name))
 			if err != nil {
 				fail("%s: %v", name, err)
@@ -275,14 +275,14 @@ func checkPackages(dist, version string, fail func(string, ...any)) {
 				fail("%s is not a %s package", name, ext)
 			}
 		}
-		deb := filepath.Join(dist, fmt.Sprintf("yahiko_%s_linux_%s.deb", version, arch))
+		deb := filepath.Join(dist, fmt.Sprintf("himorime_%s_linux_%s.deb", version, arch))
 		if dpkg, err := exec.LookPath("dpkg-deb"); err == nil {
 			out, err := exec.Command(dpkg, "-c", deb).Output()
 			if err != nil {
 				fail("dpkg-deb -c %s: %v", deb, err)
 				continue
 			}
-			for _, want := range []string{"./usr/bin/yahiko", "./usr/share/bash-completion/completions/yahiko", "./usr/share/zsh/vendor-completions/_yahiko", "./usr/share/fish/vendor_completions.d/yahiko.fish"} {
+			for _, want := range []string{"./usr/bin/himorime", "./usr/share/bash-completion/completions/himorime", "./usr/share/zsh/vendor-completions/_himorime", "./usr/share/fish/vendor_completions.d/himorime.fish"} {
 				if !bytes.Contains(out, []byte(want+"\n")) {
 					fail("%s lacks %s", filepath.Base(deb), want)
 				}
@@ -338,14 +338,14 @@ func checkChecksums(dist, version string, fail func(string, ...any)) {
 		if p.goos == "windows" {
 			ext = ".zip"
 		}
-		name := fmt.Sprintf("yahiko_%s_%s_%s%s", version, p.goos, p.goarch, ext)
+		name := fmt.Sprintf("himorime_%s_%s_%s%s", version, p.goos, p.goarch, ext)
 		if !listed[name] {
 			fail("checksums.txt does not list %s", name)
 		}
 	}
 	for _, arch := range []string{"amd64", "arm64"} {
 		for _, ext := range []string{"deb", "rpm", "apk"} {
-			if name := fmt.Sprintf("yahiko_%s_linux_%s.%s", version, arch, ext); !listed[name] {
+			if name := fmt.Sprintf("himorime_%s_linux_%s.%s", version, arch, ext); !listed[name] {
 				fail("checksums.txt does not list %s", name)
 			}
 		}
@@ -353,13 +353,13 @@ func checkChecksums(dist, version string, fail func(string, ...any)) {
 }
 
 func checkCask(dist, version string, fail func(string, ...any)) {
-	data, err := os.ReadFile(filepath.Join(dist, "homebrew", "Casks", "yahiko.rb"))
+	data, err := os.ReadFile(filepath.Join(dist, "homebrew", "Casks", "himorime.rb"))
 	if err != nil {
 		fail("homebrew cask: %v", err)
 		return
 	}
 	cask := string(data)
-	for _, want := range []string{`binary "yahiko"`, `version "` + version + `"`, "completions/yahiko.bash"} {
+	for _, want := range []string{`binary "himorime"`, `version "` + version + `"`, "completions/himorime.bash"} {
 		if !strings.Contains(cask, want) {
 			fail("the cask lacks %s", want)
 		}
@@ -368,7 +368,7 @@ func checkCask(dist, version string, fail func(string, ...any)) {
 		if p.goos == "windows" {
 			continue
 		}
-		archive := fmt.Sprintf("yahiko_%s_%s_%s.tar.gz", version, p.goos, p.goarch)
+		archive := fmt.Sprintf("himorime_%s_%s_%s.tar.gz", version, p.goos, p.goarch)
 		body, err := os.ReadFile(filepath.Join(dist, archive))
 		if err != nil {
 			continue

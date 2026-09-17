@@ -1,12 +1,12 @@
 # Copy this file to .github/workflows/benchmark.yml.
 # Recipe: fail a GitHub Actions job when a performance budget is violated.
-# https://nao1215.github.io/yahiko/cookbook/#fail-a-github-actions-job-when-a-performance-budget-is-violated
+# https://nao1215.github.io/himorime/cookbook/#fail-a-github-actions-job-when-a-performance-budget-is-violated
 name: Benchmark
 
 on:
   pull_request:
 
-# Read-only: yahiko needs no secret and no write token, so pull requests from
+# Read-only: himorime needs no secret and no write token, so pull requests from
 # forks run it safely. Do not use pull_request_target, which would run the
 # pull request's code with the base repository's secrets.
 permissions:
@@ -24,10 +24,10 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
-      - run: go install github.com/nao1215/yahiko@latest
+      - run: go install github.com/nao1215/himorime@latest
       # Finds the pull request's base commit from the event, compares it with
       # the checked-out head on every metric the suite measures, writes a
       # summary to the job page and annotations to the pull request, and
       # exits 1 on a missed budget or a confirmed regression. Exit 4 or 6
       # means the measurement itself failed, not the performance.
-      - run: yahiko ci
+      - run: himorime ci

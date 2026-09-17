@@ -1,17 +1,17 @@
 # Configuration for the documentation website (GitHub Pages).
-# The prose lives here; the README only introduces yahiko and links to it.
+# The prose lives here; the README only introduces himorime and links to it.
 # Sections marked "BEGIN GENERATED" are rewritten from the code by
 # `make docs` and checked by internal/docgen.
-baseURL = "https://nao1215.github.io/yahiko/"
+baseURL = "https://nao1215.github.io/himorime/"
 locale = "en"
-title = "yahiko"
+title = "himorime"
 disableKinds = ["taxonomy", "term", "rss"]
 enableRobotsTXT = true
 timeZone = "UTC"
 
 [params]
 tagline = "Performance budgets for command-line programs, in your repository and in CI"
-description = "yahiko checks whether a CLI stays within its performance budget: latency, throughput, CPU time and peak RSS, measured from a YAML suite, compared with a Git base revision, failing CI on violations."
+description = "himorime checks whether a CLI stays within its performance budget: latency, throughput, CPU time and peak RSS, measured from a YAML suite, compared with a Git base revision, failing CI on violations."
 
 [markup.highlight]
 noClasses = false
@@ -91,8 +91,8 @@ target = "assets"
 # The JSON Schemas are served from the site as well as from the repository,
 # so the Configuration and Reports pages can link to a stable address.
 [[module.mounts]]
-source = "../schema/yahiko.schema.json"
-target = "static/schema/yahiko.schema.json"
+source = "../schema/himorime.schema.json"
+target = "static/schema/himorime.schema.json"
 
 [[module.mounts]]
 source = "../schema/report.schema.json"

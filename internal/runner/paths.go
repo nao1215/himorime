@@ -81,7 +81,7 @@ func confine(p string, roots ...string) (string, error) {
 	return "", fmt.Errorf("path %s resolves outside the project and the benchmark workdir", p)
 }
 
-// removeTemp deletes a directory yahiko created under base. It refuses any
+// removeTemp deletes a directory himorime created under base. It refuses any
 // path that is not strictly inside base, and it does not follow a symlink in
 // place of the directory, so a cleanup can never recurse outside the
 // temporary area.

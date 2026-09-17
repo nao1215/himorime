@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nao1215/yahiko/schema"
+	"github.com/nao1215/himorime/schema"
 )
 
 func mustSchema(t *testing.T) []byte {
@@ -14,11 +14,11 @@ func mustSchema(t *testing.T) []byte {
 	return schema.Suite
 }
 
-// parseString loads suite source written to a temporary yahiko.yaml.
+// parseString loads suite source written to a temporary himorime.yaml.
 func parseString(t *testing.T, src string) (*Suite, error) {
 	t.Helper()
 	dir := t.TempDir()
-	p := filepath.Join(dir, "yahiko.yaml")
+	p := filepath.Join(dir, "himorime.yaml")
 	if err := os.WriteFile(p, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}

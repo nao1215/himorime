@@ -1,8 +1,8 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: treat a failing command as an error, or allow expected exit codes.
 # The first benchmark fails on purpose (exit 4).
-# https://nao1215.github.io/yahiko/cookbook/#treat-a-non-zero-exit-as-an-error
+# https://nao1215.github.io/himorime/cookbook/#treat-a-non-zero-exit-as-an-error
 version: "1"
 
 suite:

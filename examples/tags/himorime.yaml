@@ -1,11 +1,11 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: run only the smoke benchmarks with tags and filters.
-# https://nao1215.github.io/yahiko/cookbook/#run-only-smoke-benchmarks
+# https://nao1215.github.io/himorime/cookbook/#run-only-smoke-benchmarks
 #
-#   yahiko run examples/tags --tag smoke
-#   yahiko run examples/tags --skip-tag slow
-#   yahiko run examples/tags --filter '^startup'
+#   himorime run examples/tags --tag smoke
+#   himorime run examples/tags --skip-tag slow
+#   himorime run examples/tags --filter '^startup'
 version: "1"
 
 suite:

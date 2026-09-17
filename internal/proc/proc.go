@@ -8,7 +8,7 @@
 // tree is stopped on timeout, on cancellation, and also when the command
 // exits: a process a command leaves running in the background is stopped with
 // it on every platform, so a benchmark cannot leak processes and a temporary
-// directory is never still in use when yahiko removes it.
+// directory is never still in use when himorime removes it.
 package proc
 
 import (
@@ -96,7 +96,7 @@ func run(ctx context.Context, s Spec, now Clock, attachTree func(*exec.Cmd) (*tr
 	// When output goes to a Go writer rather than a file, os/exec copies it
 	// through a pipe and Wait also waits for every process holding that pipe.
 	// Bound that wait so a stray descendant cannot hold a finished command for
-	// long. yahiko's runner always passes files or nil.
+	// long. himorime's runner always passes files or nil.
 	cmd.WaitDelay = waitDelay
 	configure(cmd)
 

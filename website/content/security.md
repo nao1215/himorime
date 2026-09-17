@@ -1,6 +1,6 @@
 ---
 title: Security
-description: yahiko's security boundary, threat model, and how to report a vulnerability.
+description: himorime's security boundary, threat model, and how to report a vulnerability.
 toc: true
 ---
 
@@ -8,17 +8,17 @@ toc: true
 
 A suite executes the commands it declares, with your privileges. Running a
 suite is running a script: only run suites you would run as a script.
-yahiko's protections bound what a reviewed suite does by accident; they are
+himorime's protections bound what a reviewed suite does by accident; they are
 not a sandbox for a hostile one.
 
 ## In CI
 
-- Run `yahiko ci` on `pull_request` with `permissions: contents: read` and no
+- Run `himorime ci` on `pull_request` with `permissions: contents: read` and no
   secrets. A pull request's suite and build commands are that pull request's
   code.
-- yahiko refuses `pull_request_target`, which runs with the base repository's
+- himorime refuses `pull_request_target`, which runs with the base repository's
   secrets and a write token.
-- yahiko never calls the GitHub API, needs no token, and reads the event
+- himorime never calls the GitHub API, needs no token, and reads the event
   payload only to find the base commit, which must look like a commit SHA.
 
 ## Protections
@@ -30,7 +30,7 @@ not a sandbox for a hostile one.
   resolved they must stay inside the repository, the base worktree, or the
   benchmark's `${workdir}`.
 - Temporary directories are created with `os.MkdirTemp` (mode 0700). Cleanup
-  deletes only directories yahiko created inside its own temporary directory,
+  deletes only directories himorime created inside its own temporary directory,
   and removes a symbolic link instead of following it.
 - The base revision is checked out as a detached worktree with repository hooks
   disabled, and a revision starting with `-` is rejected before it reaches Git.
@@ -48,6 +48,6 @@ not a sandbox for a hostile one.
 ## Reporting a vulnerability
 
 Please report vulnerabilities privately, through the repository's
-[Security advisories](https://github.com/nao1215/yahiko/security/advisories/new)
+[Security advisories](https://github.com/nao1215/himorime/security/advisories/new)
 or by email to n.chika156@gmail.com. See
-[SECURITY.md](https://github.com/nao1215/yahiko/blob/main/SECURITY.md).
+[SECURITY.md](https://github.com/nao1215/himorime/blob/main/SECURITY.md).

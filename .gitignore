@@ -33,8 +33,8 @@ go.work.sum
 
 # Build and release output
 /dist/
-/yahiko
-/yahiko.exe
+/himorime
+/himorime.exe
 /completions/
 cover.html
 

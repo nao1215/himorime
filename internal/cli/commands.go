@@ -28,29 +28,29 @@ func Commands() []Command {
 	return []Command{
 		{
 			Name:  "init",
-			Usage: "yahiko init [flags] [PATH]",
-			Short: "Write a minimal, runnable yahiko.yaml",
+			Usage: "himorime init [flags] [PATH]",
+			Short: "Write a minimal, runnable himorime.yaml",
 			Long: "Writes a small suite that measures `git --version`, with a JSON Schema comment so editors " +
-				"can complete and validate it. PATH defaults to yahiko.yaml. An existing file is never " +
+				"can complete and validate it. PATH defaults to himorime.yaml. An existing file is never " +
 				"overwritten unless --force is given.",
 			Flags: initFlags,
 			run:   runInit,
 		},
 		{
 			Name:  "validate",
-			Usage: "yahiko validate [PATH...]",
+			Usage: "himorime validate [PATH...]",
 			Short: "Check suite files without running anything",
 			Long: "Checks YAML syntax, the schema (unknown keys, types, durations, byte sizes, rates, " +
 				"percentages, paths) and semantic rules (baselines, budgets and regression settings that refer " +
 				"to real commands and measured metrics, budget directions, throughput units, variables that " +
-				"exist). No command is executed. Each PATH is a suite file or a directory holding yahiko.yaml " +
-				"or *.yahiko.yaml files; the default is yahiko.yaml.",
+				"exist). No command is executed. Each PATH is a suite file or a directory holding himorime.yaml " +
+				"or *.himorime.yaml files; the default is himorime.yaml.",
 			Flags: func(*flag.FlagSet) any { return nil },
 			run:   runValidate,
 		},
 		{
 			Name:  "list",
-			Usage: "yahiko list [flags] [PATH...]",
+			Usage: "himorime list [flags] [PATH...]",
 			Short: "List suites, benchmarks, commands, tags and fixtures",
 			Long: "Prints one line per command of every selected benchmark: suite file, benchmark, tags, " +
 				"stdin fixture, command name and the command as written. Nothing is executed, and variables " +
@@ -60,7 +60,7 @@ func Commands() []Command {
 		},
 		{
 			Name:  "run",
-			Usage: "yahiko run [flags] [PATH...]",
+			Usage: "himorime run [flags] [PATH...]",
 			Short: "Measure the suite in the current environment",
 			Long: "Builds the suite's artifact when a build section exists, then measures every selected " +
 				"benchmark: latency, and the throughput, CPU time and peak RSS the suite asks for. Commands of " +
@@ -71,7 +71,7 @@ func Commands() []Command {
 		},
 		{
 			Name:  "compare",
-			Usage: "yahiko compare --against REF [flags] [PATH...]",
+			Usage: "himorime compare --against REF [flags] [PATH...]",
 			Short: "Compare a Git revision with the working tree",
 			Long: "Checks REF out into a temporary Git worktree, builds both REF and the current working " +
 				"tree (uncommitted changes included), and measures them interleaved on this machine. Commands " +
@@ -85,10 +85,10 @@ func Commands() []Command {
 		},
 		{
 			Name:  "ci",
-			Usage: "yahiko ci [flags] [PATH...]",
+			Usage: "himorime ci [flags] [PATH...]",
 			Short: "Compare against the pull request base in CI",
 			Long: "Like compare, with CI defaults: no colors, and a Markdown summary appended to " +
-				"$GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $YAHIKO_BASE_REF, " +
+				"$GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $HIMORIME_BASE_REF, " +
 				"else the base commit of the GitHub Actions pull_request, merge_group or push event. " +
 				"pull_request_target is refused. In GitHub Actions, every missed budget, regression and " +
 				"failure is also printed as an annotation.",
@@ -97,15 +97,15 @@ func Commands() []Command {
 		},
 		{
 			Name:  "version",
-			Usage: "yahiko version",
-			Short: "Print the yahiko version",
+			Usage: "himorime version",
+			Short: "Print the himorime version",
 			Long:  "Prints the version, the Go version and the platform.",
 			Flags: func(*flag.FlagSet) any { return nil },
 			run:   runVersion,
 		},
 		{
 			Name:  "completion",
-			Usage: "yahiko completion <bash|zsh|fish|powershell>",
+			Usage: "himorime completion <bash|zsh|fish|powershell>",
 			Short: "Print a shell completion script",
 			Long:  "Prints a completion script for the named shell to standard output.",
 			Flags: func(*flag.FlagSet) any { return nil },
@@ -113,8 +113,8 @@ func Commands() []Command {
 		},
 		{
 			Name:  "help",
-			Usage: "yahiko help [COMMAND]",
-			Short: "Show help for yahiko or a command",
+			Usage: "himorime help [COMMAND]",
+			Short: "Show help for himorime or a command",
 			Long:  "Shows the command list, or the usage and flags of one command.",
 			Flags: func(*flag.FlagSet) any { return nil },
 			run:   runHelp,
@@ -208,7 +208,7 @@ func runHelp(_ context.Context, a *App, args []string) int {
 		return 0
 	}
 	if _, ok := findCommand(args[0]); !ok {
-		fmt.Fprintf(a.Stderr, "yahiko help: unknown command %q\n", args[0])
+		fmt.Fprintf(a.Stderr, "himorime help: unknown command %q\n", args[0])
 		return 3
 	}
 	WriteHelp(a.Stdout, args[0])

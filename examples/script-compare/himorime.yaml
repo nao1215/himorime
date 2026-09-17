@@ -1,9 +1,9 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: compare a script-based CLI without a build step.
-# https://nao1215.github.io/yahiko/cookbook/#compare-a-script-based-cli-without-a-build-step
+# https://nao1215.github.io/himorime/cookbook/#compare-a-script-based-cli-without-a-build-step
 #
-#   yahiko compare --against main examples/script-compare
+#   himorime compare --against main examples/script-compare
 version: "1"
 
 suite:

@@ -1,4 +1,4 @@
-// Package cli implements yahiko's command-line interface: subcommand
+// Package cli implements himorime's command-line interface: subcommand
 // dispatch, flag parsing, and the mapping of outcomes to exit codes.
 package cli
 
@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/exitcode"
+	"github.com/nao1215/himorime/internal/exitcode"
 )
 
 // App carries everything a command touches outside its arguments, so tests
@@ -43,7 +43,7 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	defer cancel()
 	// The first interrupt cancels the run, which stops running commands and
 	// runs cleanup. Signal handling is then restored, so a second Ctrl+C ends
-	// yahiko at once for someone who does not want to wait for cleanup.
+	// himorime at once for someone who does not want to wait for cleanup.
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	done := make(chan struct{})
@@ -52,7 +52,7 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		select {
 		case <-signals:
 			signal.Stop(signals)
-			fmt.Fprintln(stderr, "yahiko: interrupted; stopping commands and cleaning up (interrupt again to quit immediately)")
+			fmt.Fprintln(stderr, "himorime: interrupted; stopping commands and cleaning up (interrupt again to quit immediately)")
 			cancel()
 		case <-done:
 			signal.Stop(signals)
@@ -89,12 +89,12 @@ func isTerminal(w io.Writer) bool {
 func (a *App) Run(ctx context.Context, args []string) (code int) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(a.Stderr, "yahiko: internal error: %v\nplease report this at https://github.com/nao1215/yahiko/issues\n", r)
+			fmt.Fprintf(a.Stderr, "himorime: internal error: %v\nplease report this at https://github.com/nao1215/himorime/issues\n", r)
 			code = exitcode.Internal
 		}
 	}()
 	if len(args) == 0 {
-		fmt.Fprint(a.Stderr, "yahiko: no command given\n\n")
+		fmt.Fprint(a.Stderr, "himorime: no command given\n\n")
 		usage(a.Stderr)
 		return exitcode.Usage
 	}
@@ -110,26 +110,26 @@ func (a *App) Run(ctx context.Context, args []string) (code int) {
 			return c.run(ctx, a, rest)
 		}
 	}
-	fmt.Fprintf(a.Stderr, "yahiko: unknown command %q\n\n", name)
+	fmt.Fprintf(a.Stderr, "himorime: unknown command %q\n\n", name)
 	usage(a.Stderr)
 	return exitcode.Usage
 }
 
 func usage(w io.Writer) {
 	var sb strings.Builder
-	sb.WriteString("yahiko - performance budgets and regression checks for command-line programs\n\n")
-	sb.WriteString("Usage:\n  yahiko <command> [flags] [arguments]\n\nCommands:\n")
+	sb.WriteString("himorime - performance budgets and regression checks for command-line programs\n\n")
+	sb.WriteString("Usage:\n  himorime <command> [flags] [arguments]\n\nCommands:\n")
 	for _, c := range Commands() {
 		fmt.Fprintf(&sb, "  %-11s %s\n", c.Name, c.Short)
 	}
-	sb.WriteString("\nRun \"yahiko <command> --help\" for the flags of a command.\n")
-	sb.WriteString("Documentation: https://nao1215.github.io/yahiko/\n")
+	sb.WriteString("\nRun \"himorime <command> --help\" for the flags of a command.\n")
+	sb.WriteString("Documentation: https://nao1215.github.io/himorime/\n")
 	fmt.Fprint(w, sb.String())
 }
 
 // parseFlags parses args with fs, accepting flags before and after operands.
 // The flag package stops at the first operand; re-entering Parse after each
-// one lets `yahiko run bench.yaml --format json` mean what users expect. A
+// one lets `himorime run bench.yaml --format json` mean what users expect. A
 // `--` ends flag parsing for good.
 func parseFlags(fs *flag.FlagSet, args []string, stdout, stderr io.Writer) ([]string, int, bool) {
 	var captured bytes.Buffer
@@ -146,7 +146,7 @@ func parseFlags(fs *flag.FlagSet, args []string, stdout, stderr io.Writer) ([]st
 			if msg == "" {
 				msg = err.Error()
 			}
-			fmt.Fprintf(stderr, "yahiko %s: %s\nrun \"yahiko %s --help\" for usage\n", fs.Name(), msg, fs.Name())
+			fmt.Fprintf(stderr, "himorime %s: %s\nrun \"himorime %s --help\" for usage\n", fs.Name(), msg, fs.Name())
 			return nil, exitcode.Usage, false
 		}
 		rest = fs.Args()

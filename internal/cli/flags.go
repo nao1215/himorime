@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nao1215/yahiko/internal/config"
+	"github.com/nao1215/himorime/internal/config"
 )
 
 type selectFlags struct {
@@ -95,7 +95,7 @@ func compareFlags(fs *flag.FlagSet) any {
 func ciFlags(fs *flag.FlagSet) any {
 	m := &measureFlags{}
 	m.registerCommon(fs)
-	fs.StringVar(&m.against, "against", "", "the base `revision`; defaults to $YAHIKO_BASE_REF, then the GitHub Actions event")
+	fs.StringVar(&m.against, "against", "", "the base `revision`; defaults to $HIMORIME_BASE_REF, then the GitHub Actions event")
 	fs.BoolVar(&m.failOnInconclusive, "fail-on-inconclusive", false, "exit 1 when a gated comparison is inconclusive")
 	return m
 }

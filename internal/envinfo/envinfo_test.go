@@ -18,7 +18,7 @@ func TestCollect(t *testing.T) {
 	if info.CI != "github-actions" {
 		t.Fatalf("CI = %q", info.CI)
 	}
-	if info.YahikoVersion == "" || info.GoVersion == "" {
+	if info.HimorimeVersion == "" || info.GoVersion == "" {
 		t.Fatalf("versions missing: %+v", info)
 	}
 }

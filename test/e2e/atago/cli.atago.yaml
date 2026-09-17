@@ -2,7 +2,7 @@
 version: "1"
 
 suite:
-  name: yahiko command line
+  name: himorime command line
 
 # The command-line contract: help, version, usage errors and their exit codes,
 # init, validate, list and shell completion. Nothing here measures anything.
@@ -10,19 +10,19 @@ scenarios:
   - name: help and version exit 0 and print to stdout
     steps:
       - run:
-          command: yahiko --help
+          command: himorime --help
       - assert:
           exit_code: 0
           stdout:
             contains: [init, validate, list, run, compare, ci, version, completion]
       - run:
-          command: yahiko version
+          command: himorime version
       - assert:
           exit_code: 0
           stdout:
-            matches: "^yahiko \\S+ \\(go"
+            matches: "^himorime \\S+ \\(go"
       - run:
-          command: yahiko run --help
+          command: himorime run --help
       - assert:
           exit_code: 0
           stdout:
@@ -31,28 +31,28 @@ scenarios:
   - name: usage errors exit 3 on stderr with nothing on stdout
     steps:
       - run:
-          command: yahiko
+          command: himorime
       - assert:
           exit_code: 3
           stdout: {empty: true}
           stderr: {contains: "no command given"}
       - run:
-          command: yahiko frobnicate
+          command: himorime frobnicate
       - assert:
           exit_code: 3
           stderr: {contains: 'unknown command "frobnicate"'}
       - run:
-          command: yahiko run --no-such-flag
+          command: himorime run --no-such-flag
       - assert:
           exit_code: 3
           stderr: {contains: "flag provided but not defined"}
       - run:
-          command: yahiko compare
+          command: himorime compare
       - assert:
           exit_code: 3
           stderr: {contains: "--against is required"}
       - run:
-          command: yahiko completion tcsh
+          command: himorime completion tcsh
       - assert:
           exit_code: 3
           stderr: {contains: "unsupported shell"}
@@ -60,30 +60,30 @@ scenarios:
   - name: init writes a runnable suite and never overwrites silently
     steps:
       - run:
-          command: yahiko init
+          command: himorime init
       - assert:
           exit_code: 0
-          stdout: {contains: "wrote yahiko.yaml"}
+          stdout: {contains: "wrote himorime.yaml"}
       - assert:
           file:
-            path: yahiko.yaml
-            contains: ["# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/yahiko/main/schema/yahiko.schema.json", 'version: "1"']
+            path: himorime.yaml
+            contains: ["# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json", 'version: "1"']
       - run:
-          command: yahiko init
+          command: himorime init
       - assert:
           exit_code: 3
           stderr: {contains: "already exists"}
       - run:
-          command: yahiko init --force
+          command: himorime init --force
       - assert:
           exit_code: 0
       - run:
-          command: yahiko validate
+          command: himorime validate
       - assert:
           exit_code: 0
-          stdout: {equals: "yahiko.yaml: ok (1 benchmark, 1 command)\n"}
+          stdout: {equals: "himorime.yaml: ok (1 benchmark, 1 command)\n"}
       - run:
-          command: yahiko run --quiet
+          command: himorime run --quiet
       - assert:
           exit_code: 0
           stdout: {contains: ["git startup", "PASS"]}
@@ -104,7 +104,7 @@ scenarios:
                     command: "tool --flag"
                     timout: 5s
       - run:
-          command: yahiko validate broken.yaml
+          command: himorime validate broken.yaml
       - assert:
           exit_code: 2
           stdout: {empty: true}
@@ -130,7 +130,7 @@ scenarios:
                   tool:
                     command: ["$${artifact}"]
       - run:
-          command: yahiko validate semantic.yaml
+          command: himorime validate semantic.yaml
       - assert:
           exit_code: 2
           stderr:
@@ -141,15 +141,15 @@ scenarios:
   - name: a missing suite file is a configuration error
     steps:
       - run:
-          command: yahiko run
+          command: himorime run
       - assert:
           exit_code: 2
-          stderr: {contains: "yahiko.yaml: suite file does not exist"}
+          stderr: {contains: "himorime.yaml: suite file does not exist"}
 
   - name: list prints a stable table and JSON without running anything
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: listing}
@@ -166,17 +166,17 @@ scenarios:
                 commands:
                   fast: {command: [e2ehelper, exit, "9"]}
       - run:
-          command: yahiko list
+          command: himorime list
       - assert:
           exit_code: 0
           stdout:
             equals: |
-              SUITE        BENCHMARK    TAGS          STDIN               COMMAND  RUN
-              yahiko.yaml  parse small  parser,smoke  fixtures/small.txt  fast*    e2ehelper exit 9
-              yahiko.yaml  parse small  parser,smoke  fixtures/small.txt  slow     shell: e2ehelper exit 9
-              yahiko.yaml  parse large  parser,slow   -                   fast     e2ehelper exit 9
+              SUITE          BENCHMARK    TAGS          STDIN               COMMAND  RUN
+              himorime.yaml  parse small  parser,smoke  fixtures/small.txt  fast*    e2ehelper exit 9
+              himorime.yaml  parse small  parser,smoke  fixtures/small.txt  slow     shell: e2ehelper exit 9
+              himorime.yaml  parse large  parser,slow   -                   fast     e2ehelper exit 9
       - run:
-          command: yahiko list --format json --tag slow
+          command: himorime list --format json --tag slow
       - assert:
           exit_code: 0
           stdout:
@@ -185,7 +185,7 @@ scenarios:
               - {path: "$[0].benchmark", equals: "parse large"}
               - {path: "$[0].tags[1]", equals: "slow"}
       - run:
-          command: yahiko list --skip-tag slow --filter small --format json
+          command: himorime list --skip-tag slow --filter small --format json
       - assert:
           stdout:
             json:
@@ -195,19 +195,19 @@ scenarios:
   - name: completion scripts name every command
     steps:
       - run:
-          command: yahiko completion bash
+          command: himorime completion bash
       - assert:
           exit_code: 0
-          stdout: {contains: ["complete -o default -F _yahiko yahiko", "fail-on-inconclusive"]}
+          stdout: {contains: ["complete -o default -F _himorime himorime", "fail-on-inconclusive"]}
       - run:
-          command: yahiko completion zsh
+          command: himorime completion zsh
       - assert:
-          stdout: {contains: "#compdef yahiko"}
+          stdout: {contains: "#compdef himorime"}
       - run:
-          command: yahiko completion fish
+          command: himorime completion fish
       - assert:
-          stdout: {contains: "complete -c yahiko"}
+          stdout: {contains: "complete -c himorime"}
       - run:
-          command: yahiko completion powershell
+          command: himorime completion powershell
       - assert:
-          stdout: {contains: "Register-ArgumentCompleter -Native -CommandName yahiko"}
+          stdout: {contains: "Register-ArgumentCompleter -Native -CommandName himorime"}

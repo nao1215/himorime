@@ -1,4 +1,4 @@
-# Measured by the "collector overhead" benchmark of bench/yahiko.yaml.
+# Measured by the "collector overhead" benchmark of bench/himorime.yaml.
 version: "1"
 suite: {name: all metrics}
 benchmarks:

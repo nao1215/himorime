@@ -1,7 +1,7 @@
 package config
 
 // The raw types mirror the YAML document one to one. Every yaml tag here is a
-// key a suite may contain, and schema/yahiko.schema.json lists exactly the same
+// key a suite may contain, and schema/himorime.schema.json lists exactly the same
 // keys: TestSchemaKeysMatchGo walks these structs and fails on any difference.
 // Pointers mark the settings whose absence means "inherit".
 

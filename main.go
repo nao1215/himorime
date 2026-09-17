@@ -1,17 +1,17 @@
-// Command yahiko checks whether command-line programs stay within their
+// Command himorime checks whether command-line programs stay within their
 // performance budgets: latency, throughput, CPU time and peak RSS, locally and
 // in CI.
 //
 // It measures commands declared in a versioned YAML suite, compares them with
 // each other or with a Git base revision, checks absolute performance budgets,
 // and exits non-zero on a confirmed regression. See
-// https://nao1215.github.io/yahiko/ for the documentation.
+// https://nao1215.github.io/himorime/ for the documentation.
 package main
 
 import (
 	"os"
 
-	"github.com/nao1215/yahiko/internal/cli"
+	"github.com/nao1215/himorime/internal/cli"
 )
 
 func main() {

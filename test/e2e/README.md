@@ -1,6 +1,6 @@
 # End-to-end tests
 
-The suite under `test/e2e/atago` runs a built `yahiko` as a real process, the
+The suite under `test/e2e/atago` runs a built `himorime` as a real process, the
 way users and CI run it, with [atago](https://github.com/nao1215/atago). It
 pins the command-line contract: exit codes, where output goes, table
 structure, JSON and CSV report shapes, Git worktree handling, the GitHub
@@ -10,12 +10,12 @@ Actions adapter, and every Cookbook recipe.
 go install github.com/nao1215/atago@v0.22.0
 go run ./test/e2e/run                                      # every spec
 go run ./test/e2e/run test/e2e/atago/compare.atago.yaml    # one spec
-YAHIKO_BINARY=dist/yahiko_linux_amd64_v1/yahiko go run ./test/e2e/run   # a prebuilt binary
+HIMORIME_BINARY=dist/himorime_linux_amd64_v1/himorime go run ./test/e2e/run   # a prebuilt binary
 ```
 
 `test/e2e/run` is a Go program so the same entry point works on Linux, macOS
-and Windows. It builds `yahiko` and the helper into a temporary directory put
-first on `PATH`, sets `YAHIKO_REPO` to the repository root, clears GitHub
+and Windows. It builds `himorime` and the helper into a temporary directory put
+first on `PATH`, sets `HIMORIME_REPO` to the repository root, clears GitHub
 Actions variables so a CI job's real event cannot leak in, runs atago, and
 fails if the repository's `git status` changed.
 
@@ -26,7 +26,7 @@ fails if the repository's `git status` changed.
 | `cli` | help, version, usage errors (exit 3), `init`, `validate` messages with file:line:column and exit 2, `list` text and JSON, completion scripts |
 | `run` | tables, JSON with raw samples, CSV/Markdown/summary files, budgets (exit 1), failing commands and masked secrets (exit 4), timeouts that stop the process tree, tags and filters, stdin fixtures, `prepare_each`, cleanup after success and failure, interrupts (POSIX), shell pipelines, warm and cold caches, adaptive runs, geometric mean rules |
 | `compare` | scratch Git repositories: pass, regression in uncommitted changes, improvement, inconclusive and `--fail-on-inconclusive`, unknown revisions, a base build failure, interrupts (POSIX), `regression.commands`, commands without a build running each revision's own files and `${head_root}` sharing the working tree's, a fixture missing from the base, adaptive runs reaching `min_samples`, a regression of a metric with `gate: false`; the working tree, branches and worktree list are unchanged afterwards |
-| `ci` | simulated GitHub Actions events and job summary: pull_request, push, merge_group, `pull_request_target` refusal, missing base guidance, shallow clones, `YAHIKO_BASE_REF` |
+| `ci` | simulated GitHub Actions events and job summary: pull_request, push, merge_group, `pull_request_target` refusal, missing base guidance, shallow clones, `HIMORIME_BASE_REF` |
 | `metrics` | latency percentile budgets, throughput from declared work and file sizes (paths with spaces), CPU time and utilization, peak RSS, several metric budgets at once, process tree CPU and memory, unsupported metrics on Windows, metric collection failures (exit 6) against command failures (exit 4), GitHub Actions annotations, CPU/memory/throughput regressions and improvements against a base revision, the JSON report schema, long CSV, samples CSV, Markdown and job summary tables, validation of units and directions, timeouts with metrics enabled, literal values in shell commands |
 | `cookbook` | one scenario per Cookbook recipe, named exactly like its heading, running the suite under `examples/` |
 
@@ -57,7 +57,7 @@ termination there is covered by the timeout scenarios and the unit tests of
 
 ## Writing a scenario
 
-- Escape yahiko's variables inside atago fixture content as `$${artifact}`,
+- Escape himorime's variables inside atago fixture content as `$${artifact}`,
   because atago expands `${...}` itself.
 - A Cookbook recipe needs a heading on the Cookbook page, an example under
   `examples/`, and a scenario here with the same name; `internal/docgen`

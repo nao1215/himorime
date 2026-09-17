@@ -52,7 +52,7 @@ func Open(ctx context.Context, dir string) (*Repo, error) {
 	}
 	r.Top = top
 	// Clear entries of worktrees whose directories no longer exist, such as
-	// one left behind by a yahiko that was killed with SIGKILL.
+	// one left behind by a himorime that was killed with SIGKILL.
 	_, _ = r.run(ctx, top, "worktree", "prune")
 	return r, nil
 }

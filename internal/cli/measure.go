@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/envinfo"
-	"github.com/nao1215/yahiko/internal/exitcode"
-	"github.com/nao1215/yahiko/internal/ghactions"
-	"github.com/nao1215/yahiko/internal/gitwt"
-	"github.com/nao1215/yahiko/internal/redact"
-	"github.com/nao1215/yahiko/internal/report"
-	"github.com/nao1215/yahiko/internal/runner"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/envinfo"
+	"github.com/nao1215/himorime/internal/exitcode"
+	"github.com/nao1215/himorime/internal/ghactions"
+	"github.com/nao1215/himorime/internal/gitwt"
+	"github.com/nao1215/himorime/internal/redact"
+	"github.com/nao1215/himorime/internal/report"
+	"github.com/nao1215/himorime/internal/runner"
 )
 
 // maxSeed keeps seeds within the integers a JSON number represents exactly.
@@ -54,7 +54,7 @@ type measurement struct {
 
 func (m *measurement) logf(format string, args ...any) {
 	if m.logw != nil {
-		fmt.Fprintf(m.logw, "yahiko: "+format+"\n", args...)
+		fmt.Fprintf(m.logw, "himorime: "+format+"\n", args...)
 	}
 }
 
@@ -83,7 +83,7 @@ func runMeasure(ctx context.Context, a *App, cmd string, args []string) int {
 		selected += len(suites[i].suite.Benchmarks)
 	}
 	if selected == 0 {
-		fmt.Fprintf(a.Stderr, "yahiko %s: no benchmark matches the selection (--filter, --tag, --skip-tag); run \"yahiko list\" to see the benchmarks\n", cmd)
+		fmt.Fprintf(a.Stderr, "himorime %s: no benchmark matches the selection (--filter, --tag, --skip-tag); run \"himorime list\" to see the benchmarks\n", cmd)
 		return exitcode.Usage
 	}
 
@@ -104,10 +104,10 @@ func (f *measureFlags) check(a *App, cmd string) int {
 	}
 	switch {
 	case !valid:
-		fmt.Fprintf(a.Stderr, "yahiko %s: unknown --format %q; use one of %s\n", cmd, f.format, formatNames())
+		fmt.Fprintf(a.Stderr, "himorime %s: unknown --format %q; use one of %s\n", cmd, f.format, formatNames())
 		return exitcode.Usage
 	case cmd == "compare" && f.against == "":
-		fmt.Fprintf(a.Stderr, "yahiko compare: --against is required, for example: yahiko compare --against main\n")
+		fmt.Fprintf(a.Stderr, "himorime compare: --against is required, for example: himorime compare --against main\n")
 		return exitcode.Usage
 	}
 	return 0
@@ -137,15 +137,15 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 		return code
 	}
 
-	tempDir, err := os.MkdirTemp("", "yahiko-")
+	tempDir, err := os.MkdirTemp("", "himorime-")
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "yahiko: create temporary directory: %v\n", err)
+		fmt.Fprintf(a.Stderr, "himorime: create temporary directory: %v\n", err)
 		return exitcode.Execution
 	}
 	m.tempDir = tempDir
 	defer func() {
 		if err := runner.RemoveAll(tempDir); err != nil {
-			fmt.Fprintf(a.Stderr, "yahiko: remove temporary directory %s: %v\n", tempDir, err)
+			fmt.Fprintf(a.Stderr, "himorime: remove temporary directory %s: %v\n", tempDir, err)
 			code = cleanupFailed(code)
 		}
 	}()
@@ -161,7 +161,7 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 		}
 		defer func() {
 			if err := git.worktree.Remove(ctx); err != nil {
-				fmt.Fprintf(a.Stderr, "yahiko: remove the temporary worktree: %v\n", err)
+				fmt.Fprintf(a.Stderr, "himorime: remove the temporary worktree: %v\n", err)
 				code = cleanupFailed(code)
 			}
 		}()
@@ -197,15 +197,15 @@ func (m *measurement) finish(ctx context.Context, rep *report.Report, suites []l
 	}
 	if gh.Actions {
 		if err := report.WriteAnnotations(a.Stderr, rep); err != nil {
-			fmt.Fprintf(a.Stderr, "yahiko: write annotations: %v\n", err)
+			fmt.Fprintf(a.Stderr, "himorime: write annotations: %v\n", err)
 		}
 	}
 	if ctx.Err() != nil {
-		fmt.Fprintln(a.Stderr, "yahiko: interrupted; cleanup has run")
+		fmt.Fprintln(a.Stderr, "himorime: interrupted; cleanup has run")
 		return exitcode.Execution
 	}
 	if outcome := exitcode.Outcome(rep.Summary.ExitCode); outcome != "" {
-		fmt.Fprintf(a.Stderr, "yahiko: exit %d: %s\n", rep.Summary.ExitCode, outcome)
+		fmt.Fprintf(a.Stderr, "himorime: exit %d: %s\n", rep.Summary.ExitCode, outcome)
 	}
 	return rep.Summary.ExitCode
 }
@@ -228,7 +228,7 @@ func (m *measurement) checkMetrics(suites []loadedSuite) int {
 		}
 	}
 	if code != 0 {
-		fmt.Fprintf(m.app.Stderr, "yahiko: exit %d: %s\n", code, exitcode.Outcome(code))
+		fmt.Fprintf(m.app.Stderr, "himorime: exit %d: %s\n", code, exitcode.Outcome(code))
 	}
 	return code
 }
@@ -242,19 +242,19 @@ func cleanupFailed(code int) int {
 	return code
 }
 
-// baseRef decides the base revision: --against, then (for ci) YAHIKO_BASE_REF,
+// baseRef decides the base revision: --against, then (for ci) HIMORIME_BASE_REF,
 // then the GitHub Actions event.
 func (m *measurement) baseRef(gh ghactions.Env) (string, string, int) {
 	a, f := m.app, m.flags
 	if m.cmd != "ci" || f.against != "" {
 		return f.against, "--against", 0
 	}
-	if env, ok := a.LookupEnv("YAHIKO_BASE_REF"); ok && strings.TrimSpace(env) != "" {
-		return strings.TrimSpace(env), "YAHIKO_BASE_REF", 0
+	if env, ok := a.LookupEnv("HIMORIME_BASE_REF"); ok && strings.TrimSpace(env) != "" {
+		return strings.TrimSpace(env), "HIMORIME_BASE_REF", 0
 	}
 	base, err := gh.ResolveBase(a.ReadFile)
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "yahiko ci: %v\n", err)
+		fmt.Fprintf(a.Stderr, "himorime ci: %v\n", err)
 		return "", "", exitcode.Usage
 	}
 	return base.SHA, base.Source, 0
@@ -263,8 +263,8 @@ func (m *measurement) baseRef(gh ghactions.Env) (string, string, int) {
 func (m *measurement) newReport(started time.Time) *report.Report {
 	info := envinfo.Collect(m.app.LookupEnv)
 	return &report.Report{
-		YahikoVersion: info.YahikoVersion,
-		StartedAt:     started.UTC(),
+		HimorimeVersion: info.HimorimeVersion,
+		StartedAt:       started.UTC(),
 		Environment: report.Environment{
 			OS: info.OS, Arch: info.Arch, CPUModel: info.CPUModel,
 			LogicalCPUs: info.LogicalCPUs, GoVersion: info.GoVersion, CI: info.CI,
@@ -305,7 +305,7 @@ func (m *measurement) openGit(ctx context.Context, suites []loadedSuite, compare
 	repo, err := gitwt.Open(ctx, suites[0].suite.Dir)
 	if err != nil {
 		if compare {
-			fmt.Fprintf(a.Stderr, "yahiko %s: %v; compare needs the suite to live in a Git repository\n", m.cmd, err)
+			fmt.Fprintf(a.Stderr, "himorime %s: %v; compare needs the suite to live in a Git repository\n", m.cmd, err)
 			return nil, exitcode.Execution
 		}
 		return &gitState{}, 0
@@ -314,7 +314,7 @@ func (m *measurement) openGit(ctx context.Context, suites []loadedSuite, compare
 		for _, ls := range suites[1:] {
 			other, err := gitwt.Open(ctx, ls.suite.Dir)
 			if err != nil || other.Top != repo.Top {
-				fmt.Fprintf(a.Stderr, "yahiko %s: %s is not in the same Git repository as %s\n", m.cmd, ls.display, suites[0].display)
+				fmt.Fprintf(a.Stderr, "himorime %s: %s is not in the same Git repository as %s\n", m.cmd, ls.display, suites[0].display)
 				return nil, exitcode.Usage
 			}
 		}
@@ -331,14 +331,14 @@ func (g *gitState) checkout(ctx context.Context, m *measurement, ref, source str
 	a := m.app
 	sha, err := g.repo.ResolveCommit(ctx, ref)
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "yahiko %s: %v\n", m.cmd, m.redact.String(err.Error()))
+		fmt.Fprintf(a.Stderr, "himorime %s: %v\n", m.cmd, m.redact.String(err.Error()))
 		return exitcode.Execution
 	}
 	rep.Git.BaseRef, rep.Git.BaseSHA, rep.Git.BaseSource = ref, sha, source
 	m.logf("comparing base %s (%s) with the working tree%s", shortRef(sha), ref, dirtyNote(rep.Git.Dirty))
 	wt, err := g.repo.AddWorktree(ctx, filepath.Join(m.tempDir, "git"), sha)
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "yahiko %s: %v\n", m.cmd, m.redact.String(err.Error()))
+		fmt.Fprintf(a.Stderr, "himorime %s: %v\n", m.cmd, m.redact.String(err.Error()))
 		return exitcode.Execution
 	}
 	g.worktree = wt
@@ -515,7 +515,7 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh 
 	}
 
 	if err := errors.Join(errs...); err != nil {
-		fmt.Fprintf(a.Stderr, "yahiko: %v\n", err)
+		fmt.Fprintf(a.Stderr, "himorime: %v\n", err)
 		return exitcode.Execution
 	}
 	return 0

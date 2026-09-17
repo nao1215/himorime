@@ -2,20 +2,20 @@
 version: "1"
 
 suite:
-  name: yahiko cookbook
+  name: himorime cookbook
 
 # One scenario per recipe on the Cookbook page, named exactly like the
 # recipe's heading; internal/docgen fails when the two drift apart. Each
 # scenario runs the recipe's example suite from the repository
-# (YAHIKO_REPO, set by test/e2e/run) and checks what the recipe says to
+# (HIMORIME_REPO, set by test/e2e/run) and checks what the recipe says to
 # expect. Recipes that compare Git revisions copy the example into a scratch
-# repository, so the yahiko checkout itself is never modified.
+# repository, so the himorime checkout itself is never modified.
 defaults:
   scenario:
     env:
-      GIT_AUTHOR_NAME: yahiko-e2e
+      GIT_AUTHOR_NAME: himorime-e2e
       GIT_AUTHOR_EMAIL: e2e@example.com
-      GIT_COMMITTER_NAME: yahiko-e2e
+      GIT_COMMITTER_NAME: himorime-e2e
       GIT_COMMITTER_EMAIL: e2e@example.com
       GIT_CONFIG_NOSYSTEM: "1"
 
@@ -23,7 +23,7 @@ scenarios:
   - name: Protect the startup latency of a CLI
     steps:
       - run:
-          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/startup
+          command: himorime run --quiet --format json ${env:HIMORIME_REPO}/examples/startup
           timeout: 180s
       - assert:
           exit_code: 0
@@ -40,7 +40,7 @@ scenarios:
   - name: Protect the throughput of large CSV and JSON processing
     steps:
       - run:
-          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/throughput
+          command: himorime run --quiet --format json ${env:HIMORIME_REPO}/examples/throughput
           timeout: 300s
       - assert:
           exit_code: 0
@@ -58,7 +58,7 @@ scenarios:
       - fixture: {file: repo/go.mod, from: ../../../go.mod}
       - fixture: {file: repo/go.sum, from: ../../../go.sum}
       - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
-      - fixture: {file: repo/examples/cpu-regression/yahiko.yaml, from: ../../../examples/cpu-regression/yahiko.yaml}
+      - fixture: {file: repo/examples/cpu-regression/himorime.yaml, from: ../../../examples/cpu-regression/himorime.yaml}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
@@ -70,7 +70,7 @@ scenarios:
           cwd: repo
       - assert: {exit_code: 0}
       - run:
-          command: yahiko compare --against main --quiet --format json examples/cpu-regression
+          command: himorime compare --against main --quiet --format json examples/cpu-regression
           cwd: repo
           timeout: 600s
       - assert:
@@ -91,7 +91,7 @@ scenarios:
       - fixture: {file: repo/go.mod, from: ../../../go.mod}
       - fixture: {file: repo/go.sum, from: ../../../go.sum}
       - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
-      - fixture: {file: repo/examples/memory-regression/yahiko.yaml, from: ../../../examples/memory-regression/yahiko.yaml}
+      - fixture: {file: repo/examples/memory-regression/himorime.yaml, from: ../../../examples/memory-regression/himorime.yaml}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
@@ -101,7 +101,7 @@ scenarios:
           cwd: repo
       - assert: {exit_code: 0}
       - run:
-          command: yahiko compare --against main --quiet --format json examples/memory-regression
+          command: himorime compare --against main --quiet --format json examples/memory-regression
           cwd: repo
           timeout: 600s
       - assert:
@@ -116,7 +116,7 @@ scenarios:
   - name: Compare similar CLIs on the same input
     steps:
       - run:
-          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/compare-clis
+          command: himorime run --quiet --format json ${env:HIMORIME_REPO}/examples/compare-clis
           timeout: 180s
       - assert:
           exit_code: 0
@@ -135,14 +135,14 @@ scenarios:
       - fixture: {file: repo/go.mod, from: ../../../go.mod}
       - fixture: {file: repo/go.sum, from: ../../../go.sum}
       - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
-      - fixture: {file: repo/examples/git-compare/yahiko.yaml, from: ../../../examples/git-compare/yahiko.yaml}
+      - fixture: {file: repo/examples/git-compare/himorime.yaml, from: ../../../examples/git-compare/himorime.yaml}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       # An uncommitted change that does not affect speed.
       - fixture: {file: repo/NOTES.md, content: "work in progress\n"}
       - run:
-          command: yahiko compare --against main examples/git-compare
+          command: himorime compare --against main examples/git-compare
           cwd: repo
           timeout: 300s
       - assert:
@@ -168,14 +168,14 @@ scenarios:
     # The recipe runs its script with sh.
     skip: {os: windows}
     steps:
-      - fixture: {file: repo/examples/script-compare/yahiko.yaml, from: ../../../examples/script-compare/yahiko.yaml}
+      - fixture: {file: repo/examples/script-compare/himorime.yaml, from: ../../../examples/script-compare/himorime.yaml}
       - fixture: {file: repo/examples/script-compare/work.sh, from: ../../../examples/script-compare/work.sh}
       - fixture: {file: repo/examples/script-compare/testdata/records.txt, from: ../../../examples/script-compare/testdata/records.txt}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run:
-          command: yahiko compare --against main --quiet examples/script-compare
+          command: himorime compare --against main --quiet examples/script-compare
           cwd: repo
           timeout: 120s
       - assert:
@@ -189,7 +189,7 @@ scenarios:
           cwd: repo
       - assert: {exit_code: 0}
       - run:
-          command: yahiko compare --against main --quiet --format json examples/script-compare
+          command: himorime compare --against main --quiet --format json examples/script-compare
           cwd: repo
           timeout: 180s
       - assert:
@@ -208,7 +208,7 @@ scenarios:
       - fixture: {file: repo/go.mod, from: ../../../go.mod}
       - fixture: {file: repo/go.sum, from: ../../../go.sum}
       - fixture: {file: repo/examples/tools/sleepy/main.go, from: ../../../examples/tools/sleepy/main.go}
-      - fixture: {file: repo/examples/gate-cpu-memory/yahiko.yaml, from: ../../../examples/gate-cpu-memory/yahiko.yaml}
+      - fixture: {file: repo/examples/gate-cpu-memory/himorime.yaml, from: ../../../examples/gate-cpu-memory/himorime.yaml}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
@@ -219,7 +219,7 @@ scenarios:
           cwd: repo
       - assert: {exit_code: 0}
       - run:
-          command: yahiko compare --against main --quiet --format json examples/gate-cpu-memory
+          command: himorime compare --against main --quiet --format json examples/gate-cpu-memory
           cwd: repo
           timeout: 600s
       - assert:
@@ -234,7 +234,7 @@ scenarios:
               - {path: "$.summary.not_gated.regression", equals: 1}
               - {path: "$.summary.exit_code", equals: 0}
       - run:
-          command: yahiko compare --against main --quiet examples/gate-cpu-memory
+          command: himorime compare --against main --quiet examples/gate-cpu-memory
           cwd: repo
           timeout: 600s
       - assert:
@@ -254,7 +254,7 @@ scenarios:
       - fixture: {file: repo/go.mod, from: ../../../go.mod}
       - fixture: {file: repo/go.sum, from: ../../../go.sum}
       - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
-      - fixture: {file: repo/examples/github-actions/yahiko.yaml, from: ../../../examples/github-actions/yahiko.yaml}
+      - fixture: {file: repo/examples/github-actions/himorime.yaml, from: ../../../examples/github-actions/himorime.yaml}
       - fixture: {file: repo/.github/workflows/benchmark.yml, from: ../../../examples/github-actions/benchmark.yml}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
@@ -263,14 +263,14 @@ scenarios:
       - assert:
           file:
             path: repo/.github/workflows/benchmark.yml
-            contains: ["pull_request:", "contents: read", "fetch-depth: 0", "run: yahiko ci"]
+            contains: ["pull_request:", "contents: read", "fetch-depth: 0", "run: himorime ci"]
       - assert:
           file:
             path: repo/.github/workflows/benchmark.yml
             not_contains: ["pull_request_target:", "${{ secrets"]
       # The same suite, without a base revision, checks the budgets locally.
       - run:
-          command: yahiko run --quiet --format json examples/github-actions
+          command: himorime run --quiet --format json examples/github-actions
           cwd: repo
           timeout: 300s
       - assert:
@@ -280,7 +280,7 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].budgets", length: 4}
               - {path: "$.summary.over_budget", equals: 0}
       - run:
-          command: yahiko ci examples/github-actions
+          command: himorime ci examples/github-actions
           cwd: repo
           timeout: 300s
       - assert:
@@ -290,34 +290,34 @@ scenarios:
       - assert:
           file:
             path: summary.md
-            contains: ["yahiko benchmark comparison", "| count 50k lines | wordcount |", "#### Throughput", "#### Peak RSS", "#### Budgets (head)"]
+            contains: ["himorime benchmark comparison", "| count 50k lines | wordcount |", "#### Throughput", "#### Peak RSS", "#### Budgets (head)"]
       # A budget the change cannot meet fails the job with exit 1 and an
       # annotation that names a performance problem, not a broken run.
       - run:
-          command: 'e2ehelper replace examples/github-actions/yahiko.yaml "<= 256MiB" "<= 1KiB"'
+          command: 'e2ehelper replace examples/github-actions/himorime.yaml "<= 256MiB" "<= 1KiB"'
           cwd: repo
       - run:
-          command: yahiko ci --quiet examples/github-actions
+          command: himorime ci --quiet examples/github-actions
           cwd: repo
           timeout: 300s
       - assert:
           exit_code: 1
           stderr:
             contains:
-              - "::error file=examples/github-actions/yahiko.yaml,title=yahiko%3A performance budget exceeded::count 50k lines / wordcount: peak rss max budget <= 1.00KiB, measured"
-              - "yahiko: exit 1: performance check failed"
+              - "::error file=examples/github-actions/himorime.yaml,title=himorime%3A performance budget exceeded::count 50k lines / wordcount: peak rss max budget <= 1.00KiB, measured"
+              - "himorime: exit 1: performance check failed"
             not_contains: "could not"
 
   - name: Save JSON, CSV and Markdown reports locally
     steps:
       - run:
-          command: yahiko run --quiet --format json --output ${workdir}/result.json ${env:YAHIKO_REPO}/examples/reports
+          command: himorime run --quiet --format json --output ${workdir}/result.json ${env:HIMORIME_REPO}/examples/reports
           timeout: 180s
       - assert:
           exit_code: 0
           stdout: {empty: true}
       - run:
-          command: e2ehelper json-schema ${env:YAHIKO_REPO}/schema/report.schema.json ${workdir}/result.json
+          command: e2ehelper json-schema ${env:HIMORIME_REPO}/schema/report.schema.json ${workdir}/result.json
       - assert:
           exit_code: 0
           stdout: {equals: "valid\n"}
@@ -331,7 +331,7 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.unit", equals: "lines/s"}
               - {path: "$.suites[0].benchmarks[0].commands[1].relative.vs_fastest", gte: 1}
       - run:
-          command: yahiko run --quiet --format csv --output ${workdir}/result.csv ${env:YAHIKO_REPO}/examples/reports
+          command: himorime run --quiet --format csv --output ${workdir}/result.csv ${env:HIMORIME_REPO}/examples/reports
           timeout: 180s
       - run:
           command: e2ehelper csv-shape ${workdir}/result.csv
@@ -347,7 +347,7 @@ scenarios:
               - "reports,count 20k lines,readall,pass,stat,head,peak_rss,bytes,process_tree,"
               - "reports,count 20k lines,readall,pass,stat,head,cpu_utilization,percent,process_tree,"
       - run:
-          command: yahiko run --quiet --format samples-csv --output ${workdir}/samples.csv ${env:YAHIKO_REPO}/examples/reports
+          command: himorime run --quiet --format samples-csv --output ${workdir}/samples.csv ${env:HIMORIME_REPO}/examples/reports
           timeout: 180s
       - run:
           command: e2ehelper csv-shape ${workdir}/samples.csv
@@ -355,7 +355,7 @@ scenarios:
           # A header and 10 runs of 7 metrics for each of 2 commands.
           stdout: {equals: "rows=141 columns=8\n"}
       - run:
-          command: yahiko run --quiet --format markdown --output ${workdir}/result.md --summary ${workdir}/summary.md ${env:YAHIKO_REPO}/examples/reports
+          command: himorime run --quiet --format markdown --output ${workdir}/result.md --summary ${workdir}/summary.md ${env:HIMORIME_REPO}/examples/reports
           timeout: 180s
       - assert:
           exit_code: 0
@@ -369,16 +369,16 @@ scenarios:
               - "| count 20k lines | scanner |"
               - "### CPU"
               - "### Memory"
-              - "Measured with yahiko"
+              - "Measured with himorime"
       - assert:
           file:
             path: summary.md
-            contains: ["## ✅ yahiko benchmarks: no regression", "### reports", "#### Throughput"]
+            contains: ["## ✅ himorime benchmarks: no regression", "### reports", "#### Throughput"]
 
   - name: Understand CPU utilization above 100%
     steps:
       - run:
-          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/cpu-utilization
+          command: himorime run --quiet --format json ${env:HIMORIME_REPO}/examples/cpu-utilization
           timeout: 300s
       - assert:
           exit_code: 0
@@ -393,7 +393,7 @@ scenarios:
   - name: Understand process tree measurement on each OS
     steps:
       - run:
-          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/process-tree
+          command: himorime run --quiet --format json ${env:HIMORIME_REPO}/examples/process-tree
           timeout: 180s
       - assert:
           exit_code: 0
@@ -409,12 +409,12 @@ scenarios:
       - fixture: {file: repo/go.mod, from: ../../../go.mod}
       - fixture: {file: repo/go.sum, from: ../../../go.sum}
       - fixture: {file: repo/examples/tools/sleepy/main.go, from: ../../../examples/tools/sleepy/main.go}
-      - fixture: {file: repo/examples/noisy/yahiko.yaml, from: ../../../examples/noisy/yahiko.yaml}
+      - fixture: {file: repo/examples/noisy/himorime.yaml, from: ../../../examples/noisy/himorime.yaml}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run:
-          command: yahiko compare --against main --quiet examples/noisy
+          command: himorime compare --against main --quiet examples/noisy
           cwd: repo
           timeout: 300s
       - assert:
@@ -425,7 +425,7 @@ scenarios:
           stdout:
             matches: "(?m)^steady +[0-9.]+ms +[0-9.]+ms +\\S+ +[+-][0-9.]+% +\\S+ +\\+20% +(PASS|INCONCLUSIVE)$"
       - run:
-          command: yahiko compare --against main --quiet --fail-on-inconclusive examples/noisy
+          command: himorime compare --against main --quiet --fail-on-inconclusive examples/noisy
           cwd: repo
           timeout: 300s
       - assert:
@@ -435,7 +435,7 @@ scenarios:
   - name: Handle a metric this platform cannot measure
     steps:
       - run:
-          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/unsupported-metrics
+          command: himorime run --quiet --format json ${env:HIMORIME_REPO}/examples/unsupported-metrics
           timeout: 180s
       - assert:
           exit_code: 0
@@ -451,7 +451,7 @@ scenarios:
   - name: Compare parsers on a stdin fixture
     steps:
       - run:
-          command: yahiko run --quiet ${env:YAHIKO_REPO}/examples/stdin-fixture
+          command: himorime run --quiet ${env:HIMORIME_REPO}/examples/stdin-fixture
           timeout: 180s
       - assert:
           exit_code: 0
@@ -461,7 +461,7 @@ scenarios:
   - name: Compare small, medium and large inputs
     steps:
       - run:
-          command: yahiko run --quiet --tag smoke ${env:YAHIKO_REPO}/examples/input-sizes
+          command: himorime run --quiet --tag smoke ${env:HIMORIME_REPO}/examples/input-sizes
           timeout: 180s
       - assert:
           exit_code: 0
@@ -469,7 +469,7 @@ scenarios:
             matches: "(?m)^small +readall .* PASS$"
             not_contains: "large"
       - run:
-          command: yahiko run --quiet --runs 3 --format json ${env:YAHIKO_REPO}/examples/input-sizes
+          command: himorime run --quiet --runs 3 --format json ${env:HIMORIME_REPO}/examples/input-sizes
           timeout: 300s
       - assert:
           exit_code: 0
@@ -483,7 +483,7 @@ scenarios:
   - name: Reset state before every run
     steps:
       - run:
-          command: yahiko run --quiet ${env:YAHIKO_REPO}/examples/prepare-each
+          command: himorime run --quiet ${env:HIMORIME_REPO}/examples/prepare-each
           timeout: 180s
       - assert:
           exit_code: 0
@@ -493,7 +493,7 @@ scenarios:
   - name: Clean up after success, failure or interruption
     steps:
       - run:
-          command: yahiko run --quiet ${env:YAHIKO_REPO}/examples/cleanup
+          command: himorime run --quiet ${env:HIMORIME_REPO}/examples/cleanup
           timeout: 180s
       - assert:
           exit_code: 0
@@ -503,7 +503,7 @@ scenarios:
   - name: Benchmark a warm cache
     steps:
       - run:
-          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/cache
+          command: himorime run --quiet --format json ${env:HIMORIME_REPO}/examples/cache
           timeout: 180s
       - assert:
           exit_code: 0
@@ -516,14 +516,14 @@ scenarios:
   - name: Run only smoke benchmarks
     steps:
       - run:
-          command: yahiko run --quiet --tag smoke ${env:YAHIKO_REPO}/examples/tags
+          command: himorime run --quiet --tag smoke ${env:HIMORIME_REPO}/examples/tags
           timeout: 180s
       - assert:
           exit_code: 0
           stdout:
             not_contains: "large input"
       - run:
-          command: yahiko list --skip-tag slow ${env:YAHIKO_REPO}/examples/tags
+          command: himorime list --skip-tag slow ${env:HIMORIME_REPO}/examples/tags
       - assert:
           exit_code: 0
           stdout:
@@ -532,7 +532,7 @@ scenarios:
   - name: Stop a command that hangs
     steps:
       - run:
-          command: yahiko run --quiet ${env:YAHIKO_REPO}/examples/timeout
+          command: himorime run --quiet ${env:HIMORIME_REPO}/examples/timeout
           timeout: 180s
       - assert:
           duration: {lt: 120s}
@@ -544,7 +544,7 @@ scenarios:
   - name: Treat a non-zero exit as an error
     steps:
       - run:
-          command: yahiko run --quiet ${env:YAHIKO_REPO}/examples/failing-command
+          command: himorime run --quiet ${env:HIMORIME_REPO}/examples/failing-command
           timeout: 180s
       - assert:
           exit_code: 4
@@ -559,7 +559,7 @@ scenarios:
   - name: Use a shell pipeline
     steps:
       - run:
-          command: yahiko run --quiet ${env:YAHIKO_REPO}/examples/shell
+          command: himorime run --quiet ${env:HIMORIME_REPO}/examples/shell
           timeout: 180s
       - assert:
           exit_code: 0
@@ -569,7 +569,7 @@ scenarios:
   - name: Understand the geometric mean
     steps:
       - run:
-          command: yahiko run --quiet ${env:YAHIKO_REPO}/examples/missing-case
+          command: himorime run --quiet ${env:HIMORIME_REPO}/examples/missing-case
           timeout: 180s
       - assert:
           exit_code: 0

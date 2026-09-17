@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
 
-project_name: yahiko
+project_name: himorime
 
 before:
   hooks:
@@ -9,9 +9,9 @@ before:
     - go run ./scripts/completions completions
 
 builds:
-  - id: yahiko
+  - id: himorime
     main: .
-    binary: yahiko
+    binary: himorime
     env:
       - CGO_ENABLED=0
     goos: [linux, darwin, windows]
@@ -20,7 +20,7 @@ builds:
     goarch: [amd64, arm64]
     flags: [-trimpath]
     ldflags:
-      - -s -w -X github.com/nao1215/yahiko/internal/buildinfo.Version=v{{ .Version }}
+      - -s -w -X github.com/nao1215/himorime/internal/buildinfo.Version=v{{ .Version }}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
@@ -65,25 +65,25 @@ signs:
 
 nfpms:
   - id: packages
-    package_name: yahiko
+    package_name: himorime
     vendor: Naohiro CHIKAMATSU
-    homepage: https://nao1215.github.io/yahiko/
+    homepage: https://nao1215.github.io/himorime/
     maintainer: Naohiro CHIKAMATSU <n.chika156@gmail.com>
     description: Performance budgets and regression checks for command-line programs.
     license: MIT
     formats: [deb, rpm, apk]
     bindir: /usr/bin
     contents:
-      - src: ./completions/yahiko.bash
-        dst: /usr/share/bash-completion/completions/yahiko
+      - src: ./completions/himorime.bash
+        dst: /usr/share/bash-completion/completions/himorime
         file_info:
           mode: 0644
-      - src: ./completions/yahiko.zsh
-        dst: /usr/share/zsh/vendor-completions/_yahiko
+      - src: ./completions/himorime.zsh
+        dst: /usr/share/zsh/vendor-completions/_himorime
         file_info:
           mode: 0644
-      - src: ./completions/yahiko.fish
-        dst: /usr/share/fish/vendor_completions.d/yahiko.fish
+      - src: ./completions/himorime.fish
+        dst: /usr/share/fish/vendor_completions.d/himorime.fish
         file_info:
           mode: 0644
 
@@ -92,16 +92,16 @@ nfpms:
 # without publishing it, so release smoke can check its contents. The docs
 # mention Homebrew only once a release has actually been published there.
 homebrew_casks:
-  - name: yahiko
-    binaries: [yahiko]
+  - name: himorime
+    binaries: [himorime]
     directory: Casks
-    homepage: https://nao1215.github.io/yahiko/
+    homepage: https://nao1215.github.io/himorime/
     description: Performance budgets and regression checks for command-line programs
     license: MIT
     completions:
-      bash: completions/yahiko.bash
-      zsh: completions/yahiko.zsh
-      fish: completions/yahiko.fish
+      bash: completions/himorime.bash
+      zsh: completions/himorime.zsh
+      fish: completions/himorime.fish
     repository:
       owner: nao1215
       name: homebrew-tap
@@ -112,7 +112,7 @@ homebrew_casks:
       post:
         install: |
           if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/yahiko"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/himorime"]
           end
 
 release:
@@ -120,14 +120,14 @@ release:
   # pre-release and never becomes "Latest".
   prerelease: auto
   header: |
-    ## yahiko {{ .Tag }}
+    ## himorime {{ .Tag }}
 
     Performance budgets and regression checks for command-line programs:
     latency, throughput, CPU time and peak RSS. Every artifact is
     signed and ships with an SBOM and build provenance; see
-    [Verify a release](https://nao1215.github.io/yahiko/install/#verify-a-release).
+    [Verify a release](https://nao1215.github.io/himorime/install/#verify-a-release).
   footer: |
-    **Full changelog**: https://github.com/nao1215/yahiko/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full changelog**: https://github.com/nao1215/himorime/compare/{{ .PreviousTag }}...{{ .Tag }}
 
 changelog:
   sort: asc

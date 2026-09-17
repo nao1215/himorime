@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 // The validator applies the rules JSON Schema cannot express, and resolves
@@ -237,7 +237,7 @@ func (v *validator) resolveExec(p path, raw RawExec, defaultTimeout time.Duratio
 	} else {
 		v.checkTemplate(p.key("command"), raw.Command.Script, sc)
 		if QuotedReference(raw.Command.Script) {
-			v.add(p.key("command"), `write the variable without quotes, such as cat ${workdir}/in.txt; yahiko quotes substituted values for the shell itself`,
+			v.add(p.key("command"), `write the variable without quotes, such as cat ${workdir}/in.txt; himorime quotes substituted values for the shell itself`,
 				"a variable inside quotes in a shell command would be quoted twice")
 		}
 	}

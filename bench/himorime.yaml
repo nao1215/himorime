@@ -1,13 +1,13 @@
-# yaml-language-server: $schema=../schema/yahiko.schema.json
+# yaml-language-server: $schema=../schema/himorime.schema.json
 #
-# yahiko measuring itself. Informational: .github/workflows/benchmark.yml runs
-# `yahiko ci bench` on pull requests without blocking merges, and `make bench`
+# himorime measuring itself. Informational: .github/workflows/benchmark.yml runs
+# `himorime ci bench` on pull requests without blocking merges, and `make bench`
 # runs it locally.
 version: "1"
 
 suite:
-  name: yahiko dogfood
-  description: Start-up, validation and a small measured run of yahiko itself.
+  name: himorime dogfood
+  description: Start-up, validation and a small measured run of himorime itself.
 
 build:
   command: [go, build, -trimpath, -o, "${artifact}", .]
@@ -25,12 +25,12 @@ benchmarks:
   - name: version
     tags: [smoke]
     commands:
-      yahiko:
+      himorime:
         command: ["${artifact}", version]
 
   - name: validate every example
     commands:
-      yahiko:
+      himorime:
         command:
           - "${artifact}"
           - validate
@@ -42,21 +42,21 @@ benchmarks:
 
   - name: list with a filter
     commands:
-      yahiko:
+      himorime:
         command: ["${artifact}", list, --format, json, --filter, "^(small|large)$", "${root}/../examples/input-sizes"]
 
   - name: run a tiny suite
     setup:
       - command: ["${artifact}", init, "${workdir}/tiny.yaml"]
     commands:
-      yahiko:
+      himorime:
         command: ["${artifact}", run, --quiet, --runs, "3", --warmup, "0", --format, json, "${workdir}/tiny.yaml"]
 
   - name: collector overhead
     description: >-
       The same suite measured with latency only and with every metric. The
       difference is what reading CPU time and peak RSS after each run costs
-      yahiko; it is never part of a measured run.
+      himorime; it is never part of a measured run.
     commands:
       latency-only:
         command: ["${artifact}", run, --quiet, --runs, "20", --warmup, "0", --format, json, "${root}/testdata/latency-only.yaml"]

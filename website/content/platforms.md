@@ -1,9 +1,9 @@
 ---
 title: Platform support
-description: Operating systems and architectures yahiko supports, and the few behaviors that differ between them.
+description: Operating systems and architectures himorime supports, and the few behaviors that differ between them.
 ---
 
-yahiko runs on Linux, macOS and Windows, on amd64 and arm64. Release archives
+himorime runs on Linux, macOS and Windows, on amd64 and arm64. Release archives
 are published for those six combinations. CI runs the unit tests (with the race
 detector on Linux) and the end-to-end suite on Linux, macOS and Windows.
 
@@ -13,7 +13,7 @@ The differences are:
 | Behavior | Linux, macOS | Windows |
 |---|---|---|
 | `shell: true` | `/bin/sh -c` | `cmd.exe /d /s /c` (`%ComSpec%`); values holding `"`, `%` or a line break cannot be substituted |
-| Stopping a process tree on timeout, Ctrl+C, or when the command exits | the command joins its own process group before it runs, and the group receives SIGKILL | the command is created suspended, assigned to a Job Object and only then resumed; the job is terminated, and yahiko waits until it is empty |
+| Stopping a process tree on timeout, Ctrl+C, or when the command exits | the command joins its own process group before it runs, and the group receives SIGKILL | the command is created suspended, assigned to a Job Object and only then resumed; the job is terminated, and himorime waits until it is empty |
 | `${artifact}` and `${exe}` | no suffix | `.exe` |
 | Program lookup | `PATH` | `PATH` and `PATHEXT` |
 
@@ -22,7 +22,7 @@ every process it starts is in the job too: nothing escapes being stopped or
 having its CPU time counted, however quickly it starts. The time between
 creating the suspended process and resuming it is not counted as latency. If
 the process cannot be assigned to a job, for example because a parent job
-forbids it, yahiko kills the still suspended process and reports the run as
+forbids it, himorime kills the still suspended process and reports the run as
 an `internal` error instead of measuring it without the guarantees. On Unix a
 descendant that moves itself into another process group or session (a daemon
 does) leaves the group and is not stopped with it.

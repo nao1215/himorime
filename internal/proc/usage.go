@@ -7,7 +7,7 @@ import (
 )
 
 // Usage is the resource usage the operating system reported for a finished
-// process tree. yahiko reads it from the statistics the OS keeps for an
+// process tree. himorime reads it from the statistics the OS keeps for an
 // exited process (wait4's rusage on Unix, Job Object accounting on Windows);
 // nothing polls the process while it runs, so collecting usage adds no work
 // to the measured interval.

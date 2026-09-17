@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 // EscapeMarkdown makes s safe inside a Markdown table cell: pipes cannot split
@@ -246,8 +246,8 @@ func markdownEnvironment(sb *strings.Builder, r *Report) {
 	if cpu == "" {
 		cpu = "unknown CPU"
 	}
-	fmt.Fprintf(sb, "Measured with yahiko %s on %s/%s, %s (%d logical CPUs)",
-		EscapeMarkdown(r.YahikoVersion), EscapeMarkdown(e.OS), EscapeMarkdown(e.Arch), EscapeMarkdown(cpu), e.LogicalCPUs)
+	fmt.Fprintf(sb, "Measured with himorime %s on %s/%s, %s (%d logical CPUs)",
+		EscapeMarkdown(r.HimorimeVersion), EscapeMarkdown(e.OS), EscapeMarkdown(e.Arch), EscapeMarkdown(cpu), e.LogicalCPUs)
 	if r.Git != nil {
 		if r.Git.BaseSHA != "" {
 			fmt.Fprintf(sb, ", base %s", shortSHA(r.Git.BaseSHA))

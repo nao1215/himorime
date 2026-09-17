@@ -57,18 +57,18 @@ func worst(a, b Result) Result {
 	return a
 }
 
-// Report is the complete result of one yahiko invocation.
+// Report is the complete result of one himorime invocation.
 type Report struct {
-	SchemaVersion string      `json:"schema_version"`
-	Mode          Mode        `json:"mode"`
-	YahikoVersion string      `json:"yahiko_version"`
-	Seed          uint64      `json:"seed"`
-	StartedAt     time.Time   `json:"started_at"`
-	FinishedAt    time.Time   `json:"finished_at"`
-	Environment   Environment `json:"environment"`
-	Git           *Git        `json:"git"`
-	Suites        []Suite     `json:"suites"`
-	Summary       Summary     `json:"summary"`
+	SchemaVersion   string      `json:"schema_version"`
+	Mode            Mode        `json:"mode"`
+	HimorimeVersion string      `json:"himorime_version"`
+	Seed            uint64      `json:"seed"`
+	StartedAt       time.Time   `json:"started_at"`
+	FinishedAt      time.Time   `json:"finished_at"`
+	Environment     Environment `json:"environment"`
+	Git             *Git        `json:"git"`
+	Suites          []Suite     `json:"suites"`
+	Summary         Summary     `json:"summary"`
 }
 
 // Environment describes the machine. It never holds a host name or
@@ -139,7 +139,7 @@ type Measurement struct {
 	// Count is the number of measured runs.
 	Count   int `json:"count"`
 	Warmups int `json:"warmups"`
-	// Metrics is keyed by metric name and holds every metric yahiko knows,
+	// Metrics is keyed by metric name and holds every metric himorime knows,
 	// with a status saying whether it was measured.
 	Metrics map[string]*MetricSummary `json:"metrics"`
 	Error   *Error                    `json:"error"`

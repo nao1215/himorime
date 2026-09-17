@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/metric"
-	"github.com/nao1215/yahiko/internal/proc"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/metric"
+	"github.com/nao1215/himorime/internal/proc"
 )
 
 // fakeUsage is a collector stand-in: it runs the real process and then

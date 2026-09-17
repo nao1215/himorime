@@ -1,8 +1,8 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipes: benchmark with a warm cache, and reproduce a cold cache with
 # prepare_each.
-# https://nao1215.github.io/yahiko/cookbook/#benchmark-a-warm-cache
+# https://nao1215.github.io/himorime/cookbook/#benchmark-a-warm-cache
 version: "1"
 
 suite:

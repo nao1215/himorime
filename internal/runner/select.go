@@ -3,7 +3,7 @@ package runner
 import (
 	"regexp"
 
-	"github.com/nao1215/yahiko/internal/config"
+	"github.com/nao1215/himorime/internal/config"
 )
 
 // Selection chooses which benchmarks run. The zero value selects everything.

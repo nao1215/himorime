@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/exitcode"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/exitcode"
 )
 
 // helperPath is the portable helper program from test/e2e/helper, built once
@@ -26,7 +26,7 @@ import (
 var helperPath string
 
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "yahiko-cli-test-")
+	dir, err := os.MkdirTemp("", "himorime-cli-test-")
 	if err != nil {
 		panic(err)
 	}
@@ -76,7 +76,7 @@ func runWith(t *testing.T, dir string, e env, adjust func(*App), args ...string)
 			if v, ok := e[k]; ok {
 				return v, true
 			}
-			if k == "GITHUB_ACTIONS" || k == "GITHUB_EVENT_NAME" || k == "GITHUB_EVENT_PATH" || k == "GITHUB_STEP_SUMMARY" || k == "YAHIKO_BASE_REF" || k == "NO_COLOR" {
+			if k == "GITHUB_ACTIONS" || k == "GITHUB_EVENT_NAME" || k == "GITHUB_EVENT_PATH" || k == "GITHUB_STEP_SUMMARY" || k == "HIMORIME_BASE_REF" || k == "NO_COLOR" {
 				return "", false
 			}
 			return os.LookupEnv(k)
@@ -140,10 +140,10 @@ func TestHelpVersionAndUsageErrors(t *testing.T) {
 	if r := run(t, dir, nil, "help", "nope"); r.code != exitcode.Usage {
 		t.Fatalf("help nope: %+v", r)
 	}
-	if r := run(t, dir, nil, "run", "--help"); r.code != 0 || !strings.Contains(r.stdout, "Usage: yahiko run") || !strings.Contains(r.stdout, "--skip-tag") {
+	if r := run(t, dir, nil, "run", "--help"); r.code != 0 || !strings.Contains(r.stdout, "Usage: himorime run") || !strings.Contains(r.stdout, "--skip-tag") {
 		t.Fatalf("run --help: %+v", r)
 	}
-	if r := run(t, dir, nil, "version"); r.code != 0 || !strings.HasPrefix(r.stdout, "yahiko ") || !strings.Contains(r.stdout, runtime.GOOS+"/"+runtime.GOARCH) {
+	if r := run(t, dir, nil, "version"); r.code != 0 || !strings.HasPrefix(r.stdout, "himorime ") || !strings.Contains(r.stdout, runtime.GOOS+"/"+runtime.GOARCH) {
 		t.Fatalf("version: %+v", r)
 	}
 	if r := run(t, dir, nil, "--version"); r.code != 0 {
@@ -174,38 +174,38 @@ func TestHelpVersionAndUsageErrors(t *testing.T) {
 func TestInit(t *testing.T) {
 	dir := t.TempDir()
 	r := run(t, dir, nil, "init")
-	if r.code != 0 || !strings.Contains(r.stdout, "wrote yahiko.yaml") {
+	if r.code != 0 || !strings.Contains(r.stdout, "wrote himorime.yaml") {
 		t.Fatalf("init: %+v", r)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "yahiko.yaml"))
-	if err != nil || !strings.HasPrefix(string(data), "# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/yahiko/main/schema/yahiko.schema.json") {
+	data, err := os.ReadFile(filepath.Join(dir, "himorime.yaml"))
+	if err != nil || !strings.HasPrefix(string(data), "# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json") {
 		t.Fatalf("init wrote %q, %v", data, err)
 	}
-	write(t, filepath.Join(dir, "yahiko.yaml"), "keep me")
+	write(t, filepath.Join(dir, "himorime.yaml"), "keep me")
 	r = run(t, dir, nil, "init")
 	if r.code != exitcode.Usage || !strings.Contains(r.stderr, "already exists") {
 		t.Fatalf("init over an existing file: %+v", r)
 	}
-	if data, _ := os.ReadFile(filepath.Join(dir, "yahiko.yaml")); string(data) != "keep me" {
+	if data, _ := os.ReadFile(filepath.Join(dir, "himorime.yaml")); string(data) != "keep me" {
 		t.Fatal("init overwrote an existing file without --force")
 	}
 	if r := run(t, dir, nil, "init", "--force"); r.code != 0 {
 		t.Fatalf("init --force: %+v", r)
 	}
-	if r := run(t, dir, nil, "init", "bench/custom.yahiko.yaml"); r.code != exitcode.Execution {
+	if r := run(t, dir, nil, "init", "bench/custom.himorime.yaml"); r.code != exitcode.Execution {
 		t.Fatalf("init into a missing directory: %+v", r)
 	}
 	if r := run(t, dir, nil, "init", "a.yaml", "b.yaml"); r.code != exitcode.Usage {
 		t.Fatalf("init with two paths: %+v", r)
 	}
-	if r := run(t, dir, nil, "validate"); r.code != 0 || !strings.Contains(r.stdout, "yahiko.yaml: ok (1 benchmark, 1 command)") {
+	if r := run(t, dir, nil, "validate"); r.code != 0 || !strings.Contains(r.stdout, "himorime.yaml: ok (1 benchmark, 1 command)") {
 		t.Fatalf("validate the generated file: %+v", r)
 	}
 }
 
 func TestInitTemplateIsValid(t *testing.T) {
 	t.Parallel()
-	s, err := config.Parse("init.yaml", filepath.Join(t.TempDir(), "yahiko.yaml"), []byte(InitTemplate))
+	s, err := config.Parse("init.yaml", filepath.Join(t.TempDir(), "himorime.yaml"), []byte(InitTemplate))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestInitTemplateIsValid(t *testing.T) {
 
 func TestValidateReportsEveryIssue(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, "yahiko.yaml"), `version: "1"
+	write(t, filepath.Join(dir, "himorime.yaml"), `version: "1"
 suite: {name: broken}
 benchmarks:
   - name: a
@@ -229,7 +229,7 @@ benchmarks:
 	if r.code != exitcode.Config {
 		t.Fatalf("validate: %+v", r)
 	}
-	for _, want := range []string{"yahiko.yaml:5:11: benchmarks[0].runs: expected an integer, got a string", `unknown key "bogus"`, "nothing was run"} {
+	for _, want := range []string{"himorime.yaml:5:11: benchmarks[0].runs: expected an integer, got a string", `unknown key "bogus"`, "nothing was run"} {
 		if !strings.Contains(r.stderr, want) {
 			t.Errorf("stderr lacks %q:\n%s", want, r.stderr)
 		}
@@ -241,7 +241,7 @@ benchmarks:
 		t.Fatalf("missing file: %+v", r)
 	}
 	empty := t.TempDir()
-	if r := run(t, empty, nil, "validate", "."); r.code != exitcode.Config || !strings.Contains(r.stderr, "contains no yahiko.yaml") {
+	if r := run(t, empty, nil, "validate", "."); r.code != exitcode.Config || !strings.Contains(r.stderr, "contains no himorime.yaml") {
 		t.Fatalf("empty directory: %+v", r)
 	}
 }
@@ -269,7 +269,7 @@ benchmarks:
 
 func TestListAndSelection(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, "yahiko.yaml"), suite(t, twoBenchmarks))
+	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, twoBenchmarks))
 	r := run(t, dir, nil, "list")
 	if r.code != 0 {
 		t.Fatalf("list: %+v", r)
@@ -298,7 +298,7 @@ func TestListAndSelection(t *testing.T) {
 func TestRunTableJSONAndOutputs(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "fixtures", "in.txt"), "data\n")
-	write(t, filepath.Join(dir, "yahiko.yaml"), suite(t, twoBenchmarks)+"report:\n  outputs:\n    - {format: markdown, path: out/report.md}\n    - {format: csv, path: out/report.csv}\n")
+	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, twoBenchmarks)+"report:\n  outputs:\n    - {format: markdown, path: out/report.md}\n    - {format: csv, path: out/report.csv}\n")
 	r := run(t, dir, nil, "run", "--tag", "smoke", "--seed", "99", "--quiet")
 	if r.code != 0 {
 		t.Fatalf("run: %+v", r)
@@ -318,7 +318,7 @@ func TestRunTableJSONAndOutputs(t *testing.T) {
 		t.Fatalf("csv output: %q %v", data, err)
 	}
 
-	r = run(t, dir, nil, "run", "yahiko.yaml", "--format", "json", "--output", "result.json")
+	r = run(t, dir, nil, "run", "himorime.yaml", "--format", "json", "--output", "result.json")
 	if r.code != 0 || r.stdout != "" || !strings.Contains(r.stderr, `benchmark "slow one"`) {
 		t.Fatalf("run --output: %+v", r)
 	}
@@ -348,7 +348,7 @@ func TestRunTableJSONAndOutputs(t *testing.T) {
 
 func TestRunExitCodes(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, "budget.yahiko.yaml"), suite(t, `version: "1"
+	write(t, filepath.Join(dir, "budget.himorime.yaml"), suite(t, `version: "1"
 suite: {name: budget}
 defaults: {warmup: 0, runs: 3}
 benchmarks:
@@ -359,12 +359,12 @@ benchmarks:
     budget:
       tool: {median: "< 5ms"}
 `))
-	r := run(t, dir, nil, "run", "budget.yahiko.yaml", "--quiet")
+	r := run(t, dir, nil, "run", "budget.himorime.yaml", "--quiet")
 	if r.code != exitcode.Failed || !strings.Contains(r.stdout, "OVER BUDGET") || !strings.Contains(r.stdout, "budget median < 5.00ms not met") {
 		t.Fatalf("budget: %+v", r)
 	}
 
-	write(t, filepath.Join(dir, "fail.yahiko.yaml"), suite(t, `version: "1"
+	write(t, filepath.Join(dir, "fail.himorime.yaml"), suite(t, `version: "1"
 suite: {name: fail}
 defaults: {warmup: 0, runs: 2}
 benchmarks:
@@ -373,7 +373,7 @@ benchmarks:
       tool:
         command: [@EXE@, exit, "2", "failing with ${env:SECRET_TOKEN}"]
 `))
-	r = run(t, dir, env{"SECRET_TOKEN": "hunter2-very-secret"}, "run", "fail.yahiko.yaml", "--quiet")
+	r = run(t, dir, env{"SECRET_TOKEN": "hunter2-very-secret"}, "run", "fail.himorime.yaml", "--quiet")
 	if r.code != exitcode.Execution || !strings.Contains(r.stdout, "ERROR") || !strings.Contains(r.stdout, "exited with status 2") {
 		t.Fatalf("command failure: %+v", r)
 	}
@@ -381,7 +381,7 @@ benchmarks:
 		t.Fatalf("a secret leaked or stderr was not shown:\n%s", r.stdout)
 	}
 
-	write(t, filepath.Join(dir, "timeout.yahiko.yaml"), suite(t, `version: "1"
+	write(t, filepath.Join(dir, "timeout.himorime.yaml"), suite(t, `version: "1"
 suite: {name: timeout}
 defaults: {warmup: 0, runs: 2}
 benchmarks:
@@ -392,7 +392,7 @@ benchmarks:
         timeout: 200ms
 `))
 	start := time.Now()
-	r = run(t, dir, nil, "run", "timeout.yahiko.yaml", "--quiet")
+	r = run(t, dir, nil, "run", "timeout.himorime.yaml", "--quiet")
 	if r.code != exitcode.Execution || !strings.Contains(r.stdout, "timed out after 200ms") || time.Since(start) > 30*time.Second {
 		t.Fatalf("timeout: %+v", r)
 	}
@@ -402,7 +402,7 @@ benchmarks:
 		t.Fatalf("missing suite: %+v", r)
 	}
 
-	if r := run(t, dir, nil, "run", "budget.yahiko.yaml", "--quiet", "--output", filepath.Join(dir, "no-such-dir", "x", "\x00bad")); r.code != exitcode.Execution {
+	if r := run(t, dir, nil, "run", "budget.himorime.yaml", "--quiet", "--output", filepath.Join(dir, "no-such-dir", "x", "\x00bad")); r.code != exitcode.Execution {
 		t.Fatalf("an unwritable report must fail: %+v", r)
 	}
 }
@@ -445,7 +445,7 @@ func compareRepo(t *testing.T) string {
 	dir := t.TempDir()
 	git(t, dir, "init", "-q", "-b", "main")
 	write(t, filepath.Join(dir, "delay.txt"), "20ms\n")
-	write(t, filepath.Join(dir, "yahiko.yaml"), suite(t, compareSuite))
+	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, compareSuite))
 	git(t, dir, "add", "-A")
 	git(t, dir, "commit", "-q", "-m", "base")
 	return dir
@@ -494,15 +494,15 @@ func TestCompare(t *testing.T) {
 		t.Fatalf("unknown ref: %+v", r)
 	}
 	notRepo := t.TempDir()
-	write(t, filepath.Join(notRepo, "yahiko.yaml"), suite(t, compareSuite))
+	write(t, filepath.Join(notRepo, "himorime.yaml"), suite(t, compareSuite))
 	if r := run(t, notRepo, nil, "compare", "--against", "main", "--quiet"); r.code != exitcode.Execution || !strings.Contains(r.stderr, "Git repository") {
 		t.Fatalf("outside git: %+v", r)
 	}
 	if r := run(t, dir, nil, "compare", "--against", "main", "--runs", "3", "--quiet"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "--runs 3 is lower than regression.min_samples") {
 		t.Fatalf("--runs below min_samples: %+v", r)
 	}
-	write(t, filepath.Join(dir, "few.yahiko.yaml"), strings.Replace(suite(t, compareSuite), "runs: 10", "runs: 3", 1))
-	if r := run(t, dir, nil, "compare", "--against", "main", "few.yahiko.yaml"); r.code != exitcode.Config || !strings.Contains(r.stderr, "lower than regression.min_samples") {
+	write(t, filepath.Join(dir, "few.himorime.yaml"), strings.Replace(suite(t, compareSuite), "runs: 10", "runs: 3", 1))
+	if r := run(t, dir, nil, "compare", "--against", "main", "few.himorime.yaml"); r.code != exitcode.Config || !strings.Contains(r.stderr, "lower than regression.min_samples") {
 		t.Fatalf("too few runs for a comparison: %+v", r)
 	}
 }
@@ -526,7 +526,7 @@ func TestCIGitHubActions(t *testing.T) {
 		t.Fatal("ci output must not be colored")
 	}
 	data, err := os.ReadFile(summary)
-	if err != nil || !strings.HasPrefix(string(data), "previous step\n## ✅ yahiko benchmark comparison") || !strings.Contains(string(data), "| sleepy | app |") {
+	if err != nil || !strings.HasPrefix(string(data), "previous step\n## ✅ himorime benchmark comparison") || !strings.Contains(string(data), "| sleepy | app |") {
 		t.Fatalf("summary = %q, %v", data, err)
 	}
 	if !strings.Contains(r.stderr, "comparing base "+base[:12]) {
@@ -537,11 +537,11 @@ func TestCIGitHubActions(t *testing.T) {
 	if r := run(t, dir, gh, "ci"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "refusing to run for pull_request_target") {
 		t.Fatalf("pull_request_target: %+v", r)
 	}
-	if r := run(t, dir, nil, "ci"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "YAHIKO_BASE_REF") {
+	if r := run(t, dir, nil, "ci"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "HIMORIME_BASE_REF") {
 		t.Fatalf("ci outside actions: %+v", r)
 	}
-	if r := run(t, dir, env{"YAHIKO_BASE_REF": "main"}, "ci", "--quiet"); r.code != 0 {
-		t.Fatalf("ci with YAHIKO_BASE_REF: %+v", r)
+	if r := run(t, dir, env{"HIMORIME_BASE_REF": "main"}, "ci", "--quiet"); r.code != 0 {
+		t.Fatalf("ci with HIMORIME_BASE_REF: %+v", r)
 	}
 	write(t, filepath.Join(dir, "delay.txt"), "150ms\n")
 	if r := run(t, dir, nil, "ci", "--against", "main", "--quiet"); r.code != exitcode.Failed || !strings.Contains(r.stdout, "REGRESSION") {
@@ -553,7 +553,7 @@ func TestCompletion(t *testing.T) {
 	dir := t.TempDir()
 	for _, shell := range Shells() {
 		r := run(t, dir, nil, "completion", shell)
-		if r.code != 0 || !strings.Contains(r.stdout, "yahiko") || !strings.Contains(r.stdout, "compare") || !strings.Contains(r.stdout, "fail-on-inconclusive") {
+		if r.code != 0 || !strings.Contains(r.stdout, "himorime") || !strings.Contains(r.stdout, "compare") || !strings.Contains(r.stdout, "fail-on-inconclusive") {
 			t.Errorf("completion %s: code %d\n%s", shell, r.code, r.stdout)
 		}
 	}
@@ -574,7 +574,7 @@ func TestBashCompletionLoads(t *testing.T) {
 	if err := WriteCompletion(&buf, "bash"); err != nil {
 		t.Fatal(err)
 	}
-	script := buf.String() + "\nCOMP_WORDS=(yahiko com); COMP_CWORD=1; _yahiko; echo \"${COMPREPLY[@]}\"\n"
+	script := buf.String() + "\nCOMP_WORDS=(himorime com); COMP_CWORD=1; _himorime; echo \"${COMPREPLY[@]}\"\n"
 	out, err := exec.Command(bash, "-c", script).Output()
 	if err != nil {
 		t.Fatalf("bash rejected the completion script: %v", err)
@@ -603,17 +603,17 @@ func TestParseFlagsAnywhere(t *testing.T) {
 
 func TestSuitePaths(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, "yahiko.yaml"), "x")
-	write(t, filepath.Join(dir, "b.yahiko.yaml"), "x")
+	write(t, filepath.Join(dir, "himorime.yaml"), "x")
+	write(t, filepath.Join(dir, "b.himorime.yaml"), "x")
 	write(t, filepath.Join(dir, "other.yaml"), "x")
-	got, err := suitePaths([]string{dir, filepath.Join(dir, "yahiko.yaml")})
+	got, err := suitePaths([]string{dir, filepath.Join(dir, "himorime.yaml")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || filepath.Base(got[0]) != "b.yahiko.yaml" || filepath.Base(got[1]) != "yahiko.yaml" {
+	if len(got) != 2 || filepath.Base(got[0]) != "b.himorime.yaml" || filepath.Base(got[1]) != "himorime.yaml" {
 		t.Fatalf("suitePaths = %v", got)
 	}
-	if got, _ := suitePaths(nil); len(got) != 1 || got[0] != "yahiko.yaml" {
+	if got, _ := suitePaths(nil); len(got) != 1 || got[0] != "himorime.yaml" {
 		t.Fatalf("default = %v", got)
 	}
 }
@@ -639,7 +639,7 @@ func TestCommandsDocumented(t *testing.T) {
 
 func TestMainEntryPoint(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := Main([]string{"version"}, strings.NewReader(""), &stdout, &stderr); code != 0 || !strings.HasPrefix(stdout.String(), "yahiko ") {
+	if code := Main([]string{"version"}, strings.NewReader(""), &stdout, &stderr); code != 0 || !strings.HasPrefix(stdout.String(), "himorime ") {
 		t.Fatalf("Main(version) = %d, %q, %q", code, stdout.String(), stderr.String())
 	}
 	if isTerminal(&stdout) {
@@ -660,7 +660,7 @@ func TestRunSuitesFromTwoRepositories(t *testing.T) {
 		dir := filepath.Join(base, name)
 		git(t, base, "init", "-q", dir)
 		write(t, filepath.Join(dir, "fixtures", "in.txt"), "one\n")
-		write(t, filepath.Join(dir, "yahiko.yaml"), suite(t, `version: "1"
+		write(t, filepath.Join(dir, "himorime.yaml"), suite(t, `version: "1"
 suite: {name: repo}
 defaults: {warmup: 0, runs: 2}
 benchmarks:
@@ -669,7 +669,7 @@ benchmarks:
     commands:
       helper: {command: [@EXE@, count, "1"]}
 `))
-		paths = append(paths, filepath.Join(dir, "yahiko.yaml"))
+		paths = append(paths, filepath.Join(dir, "himorime.yaml"))
 	}
 	r := run(t, base, nil, append([]string{"run", "--quiet"}, paths...)...)
 	if r.code != 0 {
@@ -693,15 +693,15 @@ benchmarks:
       tool:
         memory: {peak_rss: {max: "<= 1GiB"}}
 `
-	write(t, filepath.Join(dir, "fail.yahiko.yaml"), suite(t, fmt.Sprintf(body, "")))
-	write(t, filepath.Join(dir, "skip.yahiko.yaml"), suite(t, fmt.Sprintf(body, ", unsupported: skip")))
+	write(t, filepath.Join(dir, "fail.himorime.yaml"), suite(t, fmt.Sprintf(body, "")))
+	write(t, filepath.Join(dir, "skip.himorime.yaml"), suite(t, fmt.Sprintf(body, ", unsupported: skip")))
 	noMemory := func(a *App) {
 		a.Capabilities = func() (error, error) {
 			return nil, errors.New("peak rss is not supported: no rusage on this test platform")
 		}
 	}
 
-	r := runWith(t, dir, nil, noMemory, "run", "fail.yahiko.yaml", "--quiet")
+	r := runWith(t, dir, nil, noMemory, "run", "fail.himorime.yaml", "--quiet")
 	if r.code != exitcode.Metric || !strings.Contains(r.stderr, `benchmark "needs memory": metrics.memory cannot be measured on this platform: peak rss is not supported`) ||
 		!strings.Contains(r.stderr, "metrics.unsupported: skip") || r.stdout != "" {
 		t.Fatalf("fail policy: %+v", r)
@@ -710,7 +710,7 @@ benchmarks:
 		t.Fatal("setup ran although a requested metric was unsupported")
 	}
 
-	r = runWith(t, dir, nil, noMemory, "run", "skip.yahiko.yaml", "--quiet", "--format", "json")
+	r = runWith(t, dir, nil, noMemory, "run", "skip.himorime.yaml", "--quiet", "--format", "json")
 	if r.code != exitcode.OK {
 		t.Fatalf("skip policy: %+v", r)
 	}
@@ -743,7 +743,7 @@ benchmarks:
 
 func TestAnnotationsOnlyInGitHubActions(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, "yahiko.yaml"), suite(t, `version: "1"
+	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, `version: "1"
 suite: {name: annotations}
 defaults: {warmup: 0, runs: 2}
 benchmarks:
@@ -754,10 +754,10 @@ benchmarks:
       tool: {median: "< 1ms"}
 `))
 	r := run(t, dir, env{"GITHUB_ACTIONS": "true"}, "run", "--quiet")
-	if r.code != exitcode.Failed || !strings.Contains(r.stderr, "::error file=yahiko.yaml,title=yahiko%3A performance budget exceeded::slow / tool: latency median budget < 1.00ms, measured") {
+	if r.code != exitcode.Failed || !strings.Contains(r.stderr, "::error file=himorime.yaml,title=himorime%3A performance budget exceeded::slow / tool: latency median budget < 1.00ms, measured") {
 		t.Fatalf("in GitHub Actions: %+v", r)
 	}
-	if !strings.Contains(r.stderr, "yahiko: exit 1: performance check failed") {
+	if !strings.Contains(r.stderr, "himorime: exit 1: performance check failed") {
 		t.Fatalf("no outcome line: %q", r.stderr)
 	}
 	r = run(t, dir, nil, "run", "--quiet")

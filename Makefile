@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := help
 
-APP        := yahiko
+APP        := himorime
 VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS    := -s -w -X github.com/nao1215/yahiko/internal/buildinfo.Version=$(VERSION)
+LDFLAGS    := -s -w -X github.com/nao1215/himorime/internal/buildinfo.Version=$(VERSION)
 PKGS       := ./...
 GOLANGCI   := v2.13.2
 ATAGO      := v0.22.0
@@ -11,11 +11,11 @@ ACTIONLINT := v1.7.12
 FUZZTIME   ?= 10s
 
 .PHONY: build
-build: ## Build the yahiko binary into ./yahiko
+build: ## Build the himorime binary into ./himorime
 	CGO_ENABLED=0 go build -trimpath -ldflags '$(LDFLAGS)' -o $(APP) .
 
 .PHONY: install
-install: ## Install yahiko into $(go env GOPATH)/bin
+install: ## Install himorime into $(go env GOPATH)/bin
 	CGO_ENABLED=0 go install -trimpath -ldflags '$(LDFLAGS)' .
 
 .PHONY: clean
@@ -31,7 +31,7 @@ vet: ## Run go vet
 	go vet $(PKGS)
 
 .PHONY: lint
-lint: ## Run golangci-lint for every operating system yahiko builds for
+lint: ## Run golangci-lint for every operating system himorime builds for
 	@for os in linux darwin windows freebsd openbsd netbsd; do \
 		echo "== GOOS=$$os"; GOOS=$$os golangci-lint run $(PKGS) || exit 1; \
 	done
@@ -50,7 +50,7 @@ coverage: test ## Write cover.html and print the total coverage
 	go tool cover -func=cover.out | tail -1
 
 .PHONY: e2e
-e2e: ## Build yahiko and run the atago end-to-end suite (needs atago on PATH)
+e2e: ## Build himorime and run the atago end-to-end suite (needs atago on PATH)
 	go run ./test/e2e/run
 
 .PHONY: fuzz
@@ -66,7 +66,7 @@ fuzz: ## Run every fuzz target for FUZZTIME (default 10s)
 
 .PHONY: calibration
 calibration: ## Print the regression classifier's verdict rates on synthetic data (1,000 trials per scenario)
-	YAHIKO_CALIBRATION=full go test -run '^TestCalibration$$' -count=1 -v ./internal/stats
+	HIMORIME_CALIBRATION=full go test -run '^TestCalibration$$' -count=1 -v ./internal/stats
 
 .PHONY: docs
 docs: ## Regenerate the generated sections of README.md and website/content
@@ -98,7 +98,7 @@ release-smoke: ## Build a snapshot release locally and smoke-test the artifacts
 	go run ./scripts/smoke dist
 
 .PHONY: bench
-bench: ## Run the dogfood suite that measures yahiko itself (not a CI gate)
+bench: ## Run the dogfood suite that measures himorime itself (not a CI gate)
 	go run . run bench
 
 .PHONY: check

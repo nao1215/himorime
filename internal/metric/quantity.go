@@ -10,8 +10,8 @@ import (
 )
 
 // The patterns below are the only spellings a suite accepts for a quantity.
-// schema/yahiko.schema.json repeats every one of them, and a test keeps the
-// two identical, so an editor validating against the schema and yahiko
+// schema/himorime.schema.json repeats every one of them, and a test keeps the
+// two identical, so an editor validating against the schema and himorime
 // itself agree on every value.
 const (
 	// DurationPattern is a duration such as 250ms or 1m30s: no sign, no bare

@@ -1,19 +1,19 @@
 ---
 name: Bug report
-about: Something yahiko does is wrong
+about: Something himorime does is wrong
 title: ""
 labels: bug
 assignees: ""
 ---
 
-## yahiko version
-<!-- Output of `yahiko version` -->
+## himorime version
+<!-- Output of `himorime version` -->
 
 ## OS and architecture
 <!-- e.g. linux/amd64, GitHub Actions ubuntu-latest -->
 
 ## Suite
-<!-- The smallest yahiko.yaml that shows the problem. Remove secrets. -->
+<!-- The smallest himorime.yaml that shows the problem. Remove secrets. -->
 
 ```yaml
 ```

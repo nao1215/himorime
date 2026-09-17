@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipes: portable commands without a shell, and an explicit shell pipeline.
-# https://nao1215.github.io/yahiko/cookbook/#use-a-shell-pipeline
+# https://nao1215.github.io/himorime/cookbook/#use-a-shell-pipeline
 version: "1"
 
 suite:

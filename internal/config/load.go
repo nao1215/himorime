@@ -31,7 +31,7 @@ func Load(path string) (*Suite, error) {
 			return nil, &ValidationError{Issues: []Issue{{
 				File:    path,
 				Message: "suite file does not exist",
-				Hint:    "create one with `yahiko init`, or pass the path of an existing suite",
+				Hint:    "create one with `himorime init`, or pass the path of an existing suite",
 			}}}
 		}
 		return nil, fmt.Errorf("read %s: %w", path, err)
@@ -56,7 +56,7 @@ func Parse(display, abs string, src []byte) (*Suite, error) {
 		return nil, &ValidationError{Issues: []Issue{{
 			File:    display,
 			Message: "suite file is empty",
-			Hint:    "a suite needs at least version, suite.name and one benchmark; `yahiko init` writes a runnable example",
+			Hint:    "a suite needs at least version, suite.name and one benchmark; `himorime init` writes a runnable example",
 		}}}
 	}
 	loc := newLocator(src)

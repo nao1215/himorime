@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 func ms(values ...float64) []float64 {

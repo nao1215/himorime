@@ -44,7 +44,7 @@ jobs:
             test -s "website/public/${page}/index.html" || { echo "missing page: ${page}"; exit 1; }
           done
           test -s website/public/index.html
-          test -s website/public/schema/yahiko.schema.json
+          test -s website/public/schema/himorime.schema.json
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: website/public

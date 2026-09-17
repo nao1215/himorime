@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: protect the startup latency of a CLI.
-# https://nao1215.github.io/yahiko/cookbook/#protect-the-startup-latency-of-a-cli
+# https://nao1215.github.io/himorime/cookbook/#protect-the-startup-latency-of-a-cli
 version: "1"
 
 suite:
@@ -23,7 +23,7 @@ benchmarks:
         # A list of arguments runs without a shell, the same way on Linux,
         # macOS and Windows.
         command: ["${artifact}", -version]
-    # A budget is a limit you chose. When it is missed yahiko exits 1,
+    # A budget is a limit you chose. When it is missed himorime exits 1,
     # whatever the base branch does. Keep CI limits generous: shared runners
     # start processes several times slower than a laptop.
     budget:

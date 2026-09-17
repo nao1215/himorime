@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/nao1215/yahiko/internal/metric"
-	"github.com/nao1215/yahiko/internal/runner"
+	"github.com/nao1215/himorime/internal/metric"
+	"github.com/nao1215/himorime/internal/runner"
 )
 
 // TerminalOptions control the terminal table.

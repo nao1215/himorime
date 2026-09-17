@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/exitcode"
-	"github.com/nao1215/yahiko/internal/runner"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/exitcode"
+	"github.com/nao1215/himorime/internal/runner"
 )
 
 // loadedSuite pairs a suite with the path the user named it by.
@@ -22,8 +22,8 @@ type loadedSuite struct {
 }
 
 // suitePaths expands the PATH operands: a directory contributes its
-// yahiko.yaml and *.yahiko.yaml files, a file is taken as is, and no operand
-// means ./yahiko.yaml.
+// himorime.yaml and *.himorime.yaml files, a file is taken as is, and no operand
+// means ./himorime.yaml.
 func suitePaths(args []string) ([]string, error) {
 	if len(args) == 0 {
 		return []string{config.DefaultFileName}, nil
@@ -55,12 +55,12 @@ func suitePaths(args []string) ([]string, error) {
 			if e.IsDir() {
 				continue
 			}
-			if n := e.Name(); n == config.DefaultFileName || strings.HasSuffix(n, ".yahiko.yaml") {
+			if n := e.Name(); n == config.DefaultFileName || strings.HasSuffix(n, ".himorime.yaml") {
 				found = append(found, filepath.Join(arg, n))
 			}
 		}
 		if len(found) == 0 {
-			return nil, fmt.Errorf("%s contains no yahiko.yaml or *.yahiko.yaml file", arg)
+			return nil, fmt.Errorf("%s contains no himorime.yaml or *.himorime.yaml file", arg)
 		}
 		sort.Strings(found)
 		for _, f := range found {
@@ -75,7 +75,7 @@ func suitePaths(args []string) ([]string, error) {
 func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 	paths, err := suitePaths(args)
 	if err != nil {
-		fmt.Fprintf(stderr, "yahiko: %v\n", err)
+		fmt.Fprintf(stderr, "himorime: %v\n", err)
 		return nil, exitcode.Config
 	}
 	var suites []loadedSuite
@@ -91,7 +91,7 @@ func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 				status = exitcode.Config
 				continue
 			}
-			fmt.Fprintf(stderr, "yahiko: %v\n", err)
+			fmt.Fprintf(stderr, "himorime: %v\n", err)
 			if status == 0 {
 				status = exitcode.Execution
 			}
@@ -100,7 +100,7 @@ func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 		suites = append(suites, loadedSuite{display: filepath.ToSlash(p), suite: s})
 	}
 	if status == exitcode.Config {
-		fmt.Fprintln(stderr, "yahiko: the suite is invalid; nothing was run")
+		fmt.Fprintln(stderr, "himorime: the suite is invalid; nothing was run")
 	}
 	return suites, status
 }
@@ -110,7 +110,7 @@ func (s *selectFlags) selection(stderr io.Writer, cmd string) (runner.Selection,
 	if s.filter != "" {
 		re, err := regexp.Compile(s.filter)
 		if err != nil {
-			fmt.Fprintf(stderr, "yahiko %s: invalid --filter: %v\n", cmd, err)
+			fmt.Fprintf(stderr, "himorime %s: invalid --filter: %v\n", cmd, err)
 			return sel, false
 		}
 		sel.Filter = re

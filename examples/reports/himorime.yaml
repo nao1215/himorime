@@ -1,13 +1,13 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: save JSON, CSV and Markdown reports locally.
-# https://nao1215.github.io/yahiko/cookbook/#save-json-csv-and-markdown-reports-locally
+# https://nao1215.github.io/himorime/cookbook/#save-json-csv-and-markdown-reports-locally
 #
-#   yahiko run examples/reports --format json --output result.json
-#   yahiko run examples/reports --format csv --output result.csv
-#   yahiko run examples/reports --format samples-csv --output samples.csv
-#   yahiko run examples/reports --format markdown --output result.md
-#   yahiko run examples/reports --summary summary.md
+#   himorime run examples/reports --format json --output result.json
+#   himorime run examples/reports --format csv --output result.csv
+#   himorime run examples/reports --format samples-csv --output samples.csv
+#   himorime run examples/reports --format markdown --output result.md
+#   himorime run examples/reports --summary summary.md
 version: "1"
 
 suite:

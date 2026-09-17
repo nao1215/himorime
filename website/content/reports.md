@@ -1,13 +1,13 @@
 ---
 title: Reports
-description: yahiko's terminal tables, JSON with raw samples of every metric, long-format CSV, samples CSV, Markdown, the GitHub Actions job summary and annotations, and what each column means.
+description: himorime's terminal tables, JSON with raw samples of every metric, long-format CSV, samples CSV, Markdown, the GitHub Actions job summary and annotations, and what each column means.
 toc: true
 ---
 
 `--format` chooses what goes to standard output (or to `--output FILE`):
 `table` (default), `json`, `csv`, `samples-csv`, `markdown` or `github`.
 `--summary FILE` additionally appends a GitHub-flavored Markdown summary;
-`yahiko ci` does that to `$GITHUB_STEP_SUMMARY` on its own. A suite can also
+`himorime ci` does that to `$GITHUB_STEP_SUMMARY` on its own. A suite can also
 write report files after every run:
 
 ```yaml
@@ -32,7 +32,7 @@ budgets table when there are budgets. A suite that measures only latency
 shows just the first table:
 
 ```text
-suite: jsonize benchmarks (yahiko.yaml)
+suite: jsonize benchmarks (himorime.yaml)
 latency
 BENCHMARK  COMMAND   MEDIAN     MEAN    STDDEV  RELATIVE  RESULT
 df large   jsonize  14.20ms  14.31ms  310.20µs     1.00x  PASS
@@ -62,7 +62,7 @@ df large   jc       peak rss max  <= 16.00MiB  31.52MiB  FAIL
   df large / jc: budget peak rss max <= 16.00MiB not met (measured 31.52MiB)
 
 1 passed, 1 over budget · 1 benchmark · seed 42 · exit 1
-yahiko: exit 1: performance check failed: a budget or regression threshold was violated (the measurement itself succeeded)
+himorime: exit 1: performance check failed: a budget or regression threshold was violated (the measurement itself succeeded)
 ```
 
 - `RELATIVE` is the command's median latency divided by the median of the
@@ -107,7 +107,7 @@ df large   72.10MiB/s  62.40MiB/s  -9.70MiB/s  -13.5%       97.2%        -8%  RE
 
 Values are rounded for reading: durations in ns, µs, ms or s, sizes in B, KiB,
 MiB or GiB, rates with a k, M or G prefix, all with two decimals. Colors are
-used only on an interactive terminal and never by `yahiko ci`; `--no-color`
+used only on an interactive terminal and never by `himorime ci`; `--no-color`
 and `NO_COLOR` turn them off.
 
 ## Geometric mean
@@ -127,7 +127,7 @@ out.
 ## JSON
 
 `--format json` is the complete, machine-readable report, described by
-[report.schema.json](https://raw.githubusercontent.com/nao1215/yahiko/main/schema/report.schema.json).
+[report.schema.json](https://raw.githubusercontent.com/nao1215/himorime/main/schema/report.schema.json).
 
 - `schema_version` is `"1"`. Until the first release the format may still
   change; afterwards fields are only added within a version.
@@ -155,7 +155,7 @@ out.
   `gate`: `false` when the metric has `gate: false` and its verdict did not
   decide the result. `comparisons` is `null` outside a comparison.
 - `environment` records the operating system, architecture, CPU model, logical
-  CPU count, Go version and CI provider. `yahiko_version`, `seed` and `git`
+  CPU count, Go version and CI provider. `himorime_version`, `seed` and `git`
   (head and base commits, and whether the working tree was dirty) complete what
   is needed to reproduce a run. Host names, user names and environment
   variables are never recorded.
@@ -166,7 +166,7 @@ out.
   result.
 
 ```console
-$ yahiko run --format json --output result.json
+$ himorime run --format json --output result.json
 $ jq '.suites[].benchmarks[].commands[] | {name, p95: .head.metrics.latency.stats.percentiles.p95, rss: .head.metrics.peak_rss.stats.max}' result.json
 ```
 
@@ -217,9 +217,9 @@ notes.
 
 ## GitHub Actions job summary and annotations
 
-`--format github`, `--summary FILE` and `yahiko ci` write the Markdown report
-under a one-line verdict such as `✅ yahiko benchmark comparison: no
-regression` or `❌ yahiko benchmarks: budget exceeded`, so the outcome is
+`--format github`, `--summary FILE` and `himorime ci` write the Markdown report
+under a one-line verdict such as `✅ himorime benchmark comparison: no
+regression` or `❌ himorime benchmarks: budget exceeded`, so the outcome is
 visible at the top of the job page.
 
 When `GITHUB_ACTIONS` is `true`, `run`, `compare` and `ci` also print one
@@ -227,11 +227,11 @@ workflow annotation per problem to standard error, which GitHub shows on the
 run page and the pull request:
 
 ```text
-::error file=yahiko.yaml,title=yahiko%3A performance budget exceeded::df large / jc: peak rss max budget <= 16.00MiB, measured 31.52MiB
-::error file=yahiko.yaml,title=yahiko%3A performance regression::df large / jsonize: latency 14.20ms -> 16.41ms (+2.21ms, +15.6%25; tolerance +10%25)
-::warning file=yahiko.yaml,title=yahiko%3A inconclusive comparison::...
-::error file=yahiko.yaml,title=yahiko%3A metric could not be measured::...
-::error file=yahiko.yaml,title=yahiko%3A benchmark could not run::...
+::error file=himorime.yaml,title=himorime%3A performance budget exceeded::df large / jc: peak rss max budget <= 16.00MiB, measured 31.52MiB
+::error file=himorime.yaml,title=himorime%3A performance regression::df large / jsonize: latency 14.20ms -> 16.41ms (+2.21ms, +15.6%25; tolerance +10%25)
+::warning file=himorime.yaml,title=himorime%3A inconclusive comparison::...
+::error file=himorime.yaml,title=himorime%3A metric could not be measured::...
+::error file=himorime.yaml,title=himorime%3A benchmark could not run::...
 ```
 
 The titles tell a performance failure (budget, regression) apart from a

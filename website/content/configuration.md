@@ -1,12 +1,12 @@
 ---
 title: Configuration
-description: The yahiko.yaml suite format, version 1. Every key, its default, variables, paths, and how validation works.
+description: The himorime.yaml suite format, version 1. Every key, its default, variables, paths, and how validation works.
 toc: true
 ---
 
-A suite is a YAML file, `yahiko.yaml` by default. `yahiko run`, `compare`,
+A suite is a YAML file, `himorime.yaml` by default. `himorime run`, `compare`,
 `ci`, `list` and `validate` take files and directories as arguments; a
-directory contributes its `yahiko.yaml` and every `*.yahiko.yaml` in it.
+directory contributes its `himorime.yaml` and every `*.himorime.yaml` in it.
 
 ## Editor support
 
@@ -15,12 +15,12 @@ and editors using the YAML language server (VS Code with the YAML extension,
 Neovim, JetBrains IDEs) complete keys and flag mistakes as you type:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/yahiko/main/schema/yahiko.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
 ```
 
-yahiko validates every suite against the same schema, embedded in the
+himorime validates every suite against the same schema, embedded in the
 binary, before it looks at anything else. What the editor accepts and what
-yahiko accepts cannot drift apart; a test in the repository keeps them equal.
+himorime accepts cannot drift apart; a test in the repository keeps them equal.
 
 ## A complete example
 
@@ -86,7 +86,7 @@ benchmarks:
 Write variables without quotes of your own, such as `cat ${workdir}/in.txt`:
 a variable inside quotes you wrote is a validation error, because two layers
 of quoting would change what the inner quotes mean. The measured time includes
-  starting the shell; yahiko does not subtract it.
+  starting the shell; himorime does not subtract it.
 
 A string without `shell: true`, or a list with it, is rejected.
 
@@ -95,12 +95,12 @@ A string without `shell: true`, or a list with it, is rejected.
 Each benchmark runs a number of unmeasured warmup runs, then measured runs.
 
 - With `runs`, every command runs exactly that many times.
-- Without `runs`, yahiko measures adaptively: it keeps going until every
+- Without `runs`, himorime measures adaptively: it keeps going until every
   command has at least `min_runs` samples and at least `min_time` of total
   measured time, and stops at `max_runs` regardless. In a revision comparison
   it also keeps going until every compared command has
   `regression.min_samples` samples on each revision, because fewer could only
-  be inconclusive; a plain `yahiko run` ignores `min_samples`.
+  be inconclusive; a plain `himorime run` ignores `min_samples`.
 
 Commands of one benchmark run interleaved: each round runs every command
 once, in an order shuffled with the seed (`--seed`, printed in every report).
@@ -199,7 +199,7 @@ After Ctrl+C, running commands are stopped and cleanup runs; interrupt a
 second time to quit at once, skipping the remaining cleanup.
 
 A process a command or hook leaves running in the background is stopped when
-that command or hook exits, on every platform. yahiko measures commands, it
+that command or hook exits, on every platform. himorime measures commands, it
 does not manage services: a hook cannot start a server that outlives it.
 
 A failing `setup` or `cleanup` fails the benchmark. A failing `prepare_each`
@@ -213,7 +213,7 @@ or inline text (`stdin: {content: "..."}`). The file is reopened for every
 run, so every run reads it from the first byte.
 
 A command's standard output and standard error are discarded by default and
-never mixed with yahiko's own report. Set `stdout` or `stderr` to a path
+never mixed with himorime's own report. Set `stdout` or `stderr` to a path
 inside `${workdir}` to keep the latest run's output. When a run fails, the
 last lines of its standard error are shown in the report either way, with
 secrets masked.
@@ -283,7 +283,7 @@ revision builds from its own tree.
 
 ## Environment
 
-Commands inherit yahiko's environment, with `env` from `defaults`, the
+Commands inherit himorime's environment, with `env` from `defaults`, the
 benchmark and the command layered on top, in that order. Reports never
 contain the environment, and command lines are shown as written, before
 `${env:NAME}` is substituted.
@@ -320,7 +320,7 @@ specific value wins.
 
 ## Values and units
 
-Every value is typed; yahiko never compares a formatted string.
+Every value is typed; himorime never compares a formatted string.
 
 | Kind | Written as | Used by |
 |---|---|---|
@@ -339,7 +339,7 @@ leading `>` starts a folded block.
 
 ## Validation
 
-`yahiko validate` checks, without running anything:
+`himorime validate` checks, without running anything:
 
 1. YAML syntax and duplicate keys.
 2. The schema: unknown keys, types, required keys, durations, budgets,
@@ -350,7 +350,7 @@ leading `>` starts a folded block.
    only for metrics the benchmark measures, operators in the metric's
    direction, and throughput units that match the declared work.
 
-`yahiko compare` and `yahiko ci` additionally refuse a benchmark whose `runs`,
+`himorime compare` and `himorime ci` additionally refuse a benchmark whose `runs`,
 `max_runs` or `--runs` is below `regression.min_samples`, because such a
 comparison could never be conclusive; adaptive runs of a comparison continue
 until `min_samples`.
@@ -392,7 +392,7 @@ until `min_samples`.
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
 | `exit_codes` |  | Exit statuses that count as success. Default [0]. |
 | `metrics` |  | Metrics every benchmark measures besides latency. Throughput is declared per benchmark. |
-| `regression` |  | How a base revision and the working tree are compared (yahiko compare / yahiko ci). |
+| `regression` |  | How a base revision and the working tree are compared (himorime compare / himorime ci). |
 
 ### build, setup, prepare_each, cleanup
 
@@ -430,7 +430,7 @@ until `min_samples`.
 | `commands` | yes | Named commands measured side by side. Names use letters, digits, '.', '_' and '-'. |
 | `metrics` |  | What the benchmark measures besides latency. |
 | `budget` |  | Absolute budgets keyed by command name. A violation fails the run with exit status 1. |
-| `regression` |  | How a base revision and the working tree are compared (yahiko compare / yahiko ci). |
+| `regression` |  | How a base revision and the working tree are compared (himorime compare / himorime ci). |
 
 ### benchmarks[].commands.NAME
 

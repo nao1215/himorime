@@ -1,17 +1,17 @@
 ---
 title: Regression detection
-description: How yahiko decides pass, improved, regression and inconclusive for latency, throughput, CPU time and peak RSS with a percentile bootstrap, and why a single slow run cannot fail CI.
+description: How himorime decides pass, improved, regression and inconclusive for latency, throughput, CPU time and peak RSS with a percentile bootstrap, and why a single slow run cannot fail CI.
 toc: true
 ---
 
 A comparison has to answer one question per metric: is the head worse than
 the base by more than you are willing to accept, and is that more than noise?
-yahiko answers it from the raw samples of both revisions, measured interleaved
+himorime answers it from the raw samples of both revisions, measured interleaved
 on the same machine in the same job.
 
 ## Measuring
 
-`yahiko compare` and `yahiko ci` check the base revision out into a temporary
+`himorime compare` and `himorime ci` check the base revision out into a temporary
 Git worktree and build it there, and build the head in your working tree.
 Commands and hooks run in `${root}` of each revision and every relative path
 resolves there, so the base runs the base's code even without a build step,
@@ -43,7 +43,7 @@ metrics, so a memory regression fails the check even when latency passed.
 
 ## The statistic
 
-For each compared metric of each command, yahiko computes the observed
+For each compared metric of each command, himorime computes the observed
 change of the statistic (median by default, or mean):
 
 ```text
@@ -162,7 +162,7 @@ Shared CI runners are noisy. Neighboring jobs, CPU frequency scaling, the
 host's load and cold caches all move timings by more than a small regression.
 CPU time moves less than latency, because waiting does not count, but
 frequency scaling and cache contention still change it. Peak RSS is usually
-steady, but depends on the allocator, the runtime and the input. yahiko does
+steady, but depends on the allocator, the runtime and the input. himorime does
 not pretend otherwise:
 
 - A result it cannot call is `inconclusive`, with the reason, and exits 0
@@ -218,7 +218,7 @@ trials per scenario and prints the table. On that data:
   every comparison inconclusive, a real +20% change included, where a paired
   resampling of rounds, evaluated in the test for comparison, detected it in
   82 to 95% of trials. Without drift both behaved the same within the Monte
-  Carlo error. yahiko keeps the independent bootstrap: it errs toward
+  Carlo error. himorime keeps the independent bootstrap: it errs toward
   `inconclusive`, and whether pairing is worth its assumptions depends on how
   much real runners drift, which synthetic data cannot tell.
 
@@ -227,16 +227,16 @@ bootstrap distribution. The verdict uses one-sided probabilities, so the
 interval of a regression can reach below the tolerance, and that of a pass
 above it; the probabilities, not the interval, decide.
 
-None of this calibrates yahiko for a particular CI provider. Real runners
+None of this calibrates himorime for a particular CI provider. Real runners
 have heavier tails, autocorrelated noise, CPU frequency scaling and thermal
 limits that synthetic data does not model. Before relying on a gate there,
 compare a revision with itself on that runner (an A/A test) a number of
 times to see how often it is inconclusive or, rarely, a regression, and
 compare a change with a known slowdown to see that it is caught.
 
-## What yahiko does not claim
+## What himorime does not claim
 
-yahiko measures end-to-end wall-clock time of whole processes, and the CPU
+himorime measures end-to-end wall-clock time of whole processes, and the CPU
 time and peak memory the operating system reports for them. It does not
 isolate CPUs, pin threads, disable frequency scaling, or subtract anything
 from what it measured. Its results are evidence for a decision in a pull

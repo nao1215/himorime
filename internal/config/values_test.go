@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 func TestParseDuration(t *testing.T) {
@@ -66,11 +66,11 @@ func TestSchemaPatternsMatchGo(t *testing.T) {
 	} {
 		quoted := strings.ReplaceAll(pattern, `\`, `\\`)
 		if !strings.Contains(src, `"pattern": "`+quoted+`"`) {
-			t.Errorf("schema/yahiko.schema.json does not carry the Go %s pattern %s", name, pattern)
+			t.Errorf("schema/himorime.schema.json does not carry the Go %s pattern %s", name, pattern)
 		}
 	}
 	agg := strings.TrimSuffix(strings.TrimPrefix(metric.PercentilePattern, "^p"), "$")
 	if !strings.Contains(src, `"pattern": "^(min|max|mean|median|p`+strings.ReplaceAll(agg, `\`, `\\`)+`)$"`) {
-		t.Errorf("schema/yahiko.schema.json does not carry the aggregation pattern built from %s", metric.PercentilePattern)
+		t.Errorf("schema/himorime.schema.json does not carry the aggregation pattern built from %s", metric.PercentilePattern)
 	}
 }

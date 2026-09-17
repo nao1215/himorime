@@ -1,15 +1,15 @@
-# Contributing to yahiko
+# Contributing to himorime
 
 Thank you for helping. Bug reports, fixes, tests, documentation and reviews
 are all welcome.
 
 ## Before you start
 
-- **Bug:** open an issue with the yahiko version, your OS, the suite, the
+- **Bug:** open an issue with the himorime version, your OS, the suite, the
   command line, and what you expected and got.
 - **Feature:** open an issue first, so the direction can be agreed before you
-  write code. yahiko deliberately stays small; see the non-goals in the
-  documentation's [Comparison](https://nao1215.github.io/yahiko/comparison/).
+  write code. himorime deliberately stays small; see the non-goals in the
+  documentation's [Comparison](https://nao1215.github.io/himorime/comparison/).
 - **Security issue:** follow [SECURITY.md](./SECURITY.md), not a public issue.
 
 ## Development
@@ -19,11 +19,11 @@ Go 1.26 or later, `git`, and for the end-to-end suite
 
 ```shell
 make tools     # golangci-lint, atago, goreleaser, actionlint, govulncheck
-make build     # ./yahiko
+make build     # ./himorime
 make test      # unit tests with coverage
 make test-race # unit tests with the race detector
 make lint      # golangci-lint for every target OS
-make e2e       # builds yahiko and runs test/e2e/atago
+make e2e       # builds himorime and runs test/e2e/atago
 make docs      # regenerate generated documentation sections
 make check     # fmt, vet, lint, test, test-race, e2e
 ```
@@ -36,7 +36,7 @@ make check     # fmt, vet, lint, test, test-race, e2e
 - E2E scenarios never assert on millisecond differences. Use the helper in
   `test/e2e/helper`, with differences of tens of milliseconds, and assert on
   classifications, table structure, report schemas and exit codes.
-- The suite schema (`schema/yahiko.schema.json`) and the Go loader must agree.
+- The suite schema (`schema/himorime.schema.json`) and the Go loader must agree.
   When you add a key, add it to both, and extend
   `internal/config/testdata/parity`.
 - The JSON report is a contract: once released, add fields, never rename or

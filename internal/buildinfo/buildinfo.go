@@ -1,4 +1,4 @@
-// Package buildinfo reports the version yahiko was built as.
+// Package buildinfo reports the version himorime was built as.
 package buildinfo
 
 import (
@@ -8,13 +8,13 @@ import (
 
 // Version is injected at link time by the release build:
 //
-//	-ldflags "-X github.com/nao1215/yahiko/internal/buildinfo.Version=v1.2.3"
+//	-ldflags "-X github.com/nao1215/himorime/internal/buildinfo.Version=v1.2.3"
 //
 // A binary built with `go install module@version` has no ldflags, so Get
 // falls back to the module version recorded by the Go toolchain.
 var Version = ""
 
-// Get returns the version string shown by `yahiko version` and written to
+// Get returns the version string shown by `himorime version` and written to
 // reports. It never returns an empty string.
 func Get() string {
 	if Version != "" {

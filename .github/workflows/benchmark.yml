@@ -1,6 +1,6 @@
 name: Benchmark
 
-# yahiko measuring itself: the dogfood suite in bench/ compares the pull
+# himorime measuring itself: the dogfood suite in bench/ compares the pull
 # request with its base. It is informational: shared runners are noisy, so
 # this job never blocks a merge (continue-on-error) and is not a required
 # check. The job summary shows the result.
@@ -25,12 +25,12 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
-      - name: build yahiko from this commit
-        run: go build -o "$RUNNER_TEMP/yahiko" .
+      - name: build himorime from this commit
+        run: go build -o "$RUNNER_TEMP/himorime" .
       - name: compare with the base
         run: |
           if [ "${GITHUB_EVENT_NAME}" = pull_request ]; then
-            "$RUNNER_TEMP/yahiko" ci bench
+            "$RUNNER_TEMP/himorime" ci bench
           else
-            "$RUNNER_TEMP/yahiko" run bench --summary "$GITHUB_STEP_SUMMARY"
+            "$RUNNER_TEMP/himorime" run bench --summary "$GITHUB_STEP_SUMMARY"
           fi

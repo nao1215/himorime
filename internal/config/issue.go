@@ -221,7 +221,7 @@ func decodeIssue(file string, err error) Issue {
 	}
 	var unknown *yaml.UnknownFieldError
 	if errors.As(err, &unknown) {
-		is.Hint = "check the spelling against https://nao1215.github.io/yahiko/configuration/; unknown keys are rejected so a typo cannot silently change a benchmark"
+		is.Hint = "check the spelling against https://nao1215.github.io/himorime/configuration/; unknown keys are rejected so a typo cannot silently change a benchmark"
 	}
 	var dup *yaml.DuplicateKeyError
 	if errors.As(err, &dup) {

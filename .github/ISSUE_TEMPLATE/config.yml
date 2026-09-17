@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security report
-    url: https://github.com/nao1215/yahiko/security/policy
+    url: https://github.com/nao1215/himorime/security/policy
     about: Report a vulnerability privately. Please do not open a public issue.
   - name: Documentation
-    url: https://nao1215.github.io/yahiko/troubleshooting/
+    url: https://nao1215.github.io/himorime/troubleshooting/
     about: Common errors and how to fix them.

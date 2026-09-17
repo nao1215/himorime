@@ -90,11 +90,11 @@ jobs:
           goarch="$(go env GOARCH)"
           mkdir -p "$RUNNER_TEMP/release"
           if [ "$goos" = windows ]; then
-            unzip -q dist/yahiko_*_"${goos}_${goarch}".zip -d "$RUNNER_TEMP/release"
-            echo "YAHIKO_BINARY=$RUNNER_TEMP/release/yahiko.exe" >> "$GITHUB_ENV"
+            unzip -q dist/himorime_*_"${goos}_${goarch}".zip -d "$RUNNER_TEMP/release"
+            echo "HIMORIME_BINARY=$RUNNER_TEMP/release/himorime.exe" >> "$GITHUB_ENV"
           else
-            tar -xzf dist/yahiko_*_"${goos}_${goarch}".tar.gz -C "$RUNNER_TEMP/release"
-            echo "YAHIKO_BINARY=$RUNNER_TEMP/release/yahiko" >> "$GITHUB_ENV"
+            tar -xzf dist/himorime_*_"${goos}_${goarch}".tar.gz -C "$RUNNER_TEMP/release"
+            echo "HIMORIME_BINARY=$RUNNER_TEMP/release/himorime" >> "$GITHUB_ENV"
           fi
       # The prebuilt atago release, verified and put on PATH by its action.
       - uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1

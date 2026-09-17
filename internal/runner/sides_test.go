@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nao1215/yahiko/internal/config"
+	"github.com/nao1215/himorime/internal/config"
 )
 
 // revisionFixture lays out a comparison: the working tree (head) and a base

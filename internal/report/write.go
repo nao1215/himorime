@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/nao1215/yahiko/internal/config"
+	"github.com/nao1215/himorime/internal/config"
 )
 
 // WriteJSON renders the report as indented JSON.

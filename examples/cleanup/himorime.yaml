@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: always clean up, even when a run fails or is interrupted.
-# https://nao1215.github.io/yahiko/cookbook/#clean-up-after-success-failure-or-interruption
+# https://nao1215.github.io/himorime/cookbook/#clean-up-after-success-failure-or-interruption
 version: "1"
 
 suite:

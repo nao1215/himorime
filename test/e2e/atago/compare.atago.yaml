@@ -2,7 +2,7 @@
 version: "1"
 
 suite:
-  name: yahiko compare
+  name: himorime compare
 
 # Every scenario builds a throw-away Git repository in its workdir. The
 # "program" is a file holding a delay: the build copies it to ${artifact} and
@@ -12,9 +12,9 @@ suite:
 defaults:
   scenario:
     env:
-      GIT_AUTHOR_NAME: yahiko-e2e
+      GIT_AUTHOR_NAME: himorime-e2e
       GIT_AUTHOR_EMAIL: e2e@example.com
-      GIT_COMMITTER_NAME: yahiko-e2e
+      GIT_COMMITTER_NAME: himorime-e2e
       GIT_COMMITTER_EMAIL: e2e@example.com
       GIT_CONFIG_NOSYSTEM: "1"
 
@@ -23,7 +23,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "40ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: compare}
@@ -39,7 +39,7 @@ scenarios:
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - assert: {exit_code: 0}
       - run:
-          command: yahiko compare --against main
+          command: himorime compare --against main
           cwd: repo
       - assert:
           exit_code: 0
@@ -59,7 +59,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "40ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: compare}
@@ -75,7 +75,7 @@ scenarios:
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - fixture: {file: repo/delay.txt, content: "250ms\n"}
       - run:
-          command: yahiko compare --against main --format json
+          command: himorime compare --against main --format json
           cwd: repo
       - assert:
           exit_code: 1
@@ -113,7 +113,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "250ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: compare}
@@ -131,7 +131,7 @@ scenarios:
       - fixture: {file: repo/delay.txt, content: "40ms\n"}
       - run: {command: git -c commit.gpgsign=false commit -q -am faster, cwd: repo}
       - run:
-          command: yahiko compare --against main
+          command: himorime compare --against main
           cwd: repo
       - assert:
           exit_code: 0
@@ -142,7 +142,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "unused\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: noisy}
@@ -158,14 +158,14 @@ scenarios:
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run:
-          command: yahiko compare --against main
+          command: himorime compare --against main
           cwd: repo
       - assert:
           exit_code: 0
           stdout:
             contains: ["INCONCLUSIVE", "bimodal / app: inconclusive: measurements are noisier than max_cv", "1 inconclusive"]
       - run:
-          command: yahiko compare --against main --fail-on-inconclusive --quiet
+          command: himorime compare --against main --fail-on-inconclusive --quiet
           cwd: repo
       - assert:
           exit_code: 1
@@ -174,7 +174,7 @@ scenarios:
   - name: an unknown revision is an execution error that leaves nothing behind
     steps:
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: compare}
@@ -187,7 +187,7 @@ scenarios:
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run:
-          command: yahiko compare --against no-such-branch
+          command: himorime compare --against no-such-branch
           cwd: repo
       - assert:
           exit_code: 4
@@ -199,7 +199,7 @@ scenarios:
   - name: a build that fails in the base revision is an execution error and the worktree is removed
     steps:
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: compare}
@@ -216,7 +216,7 @@ scenarios:
       # Only the working tree has the file the build needs.
       - fixture: {file: repo/new-delay.txt, content: "5ms\n"}
       - run:
-          command: yahiko compare --against main
+          command: himorime compare --against main
           cwd: repo
       - assert:
           exit_code: 4
@@ -230,7 +230,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "100ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: interrupt}
@@ -247,7 +247,7 @@ scenarios:
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run:
-          command: e2ehelper interrupt 60s ${workdir}/repo/interrupt-started -- yahiko compare --against main --quiet
+          command: e2ehelper interrupt 60s ${workdir}/repo/interrupt-started -- himorime compare --against main --quiet
           cwd: repo
           timeout: 120s
       - assert:
@@ -261,7 +261,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "20ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: partial}
@@ -279,7 +279,7 @@ scenarios:
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run:
-          command: yahiko compare --against HEAD --format json --quiet
+          command: himorime compare --against HEAD --format json --quiet
           cwd: repo
       - assert:
           exit_code: 0
@@ -295,7 +295,7 @@ scenarios:
     steps:
       - fixture: {file: repo/bench/delay.txt, content: "40ms\n"}
       - fixture:
-          file: repo/bench/yahiko.yaml
+          file: repo/bench/himorime.yaml
           content: |
             version: "1"
             suite: {name: script}
@@ -312,7 +312,7 @@ scenarios:
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - fixture: {file: repo/bench/delay.txt, content: "250ms\n"}
       - run:
-          command: yahiko compare --against main --quiet --format json bench
+          command: himorime compare --against main --quiet --format json bench
           cwd: repo
           timeout: 180s
       - assert:
@@ -335,13 +335,13 @@ scenarios:
 
   - name: a fixture that only the working tree has fails the base with a hint
     steps:
-      - fixture: {file: repo/yahiko.yaml, content: "version: \"1\"\nsuite: {name: fixture}\ndefaults: {warmup: 0, runs: 2, regression: {min_samples: 2}}\nbenchmarks:\n  - name: new input\n    stdin: input.txt\n    commands:\n      app: {command: [e2ehelper, sleep, 1ms]}\n"}
+      - fixture: {file: repo/himorime.yaml, content: "version: \"1\"\nsuite: {name: fixture}\ndefaults: {warmup: 0, runs: 2, regression: {min_samples: 2}}\nbenchmarks:\n  - name: new input\n    stdin: input.txt\n    commands:\n      app: {command: [e2ehelper, sleep, 1ms]}\n"}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - fixture: {file: repo/input.txt, content: "added in the working tree\n"}
       - run:
-          command: yahiko compare --against main --quiet
+          command: himorime compare --against main --quiet
           cwd: repo
           timeout: 120s
       - assert:
@@ -356,7 +356,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "20ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: adaptive}
@@ -370,7 +370,7 @@ scenarios:
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run:
-          command: yahiko compare --against main --quiet --format json
+          command: himorime compare --against main --quiet --format json
           cwd: repo
           timeout: 120s
       - assert:
@@ -384,7 +384,7 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.samples", length: 5}
       # A plain run judges no comparison and stops at min_runs.
       - run:
-          command: yahiko run --quiet --format json
+          command: himorime run --quiet --format json
           cwd: repo
       - assert:
           exit_code: 0
@@ -392,15 +392,15 @@ scenarios:
             json:
               - {path: "$.suites[0].benchmarks[0].rounds", equals: 2}
       # max_runs below min_samples is refused before anything runs.
-      - fixture: {file: repo/yahiko.yaml, content: "version: \"1\"\nsuite: {name: adaptive}\ndefaults: {warmup: 0, min_runs: 2, max_runs: 4}\nbenchmarks:\n  - name: sleepy\n    commands:\n      app: {command: [e2ehelper, sleep-from, delay.txt]}\n    regression: {min_samples: 5}\n"}
+      - fixture: {file: repo/himorime.yaml, content: "version: \"1\"\nsuite: {name: adaptive}\ndefaults: {warmup: 0, min_runs: 2, max_runs: 4}\nbenchmarks:\n  - name: sleepy\n    commands:\n      app: {command: [e2ehelper, sleep-from, delay.txt]}\n    regression: {min_samples: 5}\n"}
       - run:
-          command: yahiko compare --against main --quiet
+          command: himorime compare --against main --quiet
           cwd: repo
       - assert:
           exit_code: 2
           stderr: {contains: "max_runs (4) is lower than regression.min_samples (5)"}
       - run:
-          command: yahiko compare --against main --quiet --runs 3
+          command: himorime compare --against main --quiet --runs 3
           cwd: repo
       - assert:
           exit_code: 3
@@ -410,7 +410,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "20ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: gate}
@@ -426,7 +426,7 @@ scenarios:
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - fixture: {file: repo/delay.txt, content: "250ms\n"}
       - run:
-          command: yahiko compare --against main --quiet --fail-on-inconclusive --format json
+          command: himorime compare --against main --quiet --fail-on-inconclusive --format json
           cwd: repo
           timeout: 120s
       - assert:
@@ -440,7 +440,7 @@ scenarios:
               - {path: "$.summary.not_gated.regression", equals: 1}
               - {path: "$.summary.exit_code", equals: 0}
       - run:
-          command: yahiko compare --against main --quiet
+          command: himorime compare --against main --quiet
           cwd: repo
           timeout: 120s
       - assert:

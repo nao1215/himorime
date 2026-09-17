@@ -2,17 +2,17 @@
 version: "1"
 
 suite:
-  name: yahiko ci
+  name: himorime ci
 
-# yahiko ci with the GitHub Actions environment simulated by files in the
+# himorime ci with the GitHub Actions environment simulated by files in the
 # workdir: an event payload whose base commit is the repository's HEAD, and a
 # step summary file. Nothing talks to GitHub.
 defaults:
   scenario:
     env:
-      GIT_AUTHOR_NAME: yahiko-e2e
+      GIT_AUTHOR_NAME: himorime-e2e
       GIT_AUTHOR_EMAIL: e2e@example.com
-      GIT_COMMITTER_NAME: yahiko-e2e
+      GIT_COMMITTER_NAME: himorime-e2e
       GIT_COMMITTER_EMAIL: e2e@example.com
       GIT_CONFIG_NOSYSTEM: "1"
 
@@ -26,7 +26,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "30ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: pull request}
@@ -47,7 +47,7 @@ scenarios:
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m docs, cwd: repo}
       - run:
-          command: yahiko ci
+          command: himorime ci
           cwd: repo
       - assert:
           exit_code: 0
@@ -61,7 +61,7 @@ scenarios:
             path: summary.md
             contains:
               - "output of an earlier step\n## "
-              - "yahiko benchmark comparison: "
+              - "himorime benchmark comparison: "
               - "| Benchmark | Command | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result |"
               - "| sleepy | app |"
 
@@ -74,7 +74,7 @@ scenarios:
     steps:
       - fixture: {file: repo/delay.txt, content: "30ms\n"}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: pull request}
@@ -92,7 +92,7 @@ scenarios:
       - fixture: {file: repo/delay.txt, content: "200ms\n"}
       - run: {command: git -c commit.gpgsign=false commit -q -am slower, cwd: repo}
       - run:
-          command: yahiko ci --format json --output ${workdir}/result.json
+          command: himorime ci --format json --output ${workdir}/result.json
           cwd: repo
       - assert:
           exit_code: 1
@@ -107,7 +107,7 @@ scenarios:
       - assert:
           file:
             path: summary.md
-            contains: ["## ❌ yahiko benchmark comparison: performance regression", "REGRESSION"]
+            contains: ["## ❌ himorime benchmark comparison: performance regression", "REGRESSION"]
 
   - name: push and merge_group events use their own base fields
     env:
@@ -115,7 +115,7 @@ scenarios:
       GITHUB_EVENT_PATH: ${workdir}/event.json
     steps:
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: events}
@@ -129,7 +129,7 @@ scenarios:
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run: {command: "e2ehelper event push ${workdir}/repo ${workdir}/event.json"}
       - run:
-          command: yahiko ci --quiet --format json
+          command: himorime ci --quiet --format json
           cwd: repo
           env: {GITHUB_EVENT_NAME: push}
       - assert:
@@ -139,7 +139,7 @@ scenarios:
               - {path: "$.git.base_source", equals: "push before"}
       - run: {command: "e2ehelper event merge_group ${workdir}/repo ${workdir}/event.json"}
       - run:
-          command: yahiko ci --quiet --format json
+          command: himorime ci --quiet --format json
           cwd: repo
           env: {GITHUB_EVENT_NAME: merge_group}
       - assert:
@@ -156,7 +156,7 @@ scenarios:
     steps:
       - fixture: {file: event.json, content: '{"pull_request":{"base":{"sha":"1111111111111111111111111111111111111111"}}}'}
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: refused}
@@ -165,7 +165,7 @@ scenarios:
                 commands:
                   app: {command: [e2ehelper, write, "$${root}/ran"]}
       - run:
-          command: yahiko ci
+          command: himorime ci
       - assert:
           exit_code: 3
           stdout: {empty: true}
@@ -176,7 +176,7 @@ scenarios:
   - name: without a base the error explains how to name one
     steps:
       - fixture:
-          file: yahiko.yaml
+          file: himorime.yaml
           content: |
             version: "1"
             suite: {name: no base}
@@ -185,12 +185,12 @@ scenarios:
                 commands:
                   app: {command: [e2ehelper, sleep, 1ms]}
       - run:
-          command: yahiko ci
+          command: himorime ci
       - assert:
           exit_code: 3
-          stderr: {contains: ["not running in GitHub Actions", "--against <ref>", "YAHIKO_BASE_REF"]}
+          stderr: {contains: ["not running in GitHub Actions", "--against <ref>", "HIMORIME_BASE_REF"]}
       - run:
-          command: yahiko ci
+          command: himorime ci
           env:
             GITHUB_ACTIONS: "true"
             GITHUB_EVENT_NAME: schedule
@@ -206,7 +206,7 @@ scenarios:
     steps:
       - fixture: {file: event.json, content: '{"pull_request":{"base":{"sha":"1111111111111111111111111111111111111111"}}}'}
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: shallow}
@@ -219,16 +219,16 @@ scenarios:
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run:
-          command: yahiko ci
+          command: himorime ci
           cwd: repo
       - assert:
           exit_code: 4
           stderr: {contains: "fetch-depth: 0"}
 
-  - name: locally, YAHIKO_BASE_REF or --against name the base
+  - name: locally, HIMORIME_BASE_REF or --against name the base
     steps:
       - fixture:
-          file: repo/yahiko.yaml
+          file: repo/himorime.yaml
           content: |
             version: "1"
             suite: {name: local}
@@ -241,18 +241,18 @@ scenarios:
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
       - run:
-          command: yahiko ci --quiet --format json
+          command: himorime ci --quiet --format json
           cwd: repo
-          env: {YAHIKO_BASE_REF: main}
+          env: {HIMORIME_BASE_REF: main}
       - assert:
           exit_code: 0
           stdout:
             json:
-              - {path: "$.git.base_source", equals: "YAHIKO_BASE_REF"}
+              - {path: "$.git.base_source", equals: "HIMORIME_BASE_REF"}
       - run:
-          command: yahiko ci --quiet --against main --summary ${workdir}/local-summary.md
+          command: himorime ci --quiet --against main --summary ${workdir}/local-summary.md
           cwd: repo
       - assert:
           exit_code: 0
       - assert:
-          file: {path: local-summary.md, contains: "yahiko benchmark comparison"}
+          file: {path: local-summary.md, contains: "himorime benchmark comparison"}

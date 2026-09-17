@@ -142,7 +142,7 @@ func parseRef(name string) (Ref, error) {
 }
 
 // QuotedReference reports whether a shell script places a ${...} reference
-// inside quotes it writes itself. yahiko quotes every substituted value for
+// inside quotes it writes itself. himorime quotes every substituted value for
 // the shell, and a second, surrounding layer of quotes changes what those
 // quotes mean: inside "..." a single quote is an ordinary character, so a value
 // holding $(...) would run. Such scripts are rejected instead.

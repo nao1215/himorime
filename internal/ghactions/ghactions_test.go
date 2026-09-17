@@ -58,7 +58,7 @@ func TestResolveBase(t *testing.T) {
 		{"push creating a branch", actions("push"), `{"before":"0000000000000000000000000000000000000000"}`, "", "", ErrNoBase, "no base commit"},
 		{"pull_request_target is refused", actions("pull_request_target"), `{"pull_request":{"base":{"sha":"` + baseSHA + `"}}}`, "", "", ErrUnsafeEvent, "trigger the workflow on pull_request"},
 		{"schedule has no base", actions("schedule"), `{}`, "", "", ErrNoBase, "--against"},
-		{"not in actions", env(map[string]string{}), ``, "", "", ErrNoBase, "YAHIKO_BASE_REF"},
+		{"not in actions", env(map[string]string{}), ``, "", "", ErrNoBase, "HIMORIME_BASE_REF"},
 		{"broken payload", actions("pull_request"), `{`, "", "", ErrNoBase, "parse the event payload"},
 		{"payload without pull request", actions("pull_request"), `{}`, "", "", ErrNoBase, "no base commit"},
 		{"malformed sha", actions("pull_request"), `{"pull_request":{"base":{"sha":"main; rm -rf /"}}}`, "", "", ErrNoBase, "no base commit"},

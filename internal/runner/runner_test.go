@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/redact"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/redact"
 )
 
 // The test binary is its own helper program: TestMain dispatches on
@@ -111,7 +111,7 @@ func newFixture(t *testing.T) *fixture {
 		t:     t,
 		exe:   exe,
 		dir:   dir,
-		suite: &config.Suite{Name: "test", Dir: dir, Path: filepath.Join(dir, "yahiko.yaml")},
+		suite: &config.Suite{Name: "test", Dir: dir, Path: filepath.Join(dir, "himorime.yaml")},
 		runner: &Runner{
 			TempDir:     tmp,
 			ProjectRoot: dir,
@@ -307,7 +307,7 @@ func TestMeasureTimeout(t *testing.T) {
 func TestMeasureStartFailure(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	c := config.Command{Name: "missing", Exec: config.Exec{Argv: []string{"yahiko-no-such-program"}, Timeout: time.Second}, Stdout: config.OutputDiscard, Stderr: config.OutputDiscard, ExitCodes: []int{0}}
+	c := config.Command{Name: "missing", Exec: config.Exec{Argv: []string{"himorime-no-such-program"}, Timeout: time.Second}, Stdout: config.OutputDiscard, Stderr: config.OutputDiscard, ExitCodes: []int{0}}
 	res := f.runner.Measure(context.Background(), bench("start", 2, c), []Side{f.side})
 	if m := res.Commands[0].Sides[SideHead]; m.Failure == nil || m.Failure.Kind != FailStart {
 		t.Fatalf("failure = %+v", m.Failure)
@@ -466,9 +466,9 @@ func TestVariablesEnvAndCwd(t *testing.T) {
 	}
 
 	missing := f.command("env", "print-env", "X")
-	missing.Env = append(missing.Env, config.EnvVar{Name: "X", Value: "${env:YAHIKO_SURELY_UNSET}"})
+	missing.Env = append(missing.Env, config.EnvVar{Name: "X", Value: "${env:HIMORIME_SURELY_UNSET}"})
 	res = f.runner.Measure(context.Background(), bench("unset", 1, missing), []Side{f.side})
-	if m := res.Commands[0].Sides[SideHead]; m.Failure == nil || !strings.Contains(m.Failure.Message, "YAHIKO_SURELY_UNSET is not set") {
+	if m := res.Commands[0].Sides[SideHead]; m.Failure == nil || !strings.Contains(m.Failure.Message, "HIMORIME_SURELY_UNSET is not set") {
 		t.Fatalf("unset variable: %+v", m.Failure)
 	}
 }

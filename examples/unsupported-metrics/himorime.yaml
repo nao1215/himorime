@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: handle a metric this platform cannot measure.
-# https://nao1215.github.io/yahiko/cookbook/#handle-a-metric-this-platform-cannot-measure
+# https://nao1215.github.io/himorime/cookbook/#handle-a-metric-this-platform-cannot-measure
 version: "1"
 
 suite:

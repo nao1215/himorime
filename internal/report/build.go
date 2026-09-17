@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/exitcode"
-	"github.com/nao1215/yahiko/internal/metric"
-	"github.com/nao1215/yahiko/internal/proc"
-	"github.com/nao1215/yahiko/internal/runner"
-	"github.com/nao1215/yahiko/internal/stats"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/exitcode"
+	"github.com/nao1215/himorime/internal/metric"
+	"github.com/nao1215/himorime/internal/proc"
+	"github.com/nao1215/himorime/internal/runner"
+	"github.com/nao1215/himorime/internal/stats"
 )
 
 // SuiteInput is what the runner produced for one suite.
@@ -287,7 +287,7 @@ func metricSummaries(m *runner.Measurement, cfg config.Benchmark, percentiles []
 	return out
 }
 
-// Collection sources of the metrics yahiko derives itself.
+// Collection sources of the metrics himorime derives itself.
 const (
 	// SourceWallClock is the monotonic clock around the process, from just
 	// before it starts until it is reaped.
@@ -297,7 +297,7 @@ const (
 )
 
 // collection describes how the metrics of a group are obtained on the
-// platform yahiko runs on.
+// platform himorime runs on.
 func collection(g metric.Group) proc.Collection {
 	switch g {
 	case metric.GroupCPU:

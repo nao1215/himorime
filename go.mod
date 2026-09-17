@@ -1,4 +1,4 @@
-module github.com/nao1215/yahiko
+module github.com/nao1215/himorime
 
 go 1.26.6
 

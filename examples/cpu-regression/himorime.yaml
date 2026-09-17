@@ -1,9 +1,9 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: detect a CPU time regression.
-# https://nao1215.github.io/yahiko/cookbook/#detect-a-cpu-time-regression
+# https://nao1215.github.io/himorime/cookbook/#detect-a-cpu-time-regression
 #
-#   yahiko compare --against main examples/cpu-regression
+#   himorime compare --against main examples/cpu-regression
 version: "1"
 
 suite:

@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: why no overall score is printed when a case is missing.
-# https://nao1215.github.io/yahiko/cookbook/#understand-the-geometric-mean
+# https://nao1215.github.io/himorime/cookbook/#understand-the-geometric-mean
 version: "1"
 
 suite:

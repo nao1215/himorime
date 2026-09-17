@@ -1,8 +1,8 @@
-// Package ghactions is the thin adapter between yahiko and GitHub Actions.
+// Package ghactions is the thin adapter between himorime and GitHub Actions.
 //
 // It reads the environment GitHub sets for a job, finds the base commit of a
 // pull request from the event payload, and locates the job summary file.
-// Nothing else in yahiko knows about GitHub.
+// Nothing else in himorime knows about GitHub.
 package ghactions
 
 import (
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Env is the part of the GitHub Actions environment yahiko reads.
+// Env is the part of the GitHub Actions environment himorime reads.
 type Env struct {
 	Actions     bool
 	EventName   string
@@ -53,7 +53,7 @@ var ErrNoBase = errors.New("cannot determine the base revision")
 var ErrUnsafeEvent = errors.New("refusing to run for pull_request_target")
 
 // Guidance explains how to name the base explicitly.
-const Guidance = "pass --against <ref> or set YAHIKO_BASE_REF, for example --against origin/main"
+const Guidance = "pass --against <ref> or set HIMORIME_BASE_REF, for example --against origin/main"
 
 const zeroSHA = "0000000000000000000000000000000000000000"
 

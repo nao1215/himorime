@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 // CSVHeader is the stable column list of the CSV report. The report is long

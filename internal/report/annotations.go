@@ -5,18 +5,18 @@ import (
 	"io"
 	"strings"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 // Annotation titles. A title says at a glance whether the job failed because
-// performance got worse or because yahiko could not measure.
+// performance got worse or because himorime could not measure.
 const (
-	TitleBudget       = "yahiko: performance budget exceeded"
-	TitleRegression   = "yahiko: performance regression"
-	TitleInconclusive = "yahiko: inconclusive comparison"
-	TitleNotGated     = "yahiko: performance regression (not gated)"
-	TitleMetricError  = "yahiko: metric could not be measured"
-	TitleError        = "yahiko: benchmark could not run"
+	TitleBudget       = "himorime: performance budget exceeded"
+	TitleRegression   = "himorime: performance regression"
+	TitleInconclusive = "himorime: inconclusive comparison"
+	TitleNotGated     = "himorime: performance regression (not gated)"
+	TitleMetricError  = "himorime: metric could not be measured"
+	TitleError        = "himorime: benchmark could not run"
 )
 
 // WriteAnnotations writes GitHub Actions workflow commands (::error,

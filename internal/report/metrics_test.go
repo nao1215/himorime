@@ -9,11 +9,11 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/exitcode"
-	"github.com/nao1215/yahiko/internal/metric"
-	"github.com/nao1215/yahiko/internal/proc"
-	"github.com/nao1215/yahiko/internal/runner"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/exitcode"
+	"github.com/nao1215/himorime/internal/metric"
+	"github.com/nao1215/himorime/internal/proc"
+	"github.com/nao1215/himorime/internal/runner"
 )
 
 // metricsResult builds a one-command benchmark measuring every metric with
@@ -323,7 +323,7 @@ func TestJudgeMetricErrors(t *testing.T) {
 	}
 	var out bytes.Buffer
 	_ = WriteGitHubSummary(&out, judge(ModeRun, false, unsupported))
-	if !strings.HasPrefix(out.String(), "## ❌ yahiko benchmarks: metrics could not be measured") {
+	if !strings.HasPrefix(out.String(), "## ❌ himorime benchmarks: metrics could not be measured") {
 		t.Fatalf("summary = %s", out.String())
 	}
 }
@@ -373,9 +373,9 @@ func TestAnnotations(t *testing.T) {
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	want := []string{
-		"::error file=yahiko.yaml,title=yahiko%3A performance budget exceeded::over / tool: peak rss max budget <= 32.00MiB, measured 64.00MiB",
-		"::error file=yahiko.yaml,title=yahiko%3A benchmark could not run::fail,ed / a: exit code: exited with status 3 ::error::injected",
-		"::error file=yahiko.yaml,title=yahiko%3A metric could not be measured::unsupported: metric unsupported: metrics.cpu was requested",
+		"::error file=himorime.yaml,title=himorime%3A performance budget exceeded::over / tool: peak rss max budget <= 32.00MiB, measured 64.00MiB",
+		"::error file=himorime.yaml,title=himorime%3A benchmark could not run::fail,ed / a: exit code: exited with status 3 ::error::injected",
+		"::error file=himorime.yaml,title=himorime%3A metric could not be measured::unsupported: metric unsupported: metrics.cpu was requested",
 	}
 	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("annotations:\n%s\nwant:\n%s", out.String(), strings.Join(want, "\n"))
@@ -385,7 +385,7 @@ func TestAnnotations(t *testing.T) {
 		metricsResult("x", 20, 100*time.Millisecond, 100*time.Millisecond, 10*time.Millisecond, 48<<20, 1000))
 	out.Reset()
 	_ = WriteAnnotations(&out, judge(ModeCompare, false, reg))
-	if got := strings.TrimSpace(out.String()); got != "::error file=yahiko.yaml,title=yahiko%3A performance regression::m / tool: peak rss 32.00MiB -> 48.00MiB (+16.00MiB, +50.0%25; tolerance +10%25)" {
+	if got := strings.TrimSpace(out.String()); got != "::error file=himorime.yaml,title=himorime%3A performance regression::m / tool: peak rss 32.00MiB -> 48.00MiB (+16.00MiB, +50.0%25; tolerance +10%25)" {
 		t.Fatalf("regression annotation = %q", got)
 	}
 	if escapeData("100%\r\nx") != "100%25%0D%0Ax" || escapeProperty("a:b,c") != "a%3Ab%2Cc" {
@@ -430,12 +430,12 @@ func TestJudgeCompareGate(t *testing.T) {
 	}
 	out.Reset()
 	_ = WriteGitHubSummary(&out, r)
-	if !strings.HasPrefix(out.String(), "## ⚠️ yahiko benchmark comparison: no regression in gated metrics") || !strings.Contains(out.String(), "REGRESSION (NOT GATED)") {
+	if !strings.HasPrefix(out.String(), "## ⚠️ himorime benchmark comparison: no regression in gated metrics") || !strings.Contains(out.String(), "REGRESSION (NOT GATED)") {
 		t.Errorf("summary:\n%s", out.String())
 	}
 	out.Reset()
 	_ = WriteAnnotations(&out, r)
-	if got := strings.TrimSpace(out.String()); !strings.HasPrefix(got, "::notice file=yahiko.yaml,title=yahiko%3A performance regression (not gated)::latency info / tool: latency") {
+	if got := strings.TrimSpace(out.String()); !strings.HasPrefix(got, "::notice file=himorime.yaml,title=himorime%3A performance regression (not gated)::latency info / tool: latency") {
 		t.Errorf("annotations = %q", got)
 	}
 	out.Reset()

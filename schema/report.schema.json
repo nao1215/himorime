@@ -1,13 +1,13 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/nao1215/yahiko/main/schema/report.schema.json",
-  "title": "yahiko JSON report",
-  "description": "The report written by `yahiko run|compare|ci --format json`. Durations are integer nanoseconds. Fields are only added within a schema_version.",
+  "$id": "https://raw.githubusercontent.com/nao1215/himorime/main/schema/report.schema.json",
+  "title": "himorime JSON report",
+  "description": "The report written by `himorime run|compare|ci --format json`. Durations are integer nanoseconds. Fields are only added within a schema_version.",
   "type": "object",
   "required": [
     "schema_version",
     "mode",
-    "yahiko_version",
+    "himorime_version",
     "seed",
     "started_at",
     "finished_at",
@@ -26,15 +26,15 @@
       ]
     },
     "mode": {
-      "description": "run for `yahiko run`, compare for `yahiko compare` and `yahiko ci`.",
+      "description": "run for `himorime run`, compare for `himorime compare` and `himorime ci`.",
       "type": "string",
       "enum": [
         "run",
         "compare"
       ]
     },
-    "yahiko_version": {
-      "description": "Version of the yahiko that wrote the report.",
+    "himorime_version": {
+      "description": "Version of the himorime that wrote the report.",
       "type": "string"
     },
     "seed": {
@@ -84,7 +84,7 @@
           "minimum": 1
         },
         "go_version": {
-          "description": "Go version yahiko was built with.",
+          "description": "Go version himorime was built with.",
           "type": "string"
         },
         "ci": {
@@ -125,7 +125,7 @@
           "type": "string"
         },
         "base_source": {
-          "description": "Where the base came from: --against, YAHIKO_BASE_REF, pull_request.base.sha, merge_group.base_sha or push before.",
+          "description": "Where the base came from: --against, HIMORIME_BASE_REF, pull_request.base.sha, merge_group.base_sha or push before.",
           "type": "string"
         }
       }
@@ -606,7 +606,7 @@
           "type": "boolean"
         },
         "exit_code": {
-          "description": "The exit status yahiko returned.",
+          "description": "The exit status himorime returned.",
           "type": "integer",
           "enum": [
             0,

@@ -21,7 +21,7 @@ import (
 // so sample i of both sides was taken close in time; the paired variant shows
 // what that pairing would change when the machine drifts during a run.
 //
-// YAHIKO_CALIBRATION=full raises the trial count; any non-empty value logs the
+// HIMORIME_CALIBRATION=full raises the trial count; any non-empty value logs the
 // table of verdict rates.
 
 const (
@@ -32,7 +32,7 @@ const (
 	calibrationSampleBudget = 200
 	calibrationMinTrials    = 3
 	// calibrationFullTrials is the trial count of every scenario with
-	// YAHIKO_CALIBRATION=full.
+	// HIMORIME_CALIBRATION=full.
 	calibrationFullTrials = 1000
 	// calibrationCenter is the median of an unchanged sample, 100ms in ns.
 	calibrationCenter = 100e6
@@ -265,7 +265,7 @@ func (s calibrationScenario) generate(r *rand.Rand) (base, head []float64) {
 	return base, head
 }
 
-// calibrationOptions are the regression defaults of a yahiko config.
+// calibrationOptions are the regression defaults of a himorime config.
 func calibrationOptions(s calibrationScenario, seed uint64) CompareOptions {
 	return CompareOptions{
 		Metric: Median, HigherIsBetter: s.higherIsBetter,
@@ -305,7 +305,7 @@ func (s calibrationScenario) run(trials int) (independent, paired rates) {
 // round indices and takes base[i] and head[i] together, so drift shared by
 // both sides at the same round cancels out of the change instead of widening
 // it. base and head must have the same length. It exists to evaluate the
-// independence assumption of Compare and is not used by yahiko.
+// independence assumption of Compare and is not used by himorime.
 func pairedCompare(base, head []float64, o CompareOptions) Comparison {
 	c := Comparison{Base: Summarize(base), Head: Summarize(head)}
 	if c.Base.Count == 0 || c.Head.Count == 0 {
@@ -531,7 +531,7 @@ func calibrationScenarios() []calibrationScenario {
 
 func TestCalibration(t *testing.T) {
 	t.Parallel()
-	mode := os.Getenv("YAHIKO_CALIBRATION")
+	mode := os.Getenv("HIMORIME_CALIBRATION")
 	scenarios := calibrationScenarios()
 	type result struct{ ind, pair rates }
 	results := make([]result, len(scenarios))

@@ -1,9 +1,9 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: gate on CPU time and memory, report latency only.
-# https://nao1215.github.io/yahiko/cookbook/#gate-on-cpu-time-and-memory-report-latency-only
+# https://nao1215.github.io/himorime/cookbook/#gate-on-cpu-time-and-memory-report-latency-only
 #
-#   yahiko compare --against main examples/gate-cpu-memory
+#   himorime compare --against main examples/gate-cpu-memory
 version: "1"
 
 suite:

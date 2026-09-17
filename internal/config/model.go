@@ -1,6 +1,6 @@
-// Package config loads, validates and resolves yahiko suite files.
+// Package config loads, validates and resolves himorime suite files.
 //
-// A suite file is versioned YAML (see schema/yahiko.schema.json). Loading
+// A suite file is versioned YAML (see schema/himorime.schema.json). Loading
 // happens in three stages: strict decoding into the Raw types, which rejects
 // unknown keys and wrong types; semantic validation, which collects every
 // problem it finds with its position in the file; and resolution into the
@@ -11,7 +11,7 @@ package config
 import (
 	"time"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 // SupportedVersion is the only suite format version this build understands.
@@ -19,7 +19,7 @@ const SupportedVersion = "1"
 
 // DefaultFileName is the suite file looked up when no path is given, and in
 // every directory given as a path.
-const DefaultFileName = "yahiko.yaml"
+const DefaultFileName = "himorime.yaml"
 
 // Defaults applied when a suite does not set a value. They are documented in
 // the Configuration page, which TestDocsDefaultsInSync keeps in step.
@@ -87,7 +87,7 @@ type Suite struct {
 	Outputs     []Output
 }
 
-// Exec is a process yahiko starts: a build step, a hook, or a measured command.
+// Exec is a process himorime starts: a build step, a hook, or a measured command.
 type Exec struct {
 	// Argv is the argument list for a command run without a shell.
 	Argv []string

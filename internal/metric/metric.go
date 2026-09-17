@@ -1,4 +1,4 @@
-// Package metric defines the performance metrics yahiko collects: their
+// Package metric defines the performance metrics himorime collects: their
 // names, units, the direction that counts as better, how raw samples are
 // aggregated, and the typed quantities (durations, byte sizes, rates and
 // percentages) that budgets and regression thresholds are written in.

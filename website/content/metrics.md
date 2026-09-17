@@ -1,6 +1,6 @@
 ---
 title: Metrics
-description: What yahiko measures — latency, throughput, CPU time and utilization, peak RSS — in which unit, over which processes, on which platform, and what it cannot tell you.
+description: What himorime measures — latency, throughput, CPU time and utilization, peak RSS — in which unit, over which processes, on which platform, and what it cannot tell you.
 toc: true
 ---
 
@@ -62,7 +62,7 @@ reading declared work, collecting other metrics and writing reports.
 
 ## Throughput
 
-Throughput is the work one run does divided by that run's latency. yahiko
+Throughput is the work one run does divided by that run's latency. himorime
 cannot know what "work" means for your program, so you declare it, and a
 suite without a declaration has no throughput:
 
@@ -122,7 +122,7 @@ time. Judge CPU time on workloads that use tens of milliseconds or more.
 ## Peak RSS
 
 Peak resident set size is the largest amount of physical memory a process
-had mapped at one time, as recorded by the kernel, in bytes. yahiko reports
+had mapped at one time, as recorded by the kernel, in bytes. himorime reports
 the largest peak of any single process in the tree. It is:
 
 - not the heap size, the allocation count or the garbage collector's view of
@@ -136,14 +136,14 @@ the largest peak of any single process in the tree. It is:
   memory that was reserved but never touched, or swapped out.
 
 The value is the kernel's own high-water mark, read once when the run exits.
-yahiko does not poll, so it does not miss a short spike the way sampling
+himorime does not poll, so it does not miss a short spike the way sampling
 would, and collecting it adds no work while the command runs. `ru_maxrss` is
-reported in kilobytes on Linux and the BSDs and in bytes on macOS; yahiko
+reported in kilobytes on Linux and the BSDs and in bytes on macOS; himorime
 converts both to bytes.
 
 ## Process tree
 
-CPU time and peak RSS cover the process yahiko starts and its descendants.
+CPU time and peak RSS cover the process himorime starts and its descendants.
 What "descendants" means depends on the operating system:
 
 | | Linux, macOS, FreeBSD, OpenBSD, NetBSD | Windows |
@@ -155,7 +155,7 @@ What "descendants" means depends on the operating system:
 
 On Windows, a command that starts child processes has CPU time but no peak
 RSS: Windows keeps no peak working set for a job, and reporting only the
-parent would under-report. yahiko reports it as unsupported for that run
+parent would under-report. himorime reports it as unsupported for that run
 instead. A process a command leaves running in the background is stopped when
 the command exits, on every platform.
 
@@ -169,7 +169,7 @@ read without knowing which platform produced it:
 | `process_aggregation` | `none` (not a per-process value), `sum_of_waited_descendants`, `sum_of_job_processes`, `max_of_single_process_peaks`, `started_process_only` |
 
 Tables and Markdown repeat the aggregation in a sentence under the CPU and
-memory tables. yahiko does not measure the combined memory of a process tree
+memory tables. himorime does not measure the combined memory of a process tree
 or a container; a cgroup's memory peak is outside what it reads.
 
 ## Unsupported, failed and not requested
@@ -184,7 +184,7 @@ A metric in a report always has a status:
 | `failed` | The platform supports it but did not report it, or the declared work could not be read. | `null`, with a reason |
 
 A missing value is never reported as zero. With the default
-`metrics.unsupported: fail`, yahiko stops before building or running anything
+`metrics.unsupported: fail`, himorime stops before building or running anything
 when a platform cannot measure a requested metric at all, and exits 6 when it
 learns so during a run. With `skip`, the rest is measured, the metric is
 `unsupported`, and its budgets and comparisons are `skipped`, never passed. A
@@ -202,7 +202,7 @@ development machine), and the `collector overhead` benchmark in `bench/`
 measures the same end to end on every pull request. On Windows collection is
 two system calls per run, also after the measured interval.
 
-## What yahiko does not measure
+## What himorime does not measure
 
 - Heap allocations, garbage collection pauses or other runtime-specific
   statistics.
@@ -210,5 +210,5 @@ two system calls per run, also after the measured interval.
 - CPU or memory of the whole machine, or of processes the command did not
   start.
 - Energy use.
-- Anything of a service running in the background: yahiko measures commands
+- Anything of a service running in the background: himorime measures commands
   that start and finish.

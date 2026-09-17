@@ -1,9 +1,9 @@
 ---
 title: Exit codes
-description: yahiko's exit statuses are a stable contract. What each one means and which one wins when several apply.
+description: himorime's exit statuses are a stable contract. What each one means and which one wins when several apply.
 ---
 
-yahiko's exit status is part of its public interface and does not change
+himorime's exit status is part of its public interface and does not change
 within a major version.
 
 <!-- BEGIN GENERATED: exit-codes -->
@@ -14,7 +14,7 @@ within a major version.
 | `2` | config | A suite file is not valid YAML, does not match the schema, or fails semantic validation. Nothing was executed. |
 | `3` | usage | The command line is invalid: an unknown flag or command, a missing argument, or no benchmark matched the selection. |
 | `4` | execution | A measured command, hook or build failed or timed out, a Git operation failed, the base revision could not be resolved, or the run was interrupted. |
-| `5` | internal | yahiko hit an unexpected internal error. Please report it. |
+| `5` | internal | himorime hit an unexpected internal error. Please report it. |
 | `6` | metric | A requested metric (throughput, cpu or memory) could not be measured: this platform does not support it and metrics.unsupported is fail, or the operating system did not report it. The commands themselves ran. |
 <!-- END GENERATED: exit-codes -->
 
@@ -39,8 +39,8 @@ run. After measuring, the status is decided in this order:
 5. `0` otherwise.
 
 `1` always means the code's performance was judged and found wanting; `4` and
-`6` mean yahiko could not complete the judgement. In CI, the last line of the
-log says which (`yahiko: exit 1: performance check failed: ...`), and
+`6` mean himorime could not complete the judgement. In CI, the last line of the
+log says which (`himorime: exit 1: performance check failed: ...`), and
 annotations carry distinct titles; see [GitHub Actions](/github-actions/).
 
 ## Inconclusive results

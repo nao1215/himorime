@@ -1,5 +1,5 @@
-// Command run executes the end-to-end suite. It builds yahiko (or copies the
-// binary named by YAHIKO_BINARY) and the portable helper into a temporary
+// Command run executes the end-to-end suite. It builds himorime (or copies the
+// binary named by HIMORIME_BINARY) and the portable helper into a temporary
 // directory put first on PATH, then runs the atago specs under
 // test/e2e/atago against them. It is written in Go so that the same entry
 // point works on Linux, macOS and Windows without a POSIX shell.
@@ -41,7 +41,7 @@ func run(args []string) (int, error) {
 	if err != nil {
 		return 127, errors.New("atago is not installed: go install github.com/nao1215/atago@v0.22.0")
 	}
-	bin, err := os.MkdirTemp("", "yahiko-e2e-bin-")
+	bin, err := os.MkdirTemp("", "himorime-e2e-bin-")
 	if err != nil {
 		return 1, err
 	}
@@ -51,11 +51,11 @@ func run(args []string) (int, error) {
 	if runtime.GOOS == "windows" {
 		exe = ".exe"
 	}
-	if prebuilt := os.Getenv("YAHIKO_BINARY"); prebuilt != "" {
-		if err := copyFile(prebuilt, filepath.Join(bin, "yahiko"+exe)); err != nil {
-			return 1, fmt.Errorf("copy YAHIKO_BINARY: %w", err)
+	if prebuilt := os.Getenv("HIMORIME_BINARY"); prebuilt != "" {
+		if err := copyFile(prebuilt, filepath.Join(bin, "himorime"+exe)); err != nil {
+			return 1, fmt.Errorf("copy HIMORIME_BINARY: %w", err)
 		}
-	} else if err := goBuild(root, filepath.Join(bin, "yahiko"+exe), "."); err != nil {
+	} else if err := goBuild(root, filepath.Join(bin, "himorime"+exe), "."); err != nil {
 		return 1, err
 	}
 	if err := goBuild(root, filepath.Join(bin, "e2ehelper"+exe), "./test/e2e/helper"); err != nil {
@@ -77,10 +77,10 @@ func run(args []string) (int, error) {
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(),
 		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"YAHIKO_REPO="+root,
+		"HIMORIME_REPO="+root,
 		"NO_COLOR=1",
 		// A run inside GitHub Actions must not pick up the job's real event.
-		"GITHUB_ACTIONS=", "GITHUB_EVENT_NAME=", "GITHUB_EVENT_PATH=", "GITHUB_STEP_SUMMARY=", "YAHIKO_BASE_REF=",
+		"GITHUB_ACTIONS=", "GITHUB_EVENT_NAME=", "GITHUB_EVENT_PATH=", "GITHUB_STEP_SUMMARY=", "HIMORIME_BASE_REF=",
 	)
 	runErr := cmd.Run()
 	code := 0
@@ -121,7 +121,7 @@ func repoRoot() (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", errors.New("run this from inside the yahiko repository")
+			return "", errors.New("run this from inside the himorime repository")
 		}
 		dir = parent
 	}

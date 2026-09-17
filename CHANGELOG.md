@@ -9,7 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- `yahiko init`, `validate`, `list`, `run`, `compare`, `ci`, `version` and
+- `himorime init`, `validate`, `list`, `run`, `compare`, `ci`, `version` and
   `completion` (bash, zsh, fish, PowerShell).
 - Versioned suite format (`version: "1"`) with a JSON Schema for editors;
   suites are validated against the same schema before semantic checks.

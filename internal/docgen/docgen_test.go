@@ -12,15 +12,15 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/nao1215/yahiko/internal/cli"
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/schema"
+	"github.com/nao1215/himorime/internal/cli"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/schema"
 )
 
 const root = "../.."
 
 // docFiles are the Markdown files that may hold generated sections, example
-// blocks, and yahiko command lines.
+// blocks, and himorime command lines.
 func docFiles(t *testing.T) []string {
 	t.Helper()
 	files, err := filepath.Glob(filepath.Join(root, "website", "content", "*.md"))
@@ -61,11 +61,11 @@ func TestGeneratedDocsInSync(t *testing.T) {
 	}
 }
 
-// commandLine matches a documented yahiko invocation in a console or shell
-// code block: "$ yahiko ..." or "yahiko ..." at the start of a line.
-var commandLine = regexp.MustCompile(`^(?:\$ )?yahiko(?: (.*))?$`)
+// commandLine matches a documented himorime invocation in a console or shell
+// code block: "$ himorime ..." or "himorime ..." at the start of a line.
+var commandLine = regexp.MustCompile(`^(?:\$ )?himorime(?: (.*))?$`)
 
-// TestDocumentedCommandsExist checks every yahiko command line shown in the
+// TestDocumentedCommandsExist checks every himorime command line shown in the
 // documentation against the real command table: the subcommand exists and
 // every flag is one that subcommand accepts.
 func TestDocumentedCommandsExist(t *testing.T) {
@@ -104,7 +104,7 @@ func TestDocumentedCommandsExist(t *testing.T) {
 				}
 				name := strings.SplitN(strings.TrimPrefix(f, "--"), "=", 2)[0]
 				if !flags[name] {
-					t.Errorf("%s: %q uses flag --%s, which yahiko %s does not have", path, part, name, fields[0])
+					t.Errorf("%s: %q uses flag --%s, which himorime %s does not have", path, part, name, fields[0])
 				}
 			}
 		}
@@ -189,11 +189,11 @@ func TestCookbookRecipesAreRun(t *testing.T) {
 		}
 	}
 
-	dirs, _ := filepath.Glob(filepath.Join(root, "examples", "*", "yahiko.yaml"))
+	dirs, _ := filepath.Glob(filepath.Join(root, "examples", "*", "himorime.yaml"))
 	if len(dirs) < 10 {
 		t.Fatalf("found only %d example suites", len(dirs))
 	}
-	recipeLink := regexp.MustCompile(`https://nao1215\.github\.io/yahiko/cookbook/#([a-z0-9-]+)`)
+	recipeLink := regexp.MustCompile(`https://nao1215\.github\.io/himorime/cookbook/#([a-z0-9-]+)`)
 	for _, file := range dirs {
 		rel, _ := filepath.Rel(root, file)
 		rel = filepath.ToSlash(rel)
@@ -228,7 +228,7 @@ func anchor(h string) string {
 
 // TestDocumentedSuitesAreValid parses every YAML block in the documentation
 // that is a suite (it starts with the schema comment or version: "1"), so an
-// example on a page cannot use a key or form yahiko rejects.
+// example on a page cannot use a key or form himorime rejects.
 func TestDocumentedSuitesAreValid(t *testing.T) {
 	t.Parallel()
 	block := regexp.MustCompile("(?s)```yaml\n(.*?)```")
@@ -240,7 +240,7 @@ func TestDocumentedSuitesAreValid(t *testing.T) {
 				continue
 			}
 			count++
-			if _, err := config.Parse(path, filepath.Join(t.TempDir(), "yahiko.yaml"), []byte(body)); err != nil {
+			if _, err := config.Parse(path, filepath.Join(t.TempDir(), "himorime.yaml"), []byte(body)); err != nil {
 				t.Errorf("%s: a documented suite is invalid:\n%v\n%s", path, err, body)
 			}
 		}
@@ -250,7 +250,7 @@ func TestDocumentedSuitesAreValid(t *testing.T) {
 	}
 }
 
-// publishedChannels are the distribution channels yahiko is actually
+// publishedChannels are the distribution channels himorime is actually
 // available through. A README or install page that tells people to use any
 // other package manager would promise something that does not exist; add a
 // channel here only once the package is published.
@@ -258,7 +258,7 @@ var publishedChannels = []string{"go install", "GitHub Releases"}
 
 func TestDocsDoNotPromiseUnpublishedPackages(t *testing.T) {
 	t.Parallel()
-	unpublished := []string{"brew install", "aqua g", "mise use", "yay -S", "paru -S", "winget install", "scoop install", "apt install yahiko", "nix-env", "choco install"}
+	unpublished := []string{"brew install", "aqua g", "mise use", "yay -S", "paru -S", "winget install", "scoop install", "apt install himorime", "nix-env", "choco install"}
 	for _, path := range []string{filepath.Join(root, "README.md"), filepath.Join(root, "website", "content", "install.md")} {
 		text := read(t, path)
 		for _, u := range unpublished {
@@ -274,7 +274,7 @@ func TestDocsDoNotPromiseUnpublishedPackages(t *testing.T) {
 func TestSchemaURLIsConsistent(t *testing.T) {
 	t.Parallel()
 	if !strings.Contains(string(schema.Suite), `"$id": "`+schema.SuiteURL+`"`) {
-		t.Errorf("schema/yahiko.schema.json $id is not %s", schema.SuiteURL)
+		t.Errorf("schema/himorime.schema.json $id is not %s", schema.SuiteURL)
 	}
 	if !strings.Contains(string(schema.Report), `"$id": "`+schema.ReportURL+`"`) {
 		t.Errorf("schema/report.schema.json $id is not %s", schema.ReportURL)

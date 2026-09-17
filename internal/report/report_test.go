@@ -11,11 +11,11 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/exitcode"
-	"github.com/nao1215/yahiko/internal/metric"
-	"github.com/nao1215/yahiko/internal/runner"
-	"github.com/nao1215/yahiko/schema"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/exitcode"
+	"github.com/nao1215/himorime/internal/metric"
+	"github.com/nao1215/himorime/internal/runner"
+	"github.com/nao1215/himorime/schema"
 )
 
 func samples(center time.Duration, n int, spread float64) []time.Duration {
@@ -55,9 +55,9 @@ func judge(mode Mode, fail bool, benches ...runner.BenchmarkResult) *Report {
 	for _, b := range benches {
 		suite.Benchmarks = append(suite.Benchmarks, b.Benchmark)
 	}
-	r := &Report{YahikoVersion: "v1.0.0", StartedAt: time.Unix(0, 0).UTC(), FinishedAt: time.Unix(1, 0).UTC(),
+	r := &Report{HimorimeVersion: "v1.0.0", StartedAt: time.Unix(0, 0).UTC(), FinishedAt: time.Unix(1, 0).UTC(),
 		Environment: Environment{OS: "linux", Arch: "amd64", CPUModel: "Test CPU", LogicalCPUs: 4, GoVersion: "go1.26"}}
-	Judge(r, []SuiteInput{{Suite: suite, File: "yahiko.yaml", Benchmarks: benches}}, Options{Mode: mode, Seed: 42, FailOnInconclusive: fail})
+	Judge(r, []SuiteInput{{Suite: suite, File: "himorime.yaml", Benchmarks: benches}}, Options{Mode: mode, Seed: 42, FailOnInconclusive: fail})
 	return r
 }
 
@@ -484,7 +484,7 @@ func TestGitHubSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := out.String()
-	for _, want := range []string{"## ❌ yahiko benchmark comparison: performance regression", "| Benchmark | Command | Base | Head |", "| slow | tool |", "REGRESSION", "seed 42"} {
+	for _, want := range []string{"## ❌ himorime benchmark comparison: performance regression", "| Benchmark | Command | Base | Head |", "| slow | tool |", "REGRESSION", "seed 42"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("summary lacks %q:\n%s", want, s)
 		}
@@ -492,7 +492,7 @@ func TestGitHubSummary(t *testing.T) {
 	ok := judge(ModeRun, false, runResult("x", "", map[string][]time.Duration{"a": samples(time.Millisecond, 10, 0)}, "a"))
 	out.Reset()
 	_ = WriteGitHubSummary(&out, ok)
-	if !strings.HasPrefix(out.String(), "## ✅ yahiko benchmarks: no regression") {
+	if !strings.HasPrefix(out.String(), "## ✅ himorime benchmarks: no regression") {
 		t.Fatalf("summary = %s", out.String())
 	}
 }

@@ -7,7 +7,7 @@
 //	...
 //	<!-- END GENERATED: commands -->
 //
-//	<!-- example: examples/startup/yahiko.yaml -->
+//	<!-- example: examples/startup/himorime.yaml -->
 //	```yaml
 //	...
 //	```
@@ -28,10 +28,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/cli"
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/exitcode"
-	"github.com/nao1215/yahiko/schema"
+	"github.com/nao1215/himorime/internal/cli"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/exitcode"
+	"github.com/nao1215/himorime/schema"
 )
 
 var (
@@ -183,7 +183,7 @@ func variables() string {
 }
 
 // configReference renders one table per object of the suite schema, from the
-// descriptions in schema/yahiko.schema.json, keeping the schema's key order.
+// descriptions in schema/himorime.schema.json, keeping the schema's key order.
 func configReference() (string, error) {
 	var root map[string]any
 	if err := json.Unmarshal(schema.Suite, &root); err != nil {

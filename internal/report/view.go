@@ -5,8 +5,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/nao1215/yahiko/internal/metric"
-	"github.com/nao1215/yahiko/internal/proc"
+	"github.com/nao1215/himorime/internal/metric"
+	"github.com/nao1215/himorime/internal/proc"
 )
 
 // The view helpers turn judged results into the text the terminal table,

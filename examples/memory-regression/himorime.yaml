@@ -1,9 +1,9 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: detect a peak RSS regression.
-# https://nao1215.github.io/yahiko/cookbook/#detect-a-peak-rss-regression
+# https://nao1215.github.io/himorime/cookbook/#detect-a-peak-rss-regression
 #
-#   yahiko compare --against main examples/memory-regression
+#   himorime compare --against main examples/memory-regression
 version: "1"
 
 suite:

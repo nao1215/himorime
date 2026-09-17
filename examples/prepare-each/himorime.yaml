@@ -1,7 +1,7 @@
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
+# yaml-language-server: $schema=../../schema/himorime.schema.json
 #
 # Recipe: reset state before every run with prepare_each.
-# https://nao1215.github.io/yahiko/cookbook/#reset-state-before-every-run
+# https://nao1215.github.io/himorime/cookbook/#reset-state-before-every-run
 version: "1"
 
 suite:

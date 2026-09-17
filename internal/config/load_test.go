@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/metric"
+	"github.com/nao1215/himorime/internal/metric"
 )
 
 func TestLoadAppliesDefaults(t *testing.T) {
@@ -32,7 +32,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if !reflect.DeepEqual(b.Regression, want) {
 		t.Errorf("regression defaults = %+v, want %+v", b.Regression, want)
 	}
-	if filepath.Base(s.Path) != "yahiko.yaml" || s.Dir != filepath.Dir(s.Path) {
+	if filepath.Base(s.Path) != "himorime.yaml" || s.Dir != filepath.Dir(s.Path) {
 		t.Errorf("paths = %s, %s", s.Path, s.Dir)
 	}
 }
@@ -354,7 +354,7 @@ func TestIssuePositions(t *testing.T) {
 	if is.Line != 9 || is.Column != 15 || is.Field != "benchmarks[0].baseline" || is.Hint == "" {
 		t.Fatalf("issue = %+v", is)
 	}
-	if !strings.HasPrefix(is.String(), filepath.Join(filepath.Dir(is.File), "yahiko.yaml")+":9:15: benchmarks[0].baseline:") {
+	if !strings.HasPrefix(is.String(), filepath.Join(filepath.Dir(is.File), "himorime.yaml")+":9:15: benchmarks[0].baseline:") {
 		t.Fatalf("String() = %q", is.String())
 	}
 }

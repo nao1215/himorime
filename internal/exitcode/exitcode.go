@@ -1,4 +1,4 @@
-// Package exitcode defines yahiko's exit statuses, a stable public contract.
+// Package exitcode defines himorime's exit statuses, a stable public contract.
 //
 // The table returned by All is the single source for the Exit Codes
 // documentation page; TestDocsExitCodesInSync fails when the page and this
@@ -19,7 +19,7 @@ const (
 	// Execution: a command, hook, build or Git operation failed, timed out,
 	// or the run was interrupted.
 	Execution = 4
-	// Internal: a bug or an unexpected environment failure inside yahiko.
+	// Internal: a bug or an unexpected environment failure inside himorime.
 	Internal = 5
 	// Metric: a requested metric could not be measured, because the platform
 	// does not support it or reading it failed.
@@ -41,7 +41,7 @@ func All() []Code {
 		{Config, "config", "A suite file is not valid YAML, does not match the schema, or fails semantic validation. Nothing was executed."},
 		{Usage, "usage", "The command line is invalid: an unknown flag or command, a missing argument, or no benchmark matched the selection."},
 		{Execution, "execution", "A measured command, hook or build failed or timed out, a Git operation failed, the base revision could not be resolved, or the run was interrupted."},
-		{Internal, "internal", "yahiko hit an unexpected internal error. Please report it."},
+		{Internal, "internal", "himorime hit an unexpected internal error. Please report it."},
 		{Metric, "metric", "A requested metric (throughput, cpu or memory) could not be measured: this platform does not support it and metrics.unsupported is fail, or the operating system did not report it. The commands themselves ran."},
 	}
 }

@@ -20,14 +20,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nao1215/yahiko/internal/config"
-	"github.com/nao1215/yahiko/internal/metric"
-	"github.com/nao1215/yahiko/internal/proc"
-	"github.com/nao1215/yahiko/internal/redact"
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/metric"
+	"github.com/nao1215/himorime/internal/proc"
+	"github.com/nao1215/himorime/internal/redact"
 )
 
 // cleanupGrace bounds cleanup hooks started after the run was interrupted:
-// the user asked yahiko to stop, so cleanup gets a fair chance but no more.
+// the user asked himorime to stop, so cleanup gets a fair chance but no more.
 const cleanupGrace = 30 * time.Second
 
 // stderrTailBytes bounds how much of a failing command's standard error is
@@ -106,7 +106,7 @@ func (r *Runner) logf(format string, args ...any) {
 	if r.Log == nil {
 		return
 	}
-	fmt.Fprintf(r.Log, "yahiko: "+format+"\n", args...)
+	fmt.Fprintf(r.Log, "himorime: "+format+"\n", args...)
 }
 
 func (r *Runner) environ() []string {
@@ -690,7 +690,7 @@ func (r *Runner) outputPath(setting string, st *sideState, name string, capture 
 }
 
 func openOutput(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) //nolint:gosec // G304: confined to ${workdir} or yahiko's private temp dir by outputPath
+	return os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) //nolint:gosec // G304: confined to ${workdir} or himorime's private temp dir by outputPath
 }
 
 func sanitize(s string) string {
@@ -762,7 +762,7 @@ func (r *Runner) resolvePath(p string, vars config.Vars, base string, roots ...s
 }
 
 func (r *Runner) tail(path string) string {
-	f, err := os.Open(path) //nolint:gosec // G304: a capture file yahiko created in its temp dir
+	f, err := os.Open(path) //nolint:gosec // G304: a capture file himorime created in its temp dir
 	if err != nil {
 		return ""
 	}
