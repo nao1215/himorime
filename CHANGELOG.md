@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 
+- `bench/thirdparty/json` measures jq, gojq and jaq writing one field of every line of generated JSON Lines, at 5MiB and at 100MiB, as a worked example of measuring a program you did not write. The input comes from the generator in `bench/thirdparty/gen`, the three outputs are compared byte for byte before measuring, and every tool is installed at a pinned version. `.github/workflows/thirdparty.yml` runs it weekly on a pinned runner to keep the example correct, and publishes nothing: the numbers of a run are in its job summary and its artifact. The new Real-world suites page says what each suite shows. No suite carries a budget, so the speed of a program this repository does not maintain never fails its CI.
 - `metrics.throughput.work` in JSON has `measured_min` and `measured_max`, the work each run was measured over, and CSV has `measured_work_min` and `measured_work_max` stat rows for `throughput`. A `file_size` is read before every run, so the work can differ between runs and between revisions. See Throughput on the Metrics page.
 
 ### Fixed

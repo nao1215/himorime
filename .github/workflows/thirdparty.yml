@@ -1,0 +1,83 @@
+name: ThirdParty
+
+# Runs the suites in bench/thirdparty, which measure programs nobody here
+# maintains. They exist as worked examples of a himorime.yaml for a real
+# program, so this job keeps them correct as those tools and himorime change.
+# It publishes nothing: the numbers of a run are in its job summary and in its
+# artifact, because a number measured on a shared runner says less than the
+# suite a reader can run today.
+#
+# The job fails only when a measurement fails - a tool that cannot be
+# installed, a command that exits non-zero, or himorime reporting an error.
+# The speed of a program this repository does not maintain is never a reason
+# to fail a change here, and no suite carries a budget.
+#
+# The runner is pinned rather than ubuntu-latest: when a suite starts failing,
+# it has to be possible to tell a change of tool from a change of image.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 05:40 UTC on Mondays.
+    - cron: "40 5 * * 1"
+  pull_request:
+    paths:
+      - "bench/thirdparty/**"
+      - ".github/workflows/thirdparty.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: nao1215/setup-himorime@b2896dee554ef31ea979f0388d9be22779ce73a2 # v0.1.1
+        with:
+          version: v0.1.2
+
+      # Every tool is pinned: a go install leg pins a module version, whose
+      # integrity comes from the Go checksum database, and a downloaded
+      # binary pins a version and a SHA256 checked before it is installed.
+      - name: Install the JSON processors
+        env:
+          JQ_VERSION: "1.8.1"
+          JQ_SHA256: "020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d"
+          JAQ_VERSION: "2.3.0"
+          JAQ_SHA256: "099b8bb519f5ab4a3dc3c1ddedd50770a9cd8cf64129c8de6353572b6f18007a"
+        run: |
+          set -euo pipefail
+          bin="$(go env GOPATH)/bin"
+          mkdir -p "${bin}"
+          # The image ships a jq of its own; a pinned one replaces it so the
+          # version in the report is the version in this file.
+          curl -fsSL -o "${RUNNER_TEMP}/jq" \
+            "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-linux-amd64"
+          echo "${JQ_SHA256}  ${RUNNER_TEMP}/jq" | sha256sum --check -
+          install -m 0755 "${RUNNER_TEMP}/jq" "${bin}/jq"
+          # jaq is written in Rust, so it comes from a release binary rather
+          # than from go install.
+          curl -fsSL -o "${RUNNER_TEMP}/jaq" \
+            "https://github.com/01mf02/jaq/releases/download/v${JAQ_VERSION}/jaq-x86_64-unknown-linux-gnu"
+          echo "${JAQ_SHA256}  ${RUNNER_TEMP}/jaq" | sha256sum --check -
+          install -m 0755 "${RUNNER_TEMP}/jaq" "${bin}/jaq"
+          go install github.com/itchyny/gojq/cmd/gojq@v0.12.17
+      - name: Measure the JSON processors
+        run: >
+          himorime run bench/thirdparty/json
+          --format json --output "$RUNNER_TEMP/json.json"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: himorime-thirdparty-reports
+          path: ${{ runner.temp }}/*.json
+          retention-days: 7
