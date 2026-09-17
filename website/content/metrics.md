@@ -195,12 +195,16 @@ learns so during a run. With `skip`, the rest is measured, the metric is
 Latency is measured around the process only. CPU time and peak RSS come from
 statistics the operating system already keeps for an exited process, read
 after the measured interval ends; nothing samples the command while it runs.
-On Linux, the `BenchmarkRunUsage` Go benchmark in `internal/proc` shows no
-difference between starting and reaping a process with and without
-collection beyond run-to-run noise (about 0.8ms per process either way on the
-development machine), and the `collector overhead` benchmark in `bench/`
-measures the same end to end on every pull request. On Windows collection is
-two system calls per run, also after the measured interval.
+On Windows collection is two system calls per run, also after the measured
+interval.
+
+The `collector overhead` benchmark in `bench/` measures what collection costs
+end to end: the same small suite run by himorime with latency only and with
+every metric. It runs on every pull request, and the table below is produced
+by `make bench-docs` on the machine named under it.
+
+<!-- himorime:begin overhead -->
+<!-- himorime:end overhead -->
 
 ## What himorime does not measure
 

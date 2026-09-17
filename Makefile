@@ -101,6 +101,10 @@ release-smoke: ## Build a snapshot release locally and smoke-test the artifacts
 bench: ## Run the dogfood suite that measures himorime itself
 	go run . run bench
 
+.PHONY: bench-docs
+bench-docs: ## Regenerate the overhead table in website/content/metrics.md
+	go run -ldflags '$(LDFLAGS)' . run --quiet --filter '^collector overhead$$' --format markdown --output website/content/metrics.md --section overhead bench
+
 .PHONY: check
 check: fmt vet lint test test-race e2e ## Run what CI runs, except the release and site jobs
 
