@@ -1,11 +1,12 @@
 ---
 title: Installation
-description: Install himorime with go install or from GitHub Releases, and verify the checksums, signature, SBOM and provenance of a release.
+description: Install himorime with go install, Homebrew, GitHub Releases or the setup-himorime GitHub Action, and verify the checksums, signature, SBOM and provenance of a release.
 toc: true
 ---
 
 himorime is a single binary with no runtime dependencies. `git` is needed for
-`himorime compare` and `himorime ci`; `himorime run` does not use it.
+`himorime compare` and `himorime ci`; `himorime run` uses it only to record
+the commit in the report, and works without it.
 
 ## go install
 
@@ -15,6 +16,29 @@ $ go install github.com/nao1215/himorime@latest
 
 This needs Go 1.26 or later and installs into `$(go env GOPATH)/bin`.
 
+## Homebrew
+
+On macOS:
+
+```console
+$ brew install --cask nao1215/tap/himorime
+```
+
+The cask installs the shell completions for bash, zsh and fish.
+
+## GitHub Actions
+
+[setup-himorime](https://github.com/nao1215/setup-himorime) installs a
+prebuilt release on Linux, macOS and Windows runners and verifies it against
+`checksums.txt`:
+
+```yaml
+- uses: nao1215/setup-himorime@v0
+- run: himorime ci
+```
+
+See [GitHub Actions](/github-actions/) for a complete workflow.
+
 ## GitHub Releases
 
 Every release on [GitHub Releases](https://github.com/nao1215/himorime/releases)
@@ -23,7 +47,7 @@ carries archives for Linux, macOS and Windows on amd64 and arm64, `.deb`,
 a signature and build provenance.
 
 ```console
-$ VERSION=1.0.0
+$ VERSION=0.1.0
 $ curl -fsSLO "https://github.com/nao1215/himorime/releases/download/v${VERSION}/himorime_${VERSION}_linux_amd64.tar.gz"
 $ tar -xzf "himorime_${VERSION}_linux_amd64.tar.gz" himorime
 $ ./himorime version
