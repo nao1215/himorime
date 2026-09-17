@@ -88,6 +88,12 @@ target = "layouts"
 source = "assets"
 target = "assets"
 
+# The logo, mounted as a processable asset so the layouts derive a sized hero
+# image, a social card and a favicon from the committed file at build time.
+[[module.mounts]]
+source = "../doc/images"
+target = "assets/imgsrc"
+
 # The JSON Schemas are served from the site as well as from the repository,
 # so the Configuration and Reports pages can link to a stable address.
 [[module.mounts]]

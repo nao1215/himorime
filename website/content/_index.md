@@ -1,10 +1,9 @@
 ---
-description: himorime checks whether a command-line program stays within its performance budget — latency, throughput, CPU time and peak RSS — from a YAML suite kept in your repository, locally and in CI.
+description: himorime measures the latency, throughput, CPU time and peak RSS of a command-line program from a YAML suite kept in your repository, checks budgets and fails CI when a change makes it worse.
 ---
 
-himorime answers one question for a command-line program: **does this CLI stay
-within its performance budget?** You keep the benchmarks, budgets and
-tolerances in a `himorime.yaml` next to your code. The same file and the same
+himorime measures how fast and how lean a command-line program is. You keep
+the benchmarks, budgets and tolerances in a `himorime.yaml` next to your code. The same file and the same
 command run on a laptop and in GitHub Actions, and the exit status tells CI
 whether performance got worse.
 
@@ -24,10 +23,10 @@ df large    31.40MiB  31.52MiB  +128.00KiB  +0.4%         low        +5%  PASS
 
 It measures:
 
-- **latency** — wall-clock time of each run, with percentiles;
-- **throughput** — work you declare (records, bytes of a file) per second;
-- **CPU time and utilization** — user and system time of the process tree;
-- **peak RSS** — the largest resident memory of any process in the tree.
+- latency: wall-clock time of each run, with percentiles;
+- throughput: work you declare (records, bytes of a file) per second;
+- CPU time and utilization: user and system time of the process tree;
+- peak RSS: the largest resident memory of any process in the tree.
 
 Each metric can have absolute budgets (`p95 <= 100ms`, `>= 50MiB/s`,
 `<= 64MiB`) and a tolerance against a Git base revision, judged in the

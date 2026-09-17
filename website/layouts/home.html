@@ -1,6 +1,13 @@
 {{ define "main" }}
 <article>
+<div class="hero">
+{{- with resources.Get "imgsrc/himorime-logo.jpeg" }}
+{{- /* The logo sits in wide margins; crop them so it is legible at page width. */ -}}
+{{- $logo := (.Crop "1500x340 center").Resize "900x q90" }}
+<img class="hero-logo" src="{{ $logo.RelPermalink }}" alt="himorime" width="{{ $logo.Width }}" height="{{ $logo.Height }}">
+{{- end }}
 <h1>{{ site.Params.tagline }}</h1>
+</div>
 {{ .Content }}
 </article>
 {{ end }}

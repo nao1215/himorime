@@ -5,12 +5,12 @@ are all welcome.
 
 ## Before you start
 
-- **Bug:** open an issue with the himorime version, your OS, the suite, the
+- Bug: open an issue with the himorime version, your OS, the suite, the
   command line, and what you expected and got.
-- **Feature:** open an issue first, so the direction can be agreed before you
+- Feature: open an issue first, so the direction can be agreed before you
   write code. himorime deliberately stays small; see the non-goals in the
   documentation's [Comparison](https://nao1215.github.io/himorime/comparison/).
-- **Security issue:** follow [SECURITY.md](./SECURITY.md), not a public issue.
+- Security issue: follow [SECURITY.md](./SECURITY.md), not a public issue.
 
 ## Development
 
