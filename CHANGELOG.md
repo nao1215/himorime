@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- On Linux the peak RSS floor has 1MiB of slack. Read exactly, it could come
+  out a few pages below the peak folded into a command, and a coverage build
+  on a GitHub runner reported one run of `true` in ten above its floor.
+
 ## [0.1.2] - 2026-09-17
 
 ### Added
