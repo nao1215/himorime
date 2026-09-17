@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Install yahiko, write a first suite with yahiko init, run it, and compare your working tree with main.
+description: Install yahiko, write a first suite with yahiko init, add budgets for latency, CPU and memory, run it, and compare your working tree with main.
 ---
 
 ## 1. Install
@@ -72,7 +72,41 @@ Without `runs`, yahiko measures adaptively: at least 10 runs and 2 seconds
 per command, at most 100 runs. Progress goes to standard error and the report
 to standard output, so `yahiko run --format json > result.json` stays clean.
 
-## 5. Compare with main
+## 5. Add budgets
+
+A budget is a limit the command must stay within on every run. Latency is
+always measured; switch on the other metrics you care about:
+
+```yaml
+version: "1"
+
+suite:
+  name: my benchmarks
+
+benchmarks:
+  - name: help output
+    metrics:
+      cpu: true
+      memory: true
+    commands:
+      mytool:
+        command: [mytool, --help]
+    budget:
+      mytool:
+        latency: {p95: "<= 50ms"}
+        cpu: {total: {median: "<= 30ms"}}
+        memory: {peak_rss: {max: "<= 32MiB"}}
+```
+
+```console
+$ yahiko run
+```
+
+The report now has a latency, a CPU, a memory and a budgets table. A missed
+budget says `FAIL`, and yahiko exits 1. To declare throughput, tell yahiko how
+much work one run does; see [Metrics](/metrics/#throughput).
+
+## 6. Compare with main
 
 To compare revisions, let the suite build the program and measure the build:
 
@@ -93,11 +127,12 @@ $ yahiko compare --against main
 
 yahiko checks `main` out into a temporary Git worktree, builds both `main` and
 your working tree (uncommitted changes included), measures them interleaved
-on this machine, and exits 1 only when a slowdown beyond the tolerance is
-statistically confirmed. Your working tree, index and branches are not
+on this machine, and exits 1 only when a degradation beyond the tolerance is
+statistically confirmed, on latency or on any other metric the suite
+measures. Your working tree, index and branches are not
 touched, and the worktree is removed even when you press Ctrl+C.
 
-## 6. Run it on pull requests
+## 7. Run it on pull requests
 
 See [GitHub Actions](/github-actions/) for a read-only workflow that runs
 `yahiko ci` on every pull request.

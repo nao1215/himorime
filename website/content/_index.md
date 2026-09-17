@@ -1,20 +1,37 @@
 ---
-description: yahiko measures command-line programs from a versioned YAML suite kept in your repository, compares them with each other or with a Git base revision, checks performance budgets and fails CI on confirmed regressions.
+description: yahiko checks whether a command-line program stays within its performance budget — latency, throughput, CPU time and peak RSS — from a YAML suite kept in your repository, locally and in CI.
 ---
 
-yahiko keeps a benchmark suite for your command-line program in the
-repository, runs it the same way on a laptop and in CI, and tells you
-whether a change made things slower. It compares commands with each other,
-compares a Git revision with your working tree, checks the budgets you set,
-and exits non-zero on a confirmed regression.
+yahiko answers one question for a command-line program: **does this CLI stay
+within its performance budget?** You keep the benchmarks, budgets and
+tolerances in a `yahiko.yaml` next to your code. The same file and the same
+command run on a laptop and in GitHub Actions, and the exit status tells CI
+whether performance got worse.
 
 ```console
 $ yahiko compare --against main
 suite: jsonize benchmarks (yahiko.yaml)
-BENCHMARK     BASE     HEAD  CHANGE  CONFIDENCE  BUDGET  RESULT
-df small    1.84ms   1.89ms   +2.7%         low    +10%  PASS
-df large   14.20ms  16.41ms  +15.6%       98.1%    +10%  REGRESSION
+latency
+BENCHMARK     BASE     HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
+df small    1.84ms   1.89ms  +50.00µs   +2.7%         low       +10%  PASS
+df large   14.20ms  16.41ms   +2.21ms  +15.6%       98.1%       +10%  REGRESSION
+
+peak rss
+BENCHMARK       BASE      HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
+df small     9.82MiB   9.84MiB  +16.00KiB  +0.2%         low        +5%  PASS
+df large    31.40MiB  31.52MiB  +128.00KiB  +0.4%         low        +5%  PASS
 ```
+
+It measures:
+
+- **latency** — wall-clock time of each run, with percentiles;
+- **throughput** — work you declare (records, bytes of a file) per second;
+- **CPU time and utilization** — user and system time of the process tree;
+- **peak RSS** — the largest resident memory of any process in the tree.
+
+Each metric can have absolute budgets (`p95 <= 100ms`, `>= 50MiB/s`,
+`<= 64MiB`) and a tolerance against a Git base revision, judged in the
+direction that is worse for it.
 
 ## Where to go
 
@@ -23,6 +40,7 @@ df large   14.20ms  16.41ms  +15.6%       98.1%    +10%  REGRESSION
 | try it in a minute | [Getting started](/getting-started/) |
 | install it | [Installation](/install/) |
 | write a suite | [Configuration](/configuration/) |
+| understand what each metric includes | [Metrics](/metrics/) |
 | look up a command or flag | [Commands](/commands/) |
 | choose an output format | [Reports](/reports/) |
 | understand PASS, REGRESSION and INCONCLUSIVE | [Regression detection](/regression-detection/) |
@@ -34,10 +52,15 @@ df large   14.20ms  16.41ms  +15.6%       98.1%    +10%  REGRESSION
 
 ## What yahiko measures, and what it does not
 
-yahiko measures the wall-clock time of a whole process, from starting it to
-reaping it, exactly as you wrote the command. It does not subtract shell
-start-up time, it does not profile, and it cannot remove the noise of a
-shared CI runner. It reduces the damage that noise does: commands run
-interleaved, a regression needs statistical confidence, and a result that
-cannot be told apart from noise is reported as inconclusive rather than
-passed or failed. See [Regression detection](/regression-detection/).
+yahiko runs the command exactly as you wrote it, measures the whole process
+from start to reaping, and reads CPU time and peak memory from the operating
+system when it exits. It does not profile, it does not see inside a language
+runtime, and it cannot remove the noise of a shared CI runner. It reduces the
+damage that noise does: revisions run interleaved, a regression needs
+statistical confidence, and a result that cannot be told apart from noise is
+reported as inconclusive rather than passed or failed. Its results are
+evidence for a decision in a pull request, not a guarantee. See
+[Regression detection](/regression-detection/) and [Metrics](/metrics/).
+
+yahiko checks performance. To check that a CLI *behaves* correctly — exit
+codes, output, files — use [atago](https://github.com/nao1215/atago).

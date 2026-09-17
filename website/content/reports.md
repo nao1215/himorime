@@ -1,70 +1,116 @@
 ---
 title: Reports
-description: yahiko's terminal table, JSON with raw samples, CSV, Markdown and GitHub Actions job summary, and what each column means.
+description: yahiko's terminal tables, JSON with raw samples of every metric, long-format CSV, samples CSV, Markdown, the GitHub Actions job summary and annotations, and what each column means.
 toc: true
 ---
 
 `--format` chooses what goes to standard output (or to `--output FILE`):
-`table` (default), `json`, `csv`, `markdown` or `github`. `--summary FILE`
-additionally appends a GitHub-flavored Markdown summary; `yahiko ci` does that
-to `$GITHUB_STEP_SUMMARY` on its own. A suite can also write report files
-after every run:
+`table` (default), `json`, `csv`, `samples-csv`, `markdown` or `github`.
+`--summary FILE` additionally appends a GitHub-flavored Markdown summary;
+`yahiko ci` does that to `$GITHUB_STEP_SUMMARY` on its own. A suite can also
+write report files after every run:
 
 ```yaml
 report:
   outputs:
     - format: json
       path: bench/result.json
+    - format: csv
+      path: bench/result.csv
     - format: markdown
       path: bench/result.md
 ```
 
 Progress lines go to standard error and never into a report. A report that
-cannot be written fails the run with exit status 4.
+cannot be written fails the run with exit status 4. When the exit status is
+not 0, the last line on standard error says why in words.
 
-## Terminal table
+## Terminal tables
 
-A plain run shows one row per command:
-
-```text
-BENCHMARK       COMMAND    MEDIAN    MEAN      STDDEV    RELATIVE    RESULT
-df small        jsonize     1.82ms    1.86ms    0.09ms    1.00x       PASS
-df small        jc         28.41ms   29.02ms    1.31ms   15.61x       PASS
-```
-
-- `RELATIVE` is the command's median divided by the median of the benchmark's
-  `baseline` command, or of its fastest command when no baseline is set.
-- `RESULT` is `PASS`, `OVER BUDGET` or `ERROR`. The lines under the table say
-  which budget was missed, why a command failed, and the tail of its standard
-  error.
-
-A comparison shows one row per compared command:
+A plain run shows one table per metric group the suite measures, then a
+budgets table when there are budgets. A suite that measures only latency
+shows just the first table:
 
 ```text
-BENCHMARK       BASE       HEAD       CHANGE     CONFIDENCE    BUDGET    RESULT
-df small         1.84ms     1.89ms      +2.7%       low         +10%     PASS
-df large        14.20ms    16.41ms     +15.6%       98.1%       +10%     REGRESSION
+suite: jsonize benchmarks (yahiko.yaml)
+latency
+BENCHMARK  COMMAND   MEDIAN     MEAN    STDDEV  RELATIVE  RESULT
+df large   jsonize  14.20ms  14.31ms  310.20µs     1.00x  PASS
+df large   jc       41.08ms  41.77ms    1.02ms     2.89x  PASS
+
+throughput
+BENCHMARK  COMMAND       MEDIAN       MEAN        MIN  RESULT
+df large   jsonize  72.10MiB/s  71.55MiB/s  68.02MiB/s  PASS
+df large   jc       24.93MiB/s  24.51MiB/s  23.60MiB/s  PASS
+
+cpu
+BENCHMARK  COMMAND      USER   SYSTEM     TOTAL  UTILIZATION  RESULT
+df large   jsonize  12.80ms   1.90ms   14.70ms       103.5%  PASS
+df large   jc       35.10ms   5.20ms   40.30ms        98.1%  PASS
+
+memory
+BENCHMARK  COMMAND  PEAK RSS       MAX  RESULT
+df large   jsonize   9.82MiB  10.07MiB  PASS
+df large   jc       31.40MiB  31.52MiB  OVER BUDGET
+
+budgets
+BENCHMARK  COMMAND  METRIC              BUDGET  MEASURED  RESULT
+df large   jsonize  latency p95     <= 30.00ms   14.90ms  PASS
+df large   jc       peak rss max  <= 16.00MiB  31.52MiB  FAIL
+  df large / jc: budget peak rss max <= 16.00MiB not met (measured 31.52MiB)
+
+1 passed, 1 over budget · 1 benchmark · seed 42 · exit 1
+yahiko: exit 1: performance check failed: a budget or regression threshold was violated (the measurement itself succeeded)
 ```
 
-- `BASE` and `HEAD` are the regression metric (median unless configured).
-- `CHANGE` is `(HEAD - BASE) / BASE`.
-- `CONFIDENCE` is the bootstrap probability that the change exceeds `BUDGET`
-  in the direction it went, shown as `low` below 50%.
-- `BUDGET` is the tolerated slowdown, `regression.max_percent`.
-- `RESULT` is `PASS`, `IMPROVED`, `REGRESSION`, `INCONCLUSIVE`, `OVER BUDGET`
-  or `ERROR`. See [Regression detection](/regression-detection/).
+- `RELATIVE` is the command's median latency divided by the median of the
+  benchmark's `baseline` command, or of its fastest command when no baseline
+  is set.
+- CPU values are medians over runs; `UTILIZATION` above 100% means more than
+  one CPU was busy. `PEAK RSS` is the median of the runs' peaks and `MAX` the
+  highest run.
+- Each table's `RESULT` is about that metric group: `PASS`, `OVER BUDGET`,
+  `UNSUPPORTED` (skipped on this platform), `METRIC ERROR` or `ERROR`. The
+  budgets table says `PASS`, `FAIL`, `SKIPPED` or `NO DATA` per budget.
+- The lines under the tables say which budget was missed, which metric was not
+  measured and why, why a command failed, and the tail of its standard error.
 
-Durations are rounded for reading: nanoseconds, microseconds, milliseconds or
-seconds with two decimals. Colors are used only on an interactive terminal
-and never by `yahiko ci`; `--no-color` and `NO_COLOR` turn them off.
+A comparison shows one table per compared metric: `latency`, and `throughput`,
+`cpu total` and `peak rss` when the suite measures them.
+
+```text
+latency
+BENCHMARK     BASE     HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
+df small    1.84ms   1.89ms  +50.00µs   +2.7%         low       +10%  PASS
+df large   14.20ms  16.41ms   +2.21ms  +15.6%       98.1%       +10%  REGRESSION
+
+throughput
+BENCHMARK        BASE        HEAD         DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
+df large   72.10MiB/s  62.40MiB/s  -9.70MiB/s  -13.5%       97.2%        -8%  REGRESSION
+```
+
+- `BASE` and `HEAD` are the compared statistic (median unless configured).
+- `DIFF` is `HEAD - BASE` and `CHANGE` is `(HEAD - BASE) / BASE`. Their sign
+  is the direction the value moved, not whether that is better.
+- `TOLERANCE` is `max_percent` in the metric's worse direction: `+` for
+  latency, CPU time and peak RSS, `-` for throughput.
+- `CONFIDENCE` is the bootstrap probability that the change exceeds the
+  tolerance in the direction it went, shown as `low` below 50%.
+- `RESULT` is `PASS`, `IMPROVED`, `REGRESSION`, `INCONCLUSIVE`, `SKIPPED`,
+  `OVER BUDGET` or an error. See [Regression detection](/regression-detection/).
+
+Values are rounded for reading: durations in ns, µs, ms or s, sizes in B, KiB,
+MiB or GiB, rates with a k, M or G prefix, all with two decimals. Colors are
+used only on an interactive terminal and never by `yahiko ci`; `--no-color`
+and `NO_COLOR` turn them off.
 
 ## Geometric mean
 
 When a suite has at least two benchmarks and every benchmark ran the same
 commands to completion, the table ends with the geometric mean of each
-command's ratio across the cases: to the common baseline when all benchmarks
-name the same one, otherwise to each case's fastest command. In a comparison
-it is the geometric mean of the head/base ratios.
+command's latency ratio across the cases: to the common baseline when all
+benchmarks name the same one, otherwise to each case's fastest command. In a
+comparison it is the geometric mean of the head/base latency ratios.
 
 It is supplementary. The per-case rows are the result. An arithmetic mean of
 ratios would let one large case dominate, so it is never used. If a command
@@ -78,45 +124,99 @@ out.
 [report.schema.json](https://raw.githubusercontent.com/nao1215/yahiko/main/schema/report.schema.json).
 
 - `schema_version` is `"1"`. Fields are only added within a version.
-- Every duration is an integer number of nanoseconds, before rounding.
-  `samples_ns` holds every measured run in execution order.
+- For every command and side, `metrics` holds all seven metrics by name. Each
+  has `unit`, `better` (`lower`, `higher` or `neutral`), `scope`, `status`
+  (`measured`, `not_requested`, `unsupported` or `failed`), `reason`, `stats`
+  (count, min, max, mean, median, stddev, cv and `percentiles` keyed by
+  `p90`, `p95`, `p99` and any percentile a budget uses), every raw sample in
+  execution order in `samples`, and for throughput the declared `work`.
+  Values are unrounded numbers in the canonical unit: ns, bytes, work per
+  second, percent. A metric that was not measured has `stats: null` and no
+  samples, never zeros.
+- `mean_ns`, `median_ns`, `stddev_ns`, `min_ns`, `max_ns`, `cv` and
+  `samples_ns` repeat latency in integer nanoseconds.
+- `budgets` lists every budget with `metric`, `aggregation`, `operator`,
+  `limit`, `actual`, `unit`, `status` (`pass`, `fail`, `skipped`, `no_data`)
+  and `reason`.
+- `comparisons` holds each compared metric with `statistic`, `base`, `head`,
+  `difference`, `change_percent`, the bootstrap interval, both tail
+  probabilities, `max_percent`, `min_difference`, the verdict and its reason.
+  `comparison` repeats the latency comparison.
 - `environment` records the operating system, architecture, CPU model, logical
   CPU count, Go version and CI provider. `yahiko_version`, `seed` and `git`
   (head and base commits, and whether the working tree was dirty) complete what
   is needed to reproduce a run. Host names, user names and environment
   variables are never recorded.
-- `relative.vs_baseline` and `relative.vs_fastest` are kept apart.
-- `comparison` holds the change, the bootstrap interval, both tail
-  probabilities, the configured thresholds, the verdict and the reason for an
-  inconclusive one.
-- `summary.exit_code` is the exit status of the run.
+- `summary` counts results, `metric_error` among them, and `exit_code` is the
+  exit status of the run.
 
 ```console
 $ yahiko run --format json --output result.json
-$ jq '.suites[].benchmarks[].commands[] | {name, median: .head.median_ns}' result.json
+$ jq '.suites[].benchmarks[].commands[] | {name, p95: .head.metrics.latency.stats.percentiles.p95, rss: .head.metrics.peak_rss.stats.max}' result.json
 ```
 
 ## CSV
 
-`--format csv` writes one row per command, and per revision in a comparison,
-with a fixed header:
+`--format csv` is long rather than wide: one row per statistic, budget or
+comparison of one metric, so a spreadsheet can filter and pivot on it without
+parsing a cell. The header is fixed:
 
 ```text
-suite,benchmark,command,side,result,count,mean_ns,median_ns,stddev_ns,min_ns,max_ns,cv,vs_baseline,vs_fastest,change_percent,ci_low_percent,ci_high_percent,probability_regression,error_kind,error_message
+suite,benchmark,command,result,record,side,metric,unit,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,reason,error_kind,error_message
 ```
 
-Fields holding commas, quotes or line breaks are quoted.
+- `record` is `stat`, `budget`, `comparison` or `error`.
+- A `stat` row has `side` (`base` or `head`), `metric`, `unit`, `status`,
+  `statistic` (`count`, `min`, `median`, `mean`, `max`, `stddev`, `cv`,
+  percentiles, and `relative_to_baseline` or `relative_to_fastest` for
+  latency) and `value`. A requested metric that was not measured has one row
+  with its status and reason.
+- A `budget` row has `statistic` (the aggregation), `value` (the measured
+  value), `operator`, `limit` and `verdict`.
+- A `comparison` row has `base`, `head`, `difference`, `change_percent`, the
+  interval, `probability_regression`, `max_percent` and `verdict`.
+- Numbers are unrounded, in the canonical unit, without exponents. Fields
+  holding commas, quotes or line breaks are quoted.
+
+`--format samples-csv` writes every raw sample, one row per metric per run:
+
+```text
+suite,benchmark,command,side,run,metric,unit,value
+jsonize benchmarks,df large,jsonize,head,1,latency,ns,14187342
+jsonize benchmarks,df large,jsonize,head,1,peak_rss,bytes,10297344
+```
+
+`run` is the 1-based index of the measured run, so the metrics of one run can
+be joined on it.
 
 ## Markdown
 
-`--format markdown` writes a table per suite with median, mean, standard
-deviation, min, max, run count, both ratios and the result, followed by notes
-and one line describing the machine. Names are escaped, so a `|` in a
-benchmark name cannot break the table. It is meant to be pasted into a README,
-a pull request, a blog post or release notes.
+`--format markdown` writes, per suite, one table per metric group and a
+budgets table when there are budgets (only the latency table for a
+latency-only suite), followed by notes and one line describing the machine.
+Names are escaped, so a `|` in a benchmark name cannot break a table. It is
+meant to be pasted into a README, a pull request, a blog post or release
+notes.
 
-## GitHub Actions job summary
+## GitHub Actions job summary and annotations
 
 `--format github`, `--summary FILE` and `yahiko ci` write the Markdown report
 under a one-line verdict such as `✅ yahiko benchmark comparison: no
-regression`, so the outcome is visible at the top of the job page.
+regression` or `❌ yahiko benchmarks: budget exceeded`, so the outcome is
+visible at the top of the job page.
+
+When `GITHUB_ACTIONS` is `true`, `run`, `compare` and `ci` also print one
+workflow annotation per problem to standard error, which GitHub shows on the
+run page and the pull request:
+
+```text
+::error file=yahiko.yaml,title=yahiko%3A performance budget exceeded::df large / jc: peak rss max budget <= 16.00MiB, measured 31.52MiB
+::error file=yahiko.yaml,title=yahiko%3A performance regression::df large / jsonize: latency 14.20ms -> 16.41ms (+2.21ms, +15.6%25; tolerance +10%25)
+::warning file=yahiko.yaml,title=yahiko%3A inconclusive comparison::...
+::error file=yahiko.yaml,title=yahiko%3A metric could not be measured::...
+::error file=yahiko.yaml,title=yahiko%3A benchmark could not run::...
+```
+
+The titles tell a performance failure (budget, regression) apart from a
+failure to measure (metric, benchmark), and so does the exit status: 1 for
+the former, 4 or 6 for the latter. See [Exit codes](/exit-codes/).

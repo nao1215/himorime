@@ -1,0 +1,13 @@
+# Measured by the "collector overhead" benchmark of bench/yahiko.yaml.
+version: "1"
+suite: {name: all metrics}
+benchmarks:
+  - name: git version
+    metrics:
+      throughput:
+        work: {value: 1, unit: runs}
+      cpu: true
+      memory: true
+      unsupported: skip
+    commands:
+      git: {command: [git, --version]}

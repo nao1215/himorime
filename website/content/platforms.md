@@ -18,8 +18,22 @@ The differences are:
 | Program lookup | `PATH` | `PATH` and `PATHEXT` |
 
 On Windows a process can start a child in the instant between its creation and
-its assignment to the Job Object; such a child is not stopped with the tree.
-The window is microseconds wide.
+its assignment to the Job Object; such a child is not stopped with the tree
+and its CPU time is not counted. The window is microseconds wide.
+
+## Metrics per platform
+
+| Metric | Linux | macOS | Windows | FreeBSD, OpenBSD, NetBSD |
+|---|---|---|---|---|
+| Latency, throughput | monotonic clock | monotonic clock | monotonic clock | monotonic clock |
+| CPU time, utilization | `wait4` usage of the process and waited-for descendants | same as Linux | Job Object accounting of every process in the job | same as Linux |
+| Peak RSS | `ru_maxrss`, kilobytes, largest waited-for process | `ru_maxrss`, bytes, largest waited-for process | peak working set of the started process; unsupported when it started other processes | `ru_maxrss`, kilobytes |
+
+Every value is read after the process exits, without polling. `ru_maxrss` is
+normalized to bytes on every platform. Other Unix systems (Solaris, illumos,
+AIX) build, but report CPU time and peak RSS as unsupported, because their
+`wait4` does not fill `ru_maxrss` the same way. See [Metrics](/metrics/) for
+what each value includes.
 
 FreeBSD, OpenBSD and NetBSD build and pass the linters, but no release
 binaries are published for them and CI does not run the suite there.
@@ -28,5 +42,9 @@ binaries are published for them and CI does not run the suite there.
 
 - Process creation cost differs a lot between operating systems; Windows is
   typically the slowest. Compare results only within one platform.
+- Peak RSS is not comparable across operating systems: page sizes, the
+  loader and what counts as resident differ.
+- A suite that measures memory for a command starting child processes runs on
+  Windows with `metrics.unsupported: skip`; without it, it exits 6 there.
 - Virtual machines and laptops on battery scale CPU frequency. A comparison
   interleaves revisions to spread this out, but it cannot remove it.

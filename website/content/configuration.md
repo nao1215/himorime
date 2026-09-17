@@ -29,12 +29,15 @@ version: "1"
 
 suite:
   name: jsonize benchmarks
-  description: Performance checks for common conversion paths
+  description: Performance budgets for common conversion paths
 
 defaults:
   warmup: 3
   runs: 20
   timeout: 10s
+  metrics:
+    cpu: true
+    memory: true
 
 build:
   command: [go, build, -o, "${artifact}", ./cmd/jz]
@@ -43,6 +46,10 @@ benchmarks:
   - name: parse df output
     tags: [parser, smoke]
     stdin: testdata/df-large.txt
+    metrics:
+      throughput:
+        work:
+          file_size: testdata/df-large.txt
     baseline: jsonize
     commands:
       jsonize:
@@ -52,10 +59,17 @@ benchmarks:
     budget:
       jsonize:
         median: "< 20ms"
+        latency: {p95: "<= 30ms"}
+        throughput: {median: ">= 50MiB/s"}
+        cpu: {total: {median: "<= 25ms"}}
+        memory: {peak_rss: {max: "<= 64MiB"}}
     regression:
       metric: median
       max_percent: 10
       confidence: 0.95
+      throughput: {max_percent: 8}
+      cpu: {max_percent: 10, min_difference: 2ms}
+      memory: {max_percent: 5, min_difference: 1MiB}
 ```
 
 ## Commands
@@ -94,6 +108,62 @@ all commands instead of on whichever ran last.
 
 `--runs` and `--warmup` on the command line override the suite, which is
 handy for a quick smoke run.
+
+## Metrics, budgets and tolerances
+
+Latency is always measured. `metrics` switches on throughput, CPU time and
+peak RSS; see [Metrics](/metrics/) for what each one means and covers on
+each platform.
+
+```yaml
+metrics:
+  latency: true            # always on; allowed for readability
+  throughput:
+    work: {value: 1000, unit: records}   # or {file_size: path}
+  cpu: true                # or {scope: process_tree}
+  memory: true             # or {scope: process_tree}
+  unsupported: fail        # or skip
+```
+
+`cpu`, `memory` and `unsupported` can be set under `defaults.metrics` and
+overridden per benchmark (`cpu: false` turns an inherited setting off).
+Throughput is declared per benchmark, because its work belongs to the
+benchmark's input.
+
+A budget is an absolute limit on one aggregation of one metric of one command,
+checked on every run of `run`, `compare` and `ci`. It is keyed by command name,
+then metric, then aggregation: `min`, `max`, `mean`, `median`, or a percentile
+from `p1` to `p99.9`.
+
+```yaml
+budget:
+  mytool:
+    median: "< 20ms"                    # shorthand for latency.median
+    latency: {p95: "<= 30ms"}
+    throughput: {median: ">= 50MiB/s"}
+    cpu:
+      user: {median: "<= 20ms"}
+      system: {p95: "<= 5ms"}
+      total: {median: "<= 25ms"}
+      utilization: {median: "<= 150%"}
+    memory:
+      peak_rss: {max: "<= 64MiB"}
+```
+
+The operator follows the metric's direction. Latency, CPU time and peak RSS
+are better when lower, so their budgets are upper bounds (`<`, `<=`).
+Throughput is better when higher, so its budgets are lower bounds (`>`,
+`>=`). CPU utilization has no better direction and takes either. A budget on a
+metric the benchmark does not measure is a validation error.
+
+`regression` sets how a comparison judges each metric. The top-level
+`metric`, `max_percent` and `min_difference` apply to latency; `throughput`,
+`cpu` (total CPU time) and `memory` (peak RSS) have their own, and each is
+compared whenever the benchmark measures it. `max_percent` is the tolerated
+degradation in the metric's worse direction: an increase for latency, CPU time
+and peak RSS, a decrease for throughput. `min_difference` is the smallest
+absolute change that can count at all. See
+[Regression detection](/regression-detection/).
 
 ## Hooks
 
@@ -179,7 +249,7 @@ contain the environment, and command lines are shown as written, before
 | `min_time` | `2s` |
 | `timeout (commands)` | `1m` |
 | `timeout (setup, prepare_each, cleanup)` | `5m` |
-| `timeout (build)` | `1` |
+| `timeout (build)` | `10m` |
 | `stdout, stderr` | `discard` |
 | `exit_codes` | `[0]` |
 | `regression.metric` | `median` |
@@ -198,17 +268,24 @@ contain the environment, and command lines are shown as written, before
 A benchmark inherits `defaults`; a command inherits its benchmark. The most
 specific value wins.
 
-## Durations and percentages
+## Values and units
 
-Durations are a number with a unit: `ns`, `us` (or `µs`), `ms`, `s`, `m`, `h`,
-such as `500ms`, `1.5s` or `1m30s`. A bare number is rejected, because `10`
-could mean ten of anything. The maximum is `24h`.
+Every value is typed; yahiko never compares a formatted string.
 
-A budget is `<` or `<=` followed by a duration, such as `"< 20ms"`. Quote it:
-YAML reads a leading `<` fine, but the quotes make the intent obvious.
+| Kind | Written as | Used by |
+|---|---|---|
+| Duration | a number with a unit: `ns`, `us` (or `µs`), `ms`, `s`, `m`, `h`, such as `500ms`, `1.5s` or `1m30s` | timeouts, latency and CPU time budgets, `min_difference` of latency and CPU |
+| Byte size | a number with `B`, `KB`, `MB`, `GB`, `TB` (powers of 1000) or `KiB`, `MiB`, `GiB`, `TiB` (powers of 1024), such as `64MiB` | peak RSS budgets, `memory.min_difference` |
+| Rate | a number, the work unit and `/s`, such as `50MiB/s` or `"1000 records/s"` | throughput budgets, `throughput.min_difference` |
+| Percentage | a number (`10`) or a string with a percent sign (`"10%"`) | `max_percent`, CPU utilization budgets |
 
-A percentage is a number (`10`) or a string with a percent sign (`"10%"`),
-greater than 0 and at most 1000.
+A bare number is rejected where a unit is expected, because `10` could mean
+ten of anything. Units are case-sensitive: `64mib` is an error. Durations may
+not exceed `24h`; a budget's limit and a work value must be greater than zero.
+
+A budget is an operator followed by a value, such as `"< 20ms"`,
+`"<= 64MiB"` or `">= 50MiB/s"`. Quote it: YAML reads a leading `<` fine, but a
+leading `>` starts a folded block.
 
 ## Validation
 
@@ -219,7 +296,9 @@ greater than 0 and at most 1000.
    percentages, names and path shapes. Every problem is listed at once.
 3. Semantic rules: unique benchmark names, baselines, budgets and
    `regression.commands` that name real commands, `max_runs` not below
-   `min_runs`, known variables used where they exist.
+   `min_runs`, known variables used where they exist, budgets and tolerances
+   only for metrics the benchmark measures, operators in the metric's
+   direction, and throughput units that match the declared work.
 
 `yahiko compare` and `yahiko ci` additionally refuse a benchmark whose `runs`
 (or `max_runs`) is below `regression.min_samples`, because such a comparison

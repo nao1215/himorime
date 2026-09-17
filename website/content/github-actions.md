@@ -52,8 +52,28 @@ jobs:
    checked-out head, exactly like `yahiko compare`.
 3. Writes the table to the log without colors, and appends the Markdown
    summary to `$GITHUB_STEP_SUMMARY`.
-4. Exits 1 on a confirmed regression or exceeded budget, 0 otherwise.
-   Add `--fail-on-inconclusive` to fail on inconclusive results too.
+4. Prints an annotation for every missed budget, regression, inconclusive
+   comparison and failure, so they show on the pull request.
+5. Exits 1 on a confirmed regression or exceeded budget on any metric, 0
+   otherwise. Add `--fail-on-inconclusive` to fail on inconclusive results
+   too.
+
+The same suite file and the same command work on a laptop: `yahiko compare
+--against main` does steps 1 to 3 and 5 against a branch you name, and
+`yahiko run` checks the budgets without a base revision.
+
+## Why did the job fail?
+
+| Exit | Last log line | Annotation title | Meaning |
+|---|---|---|---|
+| `1` | `yahiko: exit 1: performance check failed: ...` | `yahiko: performance budget exceeded`, `yahiko: performance regression` | The code got slower, less productive or hungrier. |
+| `4` | `yahiko: exit 4: the measurement did not complete: ...` | `yahiko: benchmark could not run` | A command, hook, build or Git operation failed. |
+| `6` | `yahiko: exit 6: a requested metric could not be measured; ...` | `yahiko: metric could not be measured` | The platform cannot measure a requested metric, or did not report it. |
+| `2`, `3` | the validation or usage error | none | The suite or the command line is wrong; nothing ran. |
+
+To keep performance advisory while still failing when the measurement breaks,
+accept only status 1 in the step: `yahiko ci || [ $? -eq 1 ]`. The job summary
+and annotations still report the regression.
 
 ## Security
 
@@ -107,4 +127,7 @@ Hosted runners are shared virtual machines. Expect inconclusive results for
 small tolerances on fast commands, and read
 [Regression detection](/regression-detection/) before tightening
 `max_percent`. Budgets are best kept generous in CI, as a guard against
-order-of-magnitude slowdowns.
+order-of-magnitude slowdowns; set `min_difference` so tiny absolute changes
+never fail a pull request. The recipe
+[Cope with noise on GitHub-hosted runners](/cookbook/#cope-with-noise-on-github-hosted-runners)
+has a runnable example.

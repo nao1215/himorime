@@ -9,7 +9,8 @@ them work well together.
 | Tool | What it is | Use it when |
 |---|---|---|
 | [hyperfine](https://github.com/sharkdp/hyperfine) | An excellent command-line tool for measuring commands you type, with rich statistics, parameter scans and exports. | You want to measure a few commands right now, interactively. |
-| yahiko | A benchmark suite kept in the repository as YAML, run the same way locally and in CI, comparing a Git base revision with the working tree and failing on confirmed regressions or broken budgets. | You want the same CLI benchmarks to guard every pull request, without an external service. |
+| yahiko | Performance budgets for a CLI kept in the repository as YAML — latency, throughput, CPU time and peak RSS — run the same way locally and in CI, comparing a Git base revision with the working tree and failing on confirmed regressions or broken budgets. | You want every pull request to answer "does this CLI stay within its performance budget?", without an external service. |
+| [atago](https://github.com/nao1215/atago) | An end-to-end test tool for command-line programs: exit codes, output, files, TUI screens. | You want to check that the CLI behaves as expected. Use it next to yahiko, which checks that it performs as expected. |
 | [Bencher](https://bencher.dev/) | A continuous benchmarking service that stores results over time, tracks thresholds and comments on pull requests. It ingests output from many harnesses. | You want history, dashboards and alerts across many runs. |
 | [CodSpeed](https://codspeed.io/) | A hosted service that measures benchmarks with instrumentation to reduce CI noise, integrated with language benchmark frameworks. | You benchmark functions in code and want low-noise results on hosted CI. |
 | [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark) | A GitHub Action that collects output of benchmark frameworks, stores it in a branch and charts it on GitHub Pages. | You want a simple history chart of existing benchmark output inside GitHub. |
@@ -46,7 +47,11 @@ that stores history.
 These are deliberate non-goals, so the tool stays small and its results stay
 easy to trust:
 
-- HTTP load testing or distributed benchmarks.
+- HTTP load testing, distributed or concurrent load generation.
+- Monitoring long-running daemons or services, system-wide CPU or memory, or
+  network service SLOs.
+- Continuous profiling, heap allocation or garbage collection statistics,
+  hardware counters and energy measurement.
 - A hosted service, an API, a web UI, a results database or history
   dashboards.
 - CPU profiling or flame graphs.

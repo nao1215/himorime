@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/goccy/go-yaml"
 
@@ -367,5 +368,16 @@ func TestFuzzTargetsAreScheduled(t *testing.T) {
 	sort.Strings(names)
 	if len(names) < 4 {
 		t.Fatalf("found only %v", names)
+	}
+}
+
+func TestDuration(t *testing.T) {
+	t.Parallel()
+	for d, want := range map[time.Duration]string{
+		time.Minute: "1m", 2 * time.Second: "2s", 5 * time.Minute: "5m", 10 * time.Minute: "10m", time.Hour: "1h", 90 * time.Second: "1m30s", 500 * time.Millisecond: "500ms",
+	} {
+		if got := duration(d); got != want {
+			t.Errorf("duration(%v) = %q, want %q", d, got, want)
+		}
 	}
 }

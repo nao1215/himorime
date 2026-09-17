@@ -5,34 +5,12 @@
 [![Lint](https://github.com/nao1215/yahiko/actions/workflows/lint.yml/badge.svg)](https://github.com/nao1215/yahiko/actions/workflows/lint.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/nao1215/yahiko.svg)](https://pkg.go.dev/github.com/nao1215/yahiko)
 
-yahiko runs the command-line benchmarks you keep in your repository, locally
-and in CI, and fails the build when a change makes them measurably slower.
-
-## Try it in 30 seconds
-
-```console
-$ go install github.com/nao1215/yahiko@latest
-$ yahiko init && yahiko run
-```
-
-`yahiko init` writes a `yahiko.yaml` that measures `git --version`.
-
-```text
-suite: my benchmarks (yahiko.yaml)
-BENCHMARK    COMMAND    MEDIAN      MEAN   STDDEV  RELATIVE  RESULT
-git startup  git      521.34µs  528.99µs  45.55µs     1.00x  PASS
-```
-
-## How it differs from hyperfine
-
-[hyperfine](https://github.com/sharkdp/hyperfine) is the tool to reach for when
-you want to measure a few commands in your terminal right now. yahiko is for
-the benchmarks that should guard every pull request: the commands, inputs,
-hooks, budgets and tolerances live in a reviewed YAML file, `compare` builds a
-Git base revision next to your working tree and measures both interleaved, and
-the exit status tells CI whether a regression is confirmed, inconclusive or
-absent. See the [comparison](https://nao1215.github.io/yahiko/comparison/) for
-Bencher, CodSpeed and github-action-benchmark as well.
+yahiko answers one question for a command-line program: **does this CLI stay
+within its performance budget?** It measures latency, throughput, CPU time and
+peak memory from a `yahiko.yaml` kept in your repository, checks your budgets,
+compares against a Git base revision, and fails CI when performance gets
+worse. The same file and the same command work on your laptop and in GitHub
+Actions.
 
 ## Install
 
@@ -41,30 +19,38 @@ $ go install github.com/nao1215/yahiko@latest
 ```
 
 Prebuilt archives and `.deb`, `.rpm` and `.apk` packages for Linux, macOS and
-Windows are on [GitHub Releases](https://github.com/nao1215/yahiko/releases),
-signed and with SBOMs; see [Installation](https://nao1215.github.io/yahiko/install/).
+Windows are on [GitHub Releases](https://github.com/nao1215/yahiko/releases);
+see [Installation](https://nao1215.github.io/yahiko/install/).
 
-## A minimal suite
+## A suite
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/yahiko/main/schema/yahiko.schema.json
 version: "1"
 
 suite:
-  name: mytool benchmarks
+  name: mytool
 
 build:
   command: [go, build, -o, "${artifact}", ./cmd/mytool]
 
 benchmarks:
   - name: parse large input
-    stdin: testdata/large.json
+    metrics:
+      throughput:
+        work:
+          file_size: testdata/large.jsonl
+      cpu: true
+      memory: true
     commands:
       mytool:
-        command: ["${artifact}", parse]
+        command: ["${artifact}", testdata/large.jsonl]
     budget:
       mytool:
-        median: "< 50ms"
+        latency: {p95: "<= 100ms"}
+        throughput: {median: ">= 50MiB/s"}
+        cpu: {total: {median: "<= 80ms"}}
+        memory: {peak_rss: {max: "<= 64MiB"}}
 ```
 
 ## Run it
@@ -73,23 +59,48 @@ benchmarks:
 $ yahiko run
 ```
 
-yahiko builds `${artifact}`, runs each command until it has enough samples, and
-exits 1 when a budget is exceeded. Reports can be a table, JSON with raw
-samples, CSV or Markdown.
+```text
+suite: mytool (yahiko.yaml)
+latency
+BENCHMARK          COMMAND   MEDIAN     MEAN  STDDEV  RELATIVE  RESULT
+parse large input  mytool   81.88ms  82.53ms  4.45ms     1.00x  PASS
 
-## Compare with main
+throughput
+BENCHMARK          COMMAND       MEDIAN         MEAN          MIN  RESULT
+parse large input  mytool   189.22MiB/s  188.19MiB/s  165.48MiB/s  PASS
+
+cpu
+BENCHMARK          COMMAND     USER  SYSTEM    TOTAL  UTILIZATION  RESULT
+parse large input  mytool   79.03ms  3.03ms  82.07ms       100.4%  OVER BUDGET
+
+memory
+BENCHMARK          COMMAND  PEAK RSS       MAX  RESULT
+parse large input  mytool   10.57MiB  10.57MiB  PASS
+
+budgets
+BENCHMARK          COMMAND  METRIC                    BUDGET     MEASURED  RESULT
+parse large input  mytool   latency p95          <= 100.00ms      89.64ms  PASS
+parse large input  mytool   throughput median  >= 50.00MiB/s  189.22MiB/s  PASS
+parse large input  mytool   cpu total median      <= 80.00ms      82.07ms  FAIL
+parse large input  mytool   peak rss max         <= 64.00MiB     10.57MiB  PASS
+  parse large input / mytool: budget cpu total median <= 80.00ms not met (measured 82.07ms)
+
+0 passed, 1 over budget · 1 benchmark · seed 6177791292910221 · exit 1
+yahiko: exit 1: performance check failed: a budget or regression threshold was violated (the measurement itself succeeded)
+```
+
+(Explanatory lines under each table are omitted here.) Reports are also
+available as JSON with every raw sample, long-format CSV, Markdown and a
+GitHub Actions job summary.
+
+To compare your working tree, uncommitted changes included, with `main` on
+every metric:
 
 ```console
 $ yahiko compare --against main
 ```
 
-`main` is checked out into a temporary Git worktree and built next to your
-working tree, uncommitted changes included. Both are measured interleaved on
-the same machine; yahiko exits 1 only when a slowdown beyond the tolerance is
-confirmed by a bootstrap confidence test, and never touches your branch or
-working tree.
-
-## GitHub Actions
+## The same suite in GitHub Actions
 
 <!-- example: examples/github-actions/benchmark.yml -->
 ```yaml
@@ -128,16 +139,29 @@ jobs:
       - run: yahiko ci
 ```
 
-## Supported platforms
+Exit status `1` means performance got worse; `4` and `6` mean the measurement
+itself failed. Shared runners are noisy: yahiko interleaves the revisions,
+needs statistical confidence to call a regression, and reports anything it
+cannot tell apart from noise as inconclusive.
 
-Linux, macOS and Windows, on amd64 and arm64. CI runs the unit and end-to-end
-tests on all three.
+## yahiko and atago
+
+[atago](https://github.com/nao1215/atago) checks that a CLI **behaves** as
+expected: exit codes, output, files. yahiko checks that it **performs** as
+expected: latency, throughput, CPU time and memory within budget. They are
+meant to be used side by side.
 
 ## Documentation
 
-https://nao1215.github.io/yahiko/ — getting started, the configuration
-reference, commands, reports, regression detection, a cookbook of runnable
-examples, exit codes and troubleshooting.
+https://nao1215.github.io/yahiko/ — [getting started](https://nao1215.github.io/yahiko/getting-started/),
+[configuration](https://nao1215.github.io/yahiko/configuration/),
+[metrics](https://nao1215.github.io/yahiko/metrics/),
+[reports](https://nao1215.github.io/yahiko/reports/),
+[regression detection](https://nao1215.github.io/yahiko/regression-detection/),
+[cookbook](https://nao1215.github.io/yahiko/cookbook/),
+[exit codes](https://nao1215.github.io/yahiko/exit-codes/). Linux, macOS and
+Windows on amd64 and arm64 are supported; what each metric covers per OS is on
+the [metrics](https://nao1215.github.io/yahiko/metrics/#process-tree) page.
 
 ## The name
 

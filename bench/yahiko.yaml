@@ -50,3 +50,14 @@ benchmarks:
     commands:
       yahiko:
         command: ["${artifact}", run, --quiet, --runs, "3", --warmup, "0", --format, json, "${workdir}/tiny.yaml"]
+
+  - name: collector overhead
+    description: >-
+      The same suite measured with latency only and with every metric. The
+      difference is what reading CPU time and peak RSS after each run costs
+      yahiko; it is never part of a measured run.
+    commands:
+      latency-only:
+        command: ["${artifact}", run, --quiet, --runs, "20", --warmup, "0", --format, json, "${root}/testdata/latency-only.yaml"]
+      all-metrics:
+        command: ["${artifact}", run, --quiet, --runs, "20", --warmup, "0", --format, json, "${root}/testdata/all-metrics.yaml"]

@@ -10,8 +10,8 @@ enableRobotsTXT = true
 timeZone = "UTC"
 
 [params]
-tagline = "Benchmark suites for command-line programs, in your repository and in CI"
-description = "yahiko measures CLI commands from a versioned YAML suite, compares them with each other or with a Git base revision, checks performance budgets, and fails CI on confirmed regressions."
+tagline = "Performance budgets for command-line programs, in your repository and in CI"
+description = "yahiko checks whether a CLI stays within its performance budget: latency, throughput, CPU time and peak RSS, measured from a YAML suite, compared with a Git base revision, failing CI on violations."
 
 [markup.highlight]
 noClasses = false
@@ -34,6 +34,11 @@ weight = 15
 name = "Configuration"
 pageRef = "/configuration"
 weight = 20
+
+[[menus.main]]
+name = "Metrics"
+pageRef = "/metrics"
+weight = 22
 
 [[menus.main]]
 name = "Commands"

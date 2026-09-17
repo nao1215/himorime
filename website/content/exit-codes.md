@@ -21,15 +21,27 @@ within a major version.
 ## When several apply
 
 Validation happens before anything runs, so exit 2 and exit 3 never combine
-with the others. After measuring, the status is decided in this order:
+with the others. A requested metric the platform cannot measure at all, with
+the default `metrics.unsupported: fail`, exits 6 before anything is built or
+run. After measuring, the status is decided in this order:
 
 1. `4` when any command, hook or build failed, a report could not be written,
    cleanup failed, or the run was interrupted. Results of a run that did not
    complete are not presented as a pass.
-2. `1` when any budget was exceeded or any regression was confirmed.
-3. `1` when `--fail-on-inconclusive` was given and any comparison was
+2. `6` when a requested metric could not be measured: unsupported for the
+   process tree at run time, or not reported by the operating system, or the
+   declared throughput work could not be read. Performance was not judged, so
+   it is neither a pass nor a regression.
+3. `1` when any budget was exceeded or any regression was confirmed, on any
+   metric.
+4. `1` when `--fail-on-inconclusive` was given and any comparison was
    inconclusive.
-4. `0` otherwise.
+5. `0` otherwise.
+
+`1` always means the code's performance was judged and found wanting; `4` and
+`6` mean yahiko could not complete the judgement. In CI, the last line of the
+log says which (`yahiko: exit 1: performance check failed: ...`), and
+annotations carry distinct titles; see [GitHub Actions](/github-actions/).
 
 ## Inconclusive results
 

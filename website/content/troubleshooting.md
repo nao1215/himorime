@@ -11,6 +11,46 @@ tolerance you set. See [Regression detection](/regression-detection/#noise-and-i
 raise `runs`, widen `max_percent`, measure a heavier workload, or use a quieter
 machine. The reason is printed under the table.
 
+## Exit 6: "metrics.memory cannot be measured on this platform"
+
+A benchmark requests a metric this platform cannot measure, and its
+`metrics.unsupported` is `fail` (the default). Remove the metric, measure it on
+another platform, or set `metrics.unsupported: skip` to measure everything
+else and report the metric as unsupported. On Windows, peak RSS is
+unsupported for commands that start child processes, which includes
+`shell: true`; see [Metrics](/metrics/#process-tree).
+
+## Exit 6: "metric collection failed"
+
+The platform supports the metric but did not report it for a run, or the
+throughput `file_size` does not exist or is empty when the run starts. Create
+the file in `setup` or `prepare_each`, and check its path: it is relative to
+the suite file. A collection failure is never skipped, because it cannot be
+told apart from a broken measurement.
+
+## "the budget is in bytes/s but the declared work unit is records"
+
+A throughput budget must use the unit of the declared work: `MiB/s` and
+friends need `unit: bytes` (or `file_size`), `records/s` needs
+`unit: records`.
+
+## "this metric is better when lower, so a budget is an upper bound"
+
+Latency, CPU time and peak RSS budgets use `<` or `<=`; throughput budgets use
+`>` or `>=`. A budget in the other direction would pass for the wrong
+programs.
+
+## CPU time reads 0ns
+
+A command that runs for a millisecond or two can finish between two scheduler
+ticks, and the operating system then reports no user or system time. Measure
+a heavier workload, or judge latency for such commands.
+
+## CPU utilization above 100%
+
+Not a bug: the command used more than one CPU at the same time. See
+[Understand CPU utilization above 100%](/cookbook/#understand-cpu-utilization-above-100).
+
 ## "runs (5) is lower than regression.min_samples (10)"
 
 `yahiko compare` and `yahiko ci` refuse settings that could never produce a

@@ -152,10 +152,16 @@ func defaults() string {
 	return sb.String()
 }
 
+// duration renders a default duration the way a suite writes it: 10m rather
+// than 10m0s, 1h rather than 1h0m0s.
 func duration(d time.Duration) string {
 	s := d.String()
-	s = strings.TrimSuffix(s, "0s")
-	s = strings.TrimSuffix(s, "0m")
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
 	return s
 }
 

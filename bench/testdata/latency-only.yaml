@@ -1,0 +1,7 @@
+# Measured by the "collector overhead" benchmark of bench/yahiko.yaml.
+version: "1"
+suite: {name: latency only}
+benchmarks:
+  - name: git version
+    commands:
+      git: {command: [git, --version]}
