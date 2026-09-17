@@ -206,6 +206,41 @@ A failing `setup` or `cleanup` fails the benchmark. A failing `prepare_each`
 fails the command it prepared. Hook output is not shown unless the hook fails,
 in which case the tail of its standard error is.
 
+## Reports
+
+`report.outputs` lists report files written after every run, relative to the
+suite file. A Markdown output with `section` does not replace the file: it
+updates the section of that name in an existing page, between the lines
+`<!-- himorime:begin NAME -->` and `<!-- himorime:end NAME -->`, and keeps the
+rest of the page. `report.versions` names the tools whose versions every
+report records:
+
+```yaml
+report:
+  outputs:
+    - format: json
+      path: bench/result.json
+    - format: markdown
+      path: docs/compare.md
+      section: speed
+  versions:
+    jc: [jc, --version]
+    jo: [jo, -v]
+```
+
+- A section name uses lowercase letters, digits and `-`. `section` is only
+  allowed with `format: markdown`.
+- Each version command is a list of arguments, run once without a shell in the
+  suite directory of the working tree, before anything is built or measured.
+  It inherits himorime's environment, may use `${root}`, `${head_root}`,
+  `${exe}` and `${env:NAME}`, and has 30 seconds. The first non-empty line it
+  prints on standard output, or else on standard error, is recorded.
+- A version command that fails, times out or prints nothing fails the suite
+  like a failed setup, and the run exits 4.
+
+See [Reports](/reports/#publish-results-in-documentation) for what a section
+looks like.
+
 ## Standard input and output
 
 `stdin` is a fixture path (`stdin: testdata/input.txt`), `stdin: {file: ...}`,
@@ -254,6 +289,7 @@ head, so each revision runs its own code:
 | a relative program or argument, such as `[sh, work.sh]` | the command's working directory | |
 | `stdout`, `stderr` | `${workdir}` | discarded |
 | `report.outputs[].path` | the suite file in the working tree | |
+| a relative program of `report.versions` | the directory of the suite file in the working tree | |
 
 `${head_root}` is the same directory inside the working tree, for both
 revisions. Use it when both revisions must read the same file, such as a
@@ -518,5 +554,14 @@ until `min_samples`.
 | Key | Required | Description |
 |---|---|---|
 | `outputs` |  | Report files. |
+| `versions` |  | Tools whose versions every report records, such as jc: [jc, --version]. Each command runs once in the suite directory before measuring, with a 30s time limit; the first non-empty line it prints is recorded, and a failure fails the run. |
+
+### report.outputs[]
+
+| Key | Required | Description |
+|---|---|---|
+| `format` | yes | Report format. |
+| `path` | yes | Relative path of the file. |
+| `section` |  | Markdown only: replace the section of this name in the existing file, between its himorime:begin and himorime:end comment lines, and keep the rest of the file. Lowercase letters, digits and '-'. |
 
 <!-- END GENERATED: config-reference -->
