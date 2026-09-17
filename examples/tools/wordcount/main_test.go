@@ -11,7 +11,7 @@ import (
 func TestImplementationsAgree(t *testing.T) {
 	t.Parallel()
 	input := "one two\nthree  four five\n\nsix"
-	for _, impl := range []string{"scanner", "readall"} {
+	for _, impl := range []string{"scanner", "readall", "parallel"} {
 		var out bytes.Buffer
 		if err := run([]string{"-impl", impl}, strings.NewReader(input), &out); err != nil {
 			t.Fatal(err)
@@ -60,5 +60,41 @@ func TestCacheAndGenerate(t *testing.T) {
 	var v bytes.Buffer
 	if err := run([]string{"-version"}, nil, &v); err != nil || !strings.HasPrefix(v.String(), "wordcount") {
 		t.Fatal("-version")
+	}
+}
+
+// TestParallelMatchesScanner counts inputs whose words straddle chunk
+// boundaries with every worker count.
+func TestParallelMatchesScanner(t *testing.T) {
+	t.Parallel()
+	inputs := []string{"", "a", " a ", "ab cd ef\ngh", strings.Repeat("word ", 101) + "\n  tail", strings.Repeat("x", 50) + " " + strings.Repeat("y", 49)}
+	for _, in := range inputs {
+		want, err := countScanner(strings.NewReader(in))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for workers := 1; workers <= 9; workers++ {
+			if got := countParallel([]byte(in), workers); got != want {
+				t.Errorf("countParallel(%q, %d) = %+v, want %+v", in, workers, got, want)
+			}
+		}
+	}
+}
+
+func TestGenerateFormats(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for format, first := range map[string]string{"text": "entry 0 ", "csv": "id,name,note,score\n0,fox 0,", "jsonl": `{"id": 0, "name": "fox 0"`} {
+		path := filepath.Join(dir, format)
+		if err := run([]string{"-gen", "3", "-gen-format", format, "-o", path}, nil, &bytes.Buffer{}); err != nil {
+			t.Fatal(err)
+		}
+		data, _ := os.ReadFile(path)
+		if !strings.HasPrefix(string(data), first) {
+			t.Errorf("%s fixture starts %q", format, data)
+		}
+	}
+	if err := run([]string{"-gen", "3", "-gen-format", "xml", "-o", filepath.Join(dir, "x")}, nil, &bytes.Buffer{}); err == nil {
+		t.Error("an unknown fixture format was accepted")
 	}
 }

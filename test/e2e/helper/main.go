@@ -10,32 +10,39 @@ package main
 import (
 	"bufio"
 	"crypto/sha256"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-// subcommands maps a helper subcommand to its implementation.
-var subcommands = map[string]func([]string) error{
-	"sleep": sleep, "sleep-from": sleepFrom, "alternate": alternate, "copy": copyFile, "exit": exitWith,
-	"gen": gen, "count": count, "spawn": spawn, "counter": counter, "cache": cache, "write": write,
-	"remove": remove, "require": require, "replace": replace, "consume": consume, "event": event,
-	"interrupt": interrupt, "burn": burn, "alloc": alloc, "records": records, "tree": tree,
-	"print": printOut, "pad": pad,
+// subcommand returns the implementation of a helper subcommand.
+func subcommand(name string) (func([]string) error, bool) {
+	run, ok := map[string]func([]string) error{
+		"sleep": sleep, "sleep-from": sleepFrom, "alternate": alternate, "copy": copyFile, "exit": exitWith,
+		"gen": gen, "count": count, "spawn": spawn, "counter": counter, "cache": cache, "write": write,
+		"remove": remove, "require": require, "replace": replace, "consume": consume, "event": event,
+		"interrupt": interrupt, "burn": burn, "alloc": alloc, "records": records, "tree": tree,
+		"print": printOut, "pad": pad, "args-from": argsFrom, "json-schema": jsonSchema, "csv-shape": csvShape,
+	}[name]
+	return run, ok
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: helper <sleep|sleep-from|alternate|copy|exit|gen|count|spawn|counter|cache|write|remove|require|replace|consume|event|interrupt|burn|alloc|records|tree|print|pad> ...")
+		fail("usage: helper <subcommand> ...; see test/e2e/README.md")
 	}
-	run, ok := subcommands[os.Args[1]]
+	run, ok := subcommand(os.Args[1])
 	if !ok {
 		fail(fmt.Sprintf("unknown subcommand %q", os.Args[1]))
 	}
@@ -497,6 +504,9 @@ func pad(args []string) error {
 	if err != nil || n < 0 {
 		return fmt.Errorf("invalid size %q", args[0])
 	}
+	if err := os.MkdirAll(filepath.Dir(args[1]), 0o700); err != nil {
+		return err
+	}
 	f, err := os.Create(args[1])
 	if err != nil {
 		return err
@@ -506,4 +516,82 @@ func pad(args []string) error {
 		_ = w.WriteByte('x')
 	}
 	return errors.Join(w.Flush(), f.Close())
+}
+
+// args-from FILE: run the subcommand and arguments written in FILE. A build
+// copies a revision's file to ${artifact}, so each revision of a comparison
+// can burn a different amount of CPU or allocate a different amount of memory.
+func argsFrom(args []string) error {
+	if err := need(args, 1, "args-from FILE"); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(args[0])
+	if err != nil {
+		return err
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return fmt.Errorf("%s holds no subcommand", args[0])
+	}
+	run, ok := subcommand(fields[0])
+	if !ok || fields[0] == "args-from" {
+		return fmt.Errorf("unknown subcommand %q in %s", fields[0], args[0])
+	}
+	return run(fields[1:])
+}
+
+// json-schema SCHEMA DOCUMENT: validate a JSON document against a JSON Schema
+// file and print "valid", or fail with the validation errors.
+func jsonSchema(args []string) error {
+	if err := need(args, 2, "json-schema SCHEMA DOCUMENT"); err != nil {
+		return err
+	}
+	c := jsonschema.NewCompiler()
+	sch, err := c.Compile(args[0])
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(args[1])
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	doc, err := jsonschema.UnmarshalJSON(f)
+	if err != nil {
+		return err
+	}
+	if err := sch.Validate(doc); err != nil {
+		return err
+	}
+	fmt.Println("valid")
+	return nil
+}
+
+// csv-shape FILE: parse a CSV file strictly and print "rows=N columns=M", or
+// fail when a row has a different number of fields or a cell holds JSON.
+func csvShape(args []string) error {
+	if err := need(args, 1, "csv-shape FILE"); err != nil {
+		return err
+	}
+	f, err := os.Open(args[0])
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	rows, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return errors.New("empty CSV")
+	}
+	for i, row := range rows {
+		for _, cell := range row {
+			if strings.HasPrefix(cell, "{") || strings.HasPrefix(cell, "[") {
+				return fmt.Errorf("row %d holds structured data: %q", i+1, cell)
+			}
+		}
+	}
+	fmt.Printf("rows=%d columns=%d\n", len(rows), len(rows[0]))
+	return nil
 }

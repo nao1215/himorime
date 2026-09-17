@@ -1,12 +1,12 @@
 # yaml-language-server: $schema=../../schema/yahiko.schema.json
 #
-# Recipe: compare several CLIs on the same input.
-# https://nao1215.github.io/yahiko/cookbook/#compare-several-clis-on-the-same-input
+# Recipe: compare similar CLIs on the same input.
+# https://nao1215.github.io/yahiko/cookbook/#compare-similar-clis-on-the-same-input
 version: "1"
 
 suite:
   name: compare CLIs
-  description: Two word counters and git hashing the same file.
+  description: Two word counter implementations and git hashing the same file.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -19,6 +19,12 @@ benchmarks:
   - name: count a 20k-line file
     setup:
       - command: ["${artifact}", -gen, "20000", -o, "${workdir}/input.txt"]
+    metrics:
+      cpu: true
+      memory: true
+      # git on Windows runs through a launcher process; measure everything
+      # else there instead of stopping.
+      unsupported: skip
     baseline: scanner
     commands:
       scanner:

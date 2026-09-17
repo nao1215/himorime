@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schema/yahiko.schema.json
 #
-# Recipes: see an inconclusive comparison, and decide whether it fails CI.
-# https://nao1215.github.io/yahiko/cookbook/#handle-noisy-measurements
+# Recipe: cope with noise on GitHub-hosted runners.
+# https://nao1215.github.io/yahiko/cookbook/#cope-with-noise-on-github-hosted-runners
 #
 #   yahiko compare --against main examples/noisy
 #   yahiko compare --against main --fail-on-inconclusive examples/noisy
@@ -9,14 +9,16 @@ version: "1"
 
 suite:
   name: noisy
-  description: A stand-in program whose run time alternates between 10ms and 60ms.
+  description: A stand-in program with bimodal run times, and a steady one with noise-tolerant settings.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
 
 defaults:
-  warmup: 0
-  runs: 12
+  # Warmup runs absorb one-off costs such as a cold file cache.
+  warmup: 1
+  # More runs make the bootstrap interval narrower on a noisy machine.
+  runs: 16
 
 benchmarks:
   - name: bimodal
@@ -29,3 +31,19 @@ benchmarks:
       # The alternating run time gives a coefficient of variation near 0.7.
       # Above max_cv a comparison is inconclusive instead of pass or fail.
       max_cv: 0.3
+
+  - name: steady
+    metrics:
+      cpu: true
+    commands:
+      sleepy:
+        command: ["${artifact}", -ms, "30"]
+    regression:
+      # A wider tolerance than the default 10%, and an absolute floor: a
+      # change of less than 2ms is never a regression on a shared runner,
+      # however large it is in percent.
+      max_percent: 20
+      min_difference: 2ms
+      cpu:
+        max_percent: 50
+        min_difference: 5ms

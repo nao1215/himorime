@@ -1,22 +1,33 @@
 # yaml-language-server: $schema=../../schema/yahiko.schema.json
 #
-# Recipe: measure the startup time of one CLI.
-# https://nao1215.github.io/yahiko/cookbook/#measure-the-startup-time-of-one-cli
+# Recipe: protect the startup latency of a CLI.
+# https://nao1215.github.io/yahiko/cookbook/#protect-the-startup-latency-of-a-cli
 version: "1"
 
 suite:
   name: startup
-  description: How long git takes to start and print its version.
+  description: How long the word counter takes to start, print its version and exit.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
 
 defaults:
   warmup: 2
-  runs: 10
+  runs: 20
 
 benchmarks:
-  - name: git version
+  - name: version
     tags: [smoke]
     commands:
-      git:
+      wordcount:
         # A list of arguments runs without a shell, the same way on Linux,
         # macOS and Windows.
-        command: [git, --version]
+        command: ["${artifact}", -version]
+    # A budget is a limit you chose. When it is missed yahiko exits 1,
+    # whatever the base branch does. Keep CI limits generous: shared runners
+    # start processes several times slower than a laptop.
+    budget:
+      wordcount:
+        median: "< 250ms"
+        latency:
+          p95: "<= 500ms"

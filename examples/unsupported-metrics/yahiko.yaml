@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: handle a metric this platform cannot measure.
+# https://nao1215.github.io/yahiko/cookbook/#handle-a-metric-this-platform-cannot-measure
+version: "1"
+
+suite:
+  name: unsupported metrics
+  description: Peak RSS of a command that starts a child process, which Windows cannot report.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/sleepy]
+
+defaults:
+  warmup: 0
+  runs: 5
+  metrics:
+    cpu: true
+    memory: true
+    # The default, fail, stops before measuring when a requested metric
+    # cannot be measured here. skip measures everything else and reports the
+    # metric as unsupported, with its budgets and comparisons skipped.
+    unsupported: skip
+
+benchmarks:
+  - name: parent and child
+    commands:
+      sleepy:
+        command: ["${artifact}", -ms, "20", -children, "1"]
+    budget:
+      sleepy:
+        memory:
+          peak_rss:
+            max: "<= 256MiB"

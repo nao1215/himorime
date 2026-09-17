@@ -20,16 +20,100 @@ defaults:
       GIT_CONFIG_NOSYSTEM: "1"
 
 scenarios:
-  - name: Measure the startup time of one CLI
+  - name: Protect the startup latency of a CLI
     steps:
       - run:
-          command: yahiko run --quiet ${env:YAHIKO_REPO}/examples/startup
+          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/startup
+          timeout: 180s
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^git version +git +\\S+ +\\S+ +\\S+ +1\\.00x +PASS$"
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets", length: 2}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].metric", equals: "latency"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].aggregation", equals: "median"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[1].aggregation", equals: "p95"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[1].status", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.count", equals: 20}
 
-  - name: Compare several CLIs on the same input
+  - name: Protect the throughput of large CSV and JSON processing
+    steps:
+      - run:
+          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/throughput
+          timeout: 300s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.summary.pass", equals: 2}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.unit", equals: "bytes/s"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.stats.median", gte: 5242880}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].operator", equals: ">="}
+              - {path: "$.suites[0].benchmarks[1].commands[0].head.metrics.throughput.unit", equals: "records/s"}
+              - {path: "$.suites[0].benchmarks[1].commands[0].head.metrics.throughput.work.value", equals: 200000}
+
+  - name: Detect a CPU time regression
+    steps:
+      - fixture: {file: repo/go.mod, from: ../../../go.mod}
+      - fixture: {file: repo/go.sum, from: ../../../go.sum}
+      - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
+      - fixture: {file: repo/examples/cpu-regression/yahiko.yaml, from: ../../../examples/cpu-regression/yahiko.yaml}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      # Shrink the read buffer from 64KiB to bufio's 16-byte minimum: counting
+      # the same input now takes thousands of times more read calls, which is
+      # system CPU time.
+      - run:
+          command: e2ehelper replace examples/tools/wordcount/main.go "64*1024" "16"
+          cwd: repo
+      - assert: {exit_code: 0}
+      - run:
+          command: yahiko compare --against main --quiet --format json examples/cpu-regression
+          cwd: repo
+          timeout: 600s
+      - assert:
+          exit_code: 1
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.change_percent", gt: 20}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.min_difference", equals: 5000000}
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "regression"}
+              - {path: "$.git.dirty", equals: true}
+      - run: {command: git worktree list --porcelain, cwd: repo}
+      - assert:
+          stdout: {count: 1, contains: "worktree "}
+
+  - name: Detect a peak RSS regression
+    steps:
+      - fixture: {file: repo/go.mod, from: ../../../go.mod}
+      - fixture: {file: repo/go.sum, from: ../../../go.sum}
+      - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
+      - fixture: {file: repo/examples/memory-regression/yahiko.yaml, from: ../../../examples/memory-regression/yahiko.yaml}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      # Read the whole input into memory by default instead of streaming it.
+      - run:
+          command: 'e2ehelper replace examples/tools/wordcount/main.go "defaultImpl = \"scanner\"" "defaultImpl = \"readall\""'
+          cwd: repo
+      - assert: {exit_code: 0}
+      - run:
+          command: yahiko compare --against main --quiet --format json examples/memory-regression
+          cwd: repo
+          timeout: 600s
+      - assert:
+          exit_code: 1
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.peak_rss.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.peak_rss.unit", equals: "bytes"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.peak_rss.difference", gt: 4194304}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].status", equals: "pass"}
+
+  - name: Compare similar CLIs on the same input
     steps:
       - run:
           command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/compare-clis
@@ -41,7 +125,248 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands", length: 3}
               - {path: "$.suites[0].benchmarks[0].commands[0].relative.vs_baseline", equals: 1}
               - {path: "$.suites[0].benchmarks[0].commands[2].name", equals: "git-hash"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.status", equals: "measured"}
+              - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.cpu_total.status", equals: "measured"}
+              - {path: "$.suites[0].benchmarks[0].commands[2].head.metrics.cpu_total.status", equals: "measured"}
               - {path: "$.summary.pass", equals: 3}
+
+  - name: Compare the Git base and head on every metric
+    steps:
+      - fixture: {file: repo/go.mod, from: ../../../go.mod}
+      - fixture: {file: repo/go.sum, from: ../../../go.sum}
+      - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
+      - fixture: {file: repo/examples/git-compare/yahiko.yaml, from: ../../../examples/git-compare/yahiko.yaml}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      # An uncommitted change that does not affect speed.
+      - fixture: {file: repo/NOTES.md, content: "work in progress\n"}
+      - run:
+          command: yahiko compare --against main examples/git-compare
+          cwd: repo
+          timeout: 300s
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: "(?m)^count 50k lines +\\S+ +\\S+ +\\S+ +[+-][0-9.]+% +\\S+ +\\+10% +(PASS|INCONCLUSIVE)$"
+      - assert:
+          stdout:
+            contains: ["latency\nBENCHMARK", "throughput\nBENCHMARK", "cpu total\nBENCHMARK", "peak rss\nBENCHMARK", "MiB/s"]
+      - assert:
+          stdout:
+            matches: "(?m)^count 50k lines +[0-9.]+MiB/s +[0-9.]+MiB/s +\\S+ +[+-][0-9.]+% +\\S+ +-10% +(PASS|INCONCLUSIVE|IMPROVED)$"
+      - assert:
+          stderr: {contains: "including uncommitted changes"}
+      - run: {command: git status --porcelain, cwd: repo}
+      - assert:
+          stdout: {equals: "?? NOTES.md\n"}
+      - run: {command: git worktree list --porcelain, cwd: repo}
+      - assert:
+          stdout: {count: 1, contains: "worktree "}
+
+  - name: Fail a GitHub Actions job when a performance budget is violated
+    env:
+      GITHUB_ACTIONS: "true"
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_EVENT_PATH: ${workdir}/event.json
+      GITHUB_STEP_SUMMARY: ${workdir}/summary.md
+    steps:
+      - fixture: {file: repo/go.mod, from: ../../../go.mod}
+      - fixture: {file: repo/go.sum, from: ../../../go.sum}
+      - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
+      - fixture: {file: repo/examples/github-actions/yahiko.yaml, from: ../../../examples/github-actions/yahiko.yaml}
+      - fixture: {file: repo/.github/workflows/benchmark.yml, from: ../../../examples/github-actions/benchmark.yml}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run: {command: "e2ehelper event pull_request ${workdir}/repo ${workdir}/event.json"}
+      - assert:
+          file:
+            path: repo/.github/workflows/benchmark.yml
+            contains: ["pull_request:", "contents: read", "fetch-depth: 0", "run: yahiko ci"]
+      - assert:
+          file:
+            path: repo/.github/workflows/benchmark.yml
+            not_contains: ["pull_request_target:", "${{ secrets"]
+      # The same suite, without a base revision, checks the budgets locally.
+      - run:
+          command: yahiko run --quiet --format json examples/github-actions
+          cwd: repo
+          timeout: 300s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets", length: 4}
+              - {path: "$.summary.over_budget", equals: 0}
+      - run:
+          command: yahiko ci examples/github-actions
+          cwd: repo
+          timeout: 300s
+      - assert:
+          exit_code: 0
+          stdout:
+            not_contains: "\x1b["
+      - assert:
+          file:
+            path: summary.md
+            contains: ["yahiko benchmark comparison", "| count 50k lines | wordcount |", "#### Throughput", "#### Peak RSS", "#### Budgets (head)"]
+      # A budget the change cannot meet fails the job with exit 1 and an
+      # annotation that names a performance problem, not a broken run.
+      - run:
+          command: 'e2ehelper replace examples/github-actions/yahiko.yaml "<= 256MiB" "<= 1KiB"'
+          cwd: repo
+      - run:
+          command: yahiko ci --quiet examples/github-actions
+          cwd: repo
+          timeout: 300s
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "::error file=examples/github-actions/yahiko.yaml,title=yahiko%3A performance budget exceeded::count 50k lines / wordcount: peak rss max budget <= 1.00KiB, measured"
+              - "yahiko: exit 1: performance check failed"
+            not_contains: "could not"
+
+  - name: Save JSON, CSV and Markdown reports locally
+    steps:
+      - run:
+          command: yahiko run --quiet --format json --output ${workdir}/result.json ${env:YAHIKO_REPO}/examples/reports
+          timeout: 180s
+      - assert:
+          exit_code: 0
+          stdout: {empty: true}
+      - run:
+          command: e2ehelper json-schema ${env:YAHIKO_REPO}/schema/report.schema.json ${workdir}/result.json
+      - assert:
+          exit_code: 0
+          stdout: {equals: "valid\n"}
+      - assert:
+          file:
+            path: result.json
+            json:
+              - {path: "$.schema_version", equals: "1"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.samples_ns", length: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.samples", length: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.unit", equals: "lines/s"}
+              - {path: "$.suites[0].benchmarks[0].commands[1].relative.vs_fastest", gte: 1}
+      - run:
+          command: yahiko run --quiet --format csv --output ${workdir}/result.csv ${env:YAHIKO_REPO}/examples/reports
+          timeout: 180s
+      - run:
+          command: e2ehelper csv-shape ${workdir}/result.csv
+      - assert:
+          exit_code: 0
+          stdout: {matches: "^rows=[0-9]+ columns=25\n$"}
+      - assert:
+          file:
+            path: result.csv
+            contains:
+              - "suite,benchmark,command,result,record,side,metric,unit,status,statistic,value"
+              - "reports,count 20k lines,scanner,pass,stat,head,latency,ns,measured,count,10,"
+              - "reports,count 20k lines,readall,pass,stat,head,peak_rss,bytes,measured,median,"
+              - "reports,count 20k lines,readall,pass,stat,head,cpu_utilization,percent,measured,p95,"
+      - run:
+          command: yahiko run --quiet --format samples-csv --output ${workdir}/samples.csv ${env:YAHIKO_REPO}/examples/reports
+          timeout: 180s
+      - run:
+          command: e2ehelper csv-shape ${workdir}/samples.csv
+      - assert:
+          # A header and 10 runs of 7 metrics for each of 2 commands.
+          stdout: {equals: "rows=141 columns=8\n"}
+      - run:
+          command: yahiko run --quiet --format markdown --output ${workdir}/result.md --summary ${workdir}/summary.md ${env:YAHIKO_REPO}/examples/reports
+          timeout: 180s
+      - assert:
+          exit_code: 0
+      - assert:
+          file:
+            path: result.md
+            contains:
+              - "## reports"
+              - "### Latency"
+              - "| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative | Result |"
+              - "| count 20k lines | scanner |"
+              - "### CPU"
+              - "### Memory"
+              - "Measured with yahiko"
+      - assert:
+          file:
+            path: summary.md
+            contains: ["## ✅ yahiko benchmarks: no regression", "### reports", "#### Throughput"]
+
+  - name: Understand CPU utilization above 100%
+    steps:
+      - run:
+          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/cpu-utilization
+          timeout: 300s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].name", equals: "scanner"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].status", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[1].name", equals: "parallel"}
+              # Four workers on a multi-core runner: well above one CPU.
+              - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.cpu_utilization.stats.median", gt: 100}
+
+  - name: Understand process tree measurement on each OS
+    steps:
+      - run:
+          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/process-tree
+          timeout: 180s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.scope", equals: "process_tree"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.stats.median", gte: 40000000}
+              # The parent only waits; the CPU time is its children's.
+              - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.cpu_total.stats.median", gte: 100000000}
+
+  - name: Cope with noise on GitHub-hosted runners
+    steps:
+      - fixture: {file: repo/go.mod, from: ../../../go.mod}
+      - fixture: {file: repo/go.sum, from: ../../../go.sum}
+      - fixture: {file: repo/examples/tools/sleepy/main.go, from: ../../../examples/tools/sleepy/main.go}
+      - fixture: {file: repo/examples/noisy/yahiko.yaml, from: ../../../examples/noisy/yahiko.yaml}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: yahiko compare --against main --quiet examples/noisy
+          cwd: repo
+          timeout: 300s
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: ["INCONCLUSIVE", "bimodal / sleepy: inconclusive: measurements are noisier than max_cv"]
+      - assert:
+          stdout:
+            matches: "(?m)^steady +[0-9.]+ms +[0-9.]+ms +\\S+ +[+-][0-9.]+% +\\S+ +\\+20% +(PASS|INCONCLUSIVE)$"
+      - run:
+          command: yahiko compare --against main --quiet --fail-on-inconclusive examples/noisy
+          cwd: repo
+          timeout: 300s
+      - assert:
+          exit_code: 1
+          stdout: {contains: "INCONCLUSIVE"}
+
+  - name: Handle a metric this platform cannot measure
+    steps:
+      - run:
+          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/unsupported-metrics
+          timeout: 180s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.status", equals: "measured"}
+              # Measured on Linux and macOS; unsupported on Windows, where the
+              # command starts a child process. Never a failure.
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.status", matches: "^(measured|unsupported)$"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].status", matches: "^(pass|skipped)$"}
+              - {path: "$.summary.exit_code", equals: 0}
 
   - name: Compare parsers on a stdin fixture
     steps:
@@ -107,193 +432,6 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].name", equals: "warm cache"}
               - {path: "$.suites[0].benchmarks[1].name", equals: "cold cache"}
               - {path: "$.summary.pass", equals: 2}
-
-  - name: Fail CI on an absolute budget
-    steps:
-      - run:
-          command: yahiko run --quiet --format json ${env:YAHIKO_REPO}/examples/budget
-      - assert:
-          exit_code: 0
-          stdout:
-            json:
-              - {path: "$.suites[0].benchmarks[0].commands[0].budgets", length: 2}
-              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].metric", equals: "latency"}
-              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].aggregation", equals: "median"}
-              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].pass", equals: true}
-
-  - name: Compare main with your working tree
-    steps:
-      - fixture: {file: repo/go.mod, from: ../../../go.mod}
-      - fixture: {file: repo/go.sum, from: ../../../go.sum}
-      - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
-      - fixture: {file: repo/examples/git-compare/yahiko.yaml, from: ../../../examples/git-compare/yahiko.yaml}
-      - run: {command: git init -q -b main, cwd: repo}
-      - run: {command: git add -A, cwd: repo}
-      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
-      # An uncommitted change that does not affect speed.
-      - fixture: {file: repo/NOTES.md, content: "work in progress\n"}
-      - run:
-          command: yahiko compare --against main examples/git-compare
-          cwd: repo
-          timeout: 300s
-      - assert:
-          exit_code: 0
-          stdout:
-            matches: "(?m)^count 50k lines +\\S+ +\\S+ +\\S+ +[+-][0-9.]+% +\\S+ +\\+10% +(PASS|INCONCLUSIVE)$"
-      - assert:
-          stderr: {contains: "including uncommitted changes"}
-      - run: {command: git status --porcelain, cwd: repo}
-      - assert:
-          stdout: {equals: "?? NOTES.md\n"}
-      - run: {command: git worktree list --porcelain, cwd: repo}
-      - assert:
-          stdout: {count: 1, contains: "worktree "}
-
-  - name: Fail on a clear regression
-    steps:
-      - fixture: {file: repo/go.mod, from: ../../../go.mod}
-      - fixture: {file: repo/go.sum, from: ../../../go.sum}
-      - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
-      - fixture: {file: repo/examples/git-compare/yahiko.yaml, from: ../../../examples/git-compare/yahiko.yaml}
-      - run: {command: git init -q -b main, cwd: repo}
-      - run: {command: git add -A, cwd: repo}
-      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
-      # Shrink the read buffer from 64KiB to bufio's 16-byte minimum: every
-      # byte of the 50k-line input now costs far more read calls.
-      - run:
-          command: e2ehelper replace examples/tools/wordcount/main.go "64*1024" "16"
-          cwd: repo
-      - assert: {exit_code: 0}
-      - run:
-          command: yahiko compare --against main --format json examples/git-compare
-          cwd: repo
-          timeout: 300s
-      - assert:
-          exit_code: 1
-          stdout:
-            json:
-              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "regression"}
-              - {path: "$.suites[0].benchmarks[0].commands[0].comparison.change_percent", gt: 50}
-              - {path: "$.git.dirty", equals: true}
-      - run: {command: git worktree list --porcelain, cwd: repo}
-      - assert:
-          stdout: {count: 1, contains: "worktree "}
-
-  - name: Compare a pull request with its base in GitHub Actions
-    env:
-      GITHUB_ACTIONS: "true"
-      GITHUB_EVENT_NAME: pull_request
-      GITHUB_EVENT_PATH: ${workdir}/event.json
-      GITHUB_STEP_SUMMARY: ${workdir}/summary.md
-    steps:
-      - fixture: {file: repo/go.mod, from: ../../../go.mod}
-      - fixture: {file: repo/go.sum, from: ../../../go.sum}
-      - fixture: {file: repo/examples/tools/wordcount/main.go, from: ../../../examples/tools/wordcount/main.go}
-      - fixture: {file: repo/examples/github-actions/yahiko.yaml, from: ../../../examples/github-actions/yahiko.yaml}
-      - fixture: {file: repo/.github/workflows/benchmark.yml, from: ../../../examples/github-actions/benchmark.yml}
-      - run: {command: git init -q -b main, cwd: repo}
-      - run: {command: git add -A, cwd: repo}
-      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
-      - run: {command: "e2ehelper event pull_request ${workdir}/repo ${workdir}/event.json"}
-      - assert:
-          file:
-            path: repo/.github/workflows/benchmark.yml
-            contains: ["pull_request:", "contents: read", "fetch-depth: 0", "run: yahiko ci"]
-      - assert:
-          file:
-            path: repo/.github/workflows/benchmark.yml
-            not_contains: ["pull_request_target:", "${{ secrets"]
-      - run:
-          command: yahiko ci examples/github-actions
-          cwd: repo
-          timeout: 300s
-      - assert:
-          exit_code: 0
-          stdout:
-            not_contains: "\x1b["
-      - assert:
-          file:
-            path: summary.md
-            contains: ["yahiko benchmark comparison", "| count 50k lines | wordcount |"]
-
-  - name: Handle noisy measurements
-    steps:
-      - fixture: {file: repo/go.mod, from: ../../../go.mod}
-      - fixture: {file: repo/go.sum, from: ../../../go.sum}
-      - fixture: {file: repo/examples/tools/sleepy/main.go, from: ../../../examples/tools/sleepy/main.go}
-      - fixture: {file: repo/examples/noisy/yahiko.yaml, from: ../../../examples/noisy/yahiko.yaml}
-      - run: {command: git init -q -b main, cwd: repo}
-      - run: {command: git add -A, cwd: repo}
-      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
-      - run:
-          command: yahiko compare --against main --quiet examples/noisy
-          cwd: repo
-          timeout: 300s
-      - assert:
-          exit_code: 0
-          stdout:
-            contains: ["INCONCLUSIVE", "bimodal / sleepy: inconclusive: measurements are noisier than max_cv"]
-      - run:
-          command: yahiko compare --against main --quiet --fail-on-inconclusive examples/noisy
-          cwd: repo
-          timeout: 300s
-      - assert:
-          exit_code: 1
-          stdout: {contains: "INCONCLUSIVE"}
-
-  - name: Write a Markdown table
-    steps:
-      - run:
-          command: yahiko run --quiet --format markdown ${env:YAHIKO_REPO}/examples/reports
-          timeout: 180s
-      - assert:
-          exit_code: 0
-          stdout:
-            contains:
-              - "## reports"
-              - "| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative | Result |"
-              - "| count 20k lines | scanner |"
-              - "Measured with yahiko"
-
-  - name: Keep raw samples in JSON
-    steps:
-      - run:
-          command: yahiko run --quiet --format json --output ${workdir}/result.json ${env:YAHIKO_REPO}/examples/reports
-          timeout: 180s
-      - assert:
-          exit_code: 0
-          stdout: {empty: true}
-      - assert:
-          file:
-            path: result.json
-            json:
-              - {path: "$.schema_version", equals: "1"}
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.samples_ns", length: 10}
-              - {path: "$.suites[0].benchmarks[0].commands[1].relative.vs_fastest", gte: 1}
-
-  - name: Export CSV
-    steps:
-      - run:
-          command: yahiko run --quiet --format csv --output ${workdir}/result.csv ${env:YAHIKO_REPO}/examples/reports
-          timeout: 180s
-      - assert:
-          exit_code: 0
-      - assert:
-          file:
-            path: result.csv
-            contains: ["suite,benchmark,command,result,record,side,metric,unit,status,statistic,value", "reports,count 20k lines,scanner,pass,stat,head,latency,ns,measured,count,10,", "reports,count 20k lines,readall,pass,stat,head,latency,ns,measured,count,10,"]
-
-  - name: Write a GitHub Actions job summary
-    steps:
-      - run:
-          command: yahiko run --quiet --summary ${workdir}/summary.md ${env:YAHIKO_REPO}/examples/reports
-          timeout: 180s
-      - assert:
-          exit_code: 0
-      - assert:
-          file:
-            path: summary.md
-            contains: ["## ✅ yahiko benchmarks: no regression", "### reports"]
 
   - name: Run only smoke benchmarks
     steps:

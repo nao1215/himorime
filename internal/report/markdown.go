@@ -169,7 +169,7 @@ func markdownCompare(sb *strings.Builder, s Suite, level int) {
 	h := strings.Repeat("#", level+1)
 	for _, def := range defs {
 		if len(defs) > 1 {
-			fmt.Fprintf(sb, "%s %s\n\n", h, capitalize(def.Label))
+			fmt.Fprintf(sb, "%s %s\n\n", h, metricTitle(def.Name))
 		}
 		sb.WriteString("| Benchmark | Command | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result |\n")
 		sb.WriteString("|---|---|--:|--:|--:|--:|--:|--:|--:|---|\n")
@@ -200,11 +200,20 @@ func markdownCompare(sb *strings.Builder, s Suite, level int) {
 	}
 }
 
-func capitalize(s string) string {
-	if s == "" {
-		return s
+// metricTitle is the heading of a compared metric's table.
+func metricTitle(n metric.Name) string {
+	switch n {
+	case metric.Latency:
+		return "Latency"
+	case metric.Throughput:
+		return "Throughput"
+	case metric.CPUTotal:
+		return "CPU time"
+	case metric.PeakRSS:
+		return "Peak RSS"
+	case metric.CPUUser, metric.CPUSystem, metric.CPUUtilization:
 	}
-	return strings.ToUpper(s[:1]) + s[1:]
+	return metric.MustLookup(n).Label
 }
 
 func markdownNotes(sb *strings.Builder, mode Mode, s Suite) {

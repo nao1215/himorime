@@ -1,11 +1,12 @@
 # yaml-language-server: $schema=../../schema/yahiko.schema.json
 #
-# Recipes: Markdown, JSON with raw samples, CSV and a GitHub job summary.
-# https://nao1215.github.io/yahiko/cookbook/#write-a-markdown-table
+# Recipe: save JSON, CSV and Markdown reports locally.
+# https://nao1215.github.io/yahiko/cookbook/#save-json-csv-and-markdown-reports-locally
 #
-#   yahiko run examples/reports --format markdown
 #   yahiko run examples/reports --format json --output result.json
 #   yahiko run examples/reports --format csv --output result.csv
+#   yahiko run examples/reports --format samples-csv --output samples.csv
+#   yahiko run examples/reports --format markdown --output result.md
 #   yahiko run examples/reports --summary summary.md
 version: "1"
 
@@ -24,6 +25,13 @@ benchmarks:
   - name: count 20k lines
     setup:
       - command: ["${artifact}", -gen, "20000", -o, "${workdir}/input.txt"]
+    metrics:
+      throughput:
+        work:
+          value: 20000
+          unit: lines
+      cpu: true
+      memory: true
     baseline: scanner
     commands:
       scanner:

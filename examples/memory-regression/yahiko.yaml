@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: detect a peak RSS regression.
+# https://nao1215.github.io/yahiko/cookbook/#detect-a-peak-rss-regression
+#
+#   yahiko compare --against main examples/memory-regression
+version: "1"
+
+suite:
+  name: memory regression
+  description: Peak resident set size of the word counter, compared between two revisions.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 12
+
+benchmarks:
+  - name: count 200k lines
+    setup:
+      - command: ["${artifact}", -gen, "200000", -o, "${workdir}/input.txt"]
+    metrics:
+      memory: true
+    commands:
+      wordcount:
+        command: ["${artifact}", "${workdir}/input.txt"]
+    budget:
+      wordcount:
+        memory:
+          peak_rss:
+            max: "<= 512MiB"
+    regression:
+      max_percent: 50
+      memory:
+        max_percent: 20
+        min_difference: 4MiB

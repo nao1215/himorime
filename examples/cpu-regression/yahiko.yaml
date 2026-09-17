@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: detect a CPU time regression.
+# https://nao1215.github.io/yahiko/cookbook/#detect-a-cpu-time-regression
+#
+#   yahiko compare --against main examples/cpu-regression
+version: "1"
+
+suite:
+  name: cpu regression
+  description: CPU time of the word counter, compared between a base revision and the working tree.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 2
+  runs: 20
+
+benchmarks:
+  - name: count 50k lines
+    setup:
+      - command: ["${artifact}", -gen, "50000", -o, "${workdir}/input.txt"]
+    metrics:
+      # User and system CPU time of the process tree, read from the operating
+      # system when each run exits.
+      cpu: true
+    commands:
+      wordcount:
+        command: ["${artifact}", "${workdir}/input.txt"]
+    budget:
+      wordcount:
+        cpu:
+          total:
+            median: "<= 5s"
+    regression:
+      # Latency and CPU time get separate tolerances. CPU time ignores time
+      # spent waiting, so it moves less when the runner is busy.
+      max_percent: 25
+      cpu:
+        max_percent: 20
+        # A difference smaller than this is never a regression, however large
+        # it is in percent.
+        min_difference: 5ms

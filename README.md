@@ -94,8 +94,8 @@ working tree.
 <!-- example: examples/github-actions/benchmark.yml -->
 ```yaml
 # Copy this file to .github/workflows/benchmark.yml.
-# Recipe: compare a pull request with its base in GitHub Actions.
-# https://nao1215.github.io/yahiko/cookbook/#compare-a-pull-request-with-its-base-in-github-actions
+# Recipe: fail a GitHub Actions job when a performance budget is violated.
+# https://nao1215.github.io/yahiko/cookbook/#fail-a-github-actions-job-when-a-performance-budget-is-violated
 name: Benchmark
 
 on:
@@ -121,8 +121,10 @@ jobs:
           go-version: stable
       - run: go install github.com/nao1215/yahiko@latest
       # Finds the pull request's base commit from the event, compares it with
-      # the checked-out head, writes a summary to the job page, and exits 1 on
-      # a confirmed regression.
+      # the checked-out head on every metric the suite measures, writes a
+      # summary to the job page and annotations to the pull request, and
+      # exits 1 on a missed budget or a confirmed regression. Exit 4 or 6
+      # means the measurement itself failed, not the performance.
       - run: yahiko ci
 ```
 

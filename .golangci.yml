@@ -113,7 +113,7 @@ linters:
       - path: scripts/
         linters: [forbidigo, gosec, noctx, tagliatelle]
       - path: examples/
-        linters: [forbidigo, gosec]
+        linters: [forbidigo, gosec, noctx]
 
 formatters:
   enable:

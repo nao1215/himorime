@@ -1,0 +1,774 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/atago/main/schema/atago.schema.json
+version: "1"
+
+suite:
+  name: yahiko metrics
+
+# Latency, throughput, CPU time and peak RSS measured on the portable helper.
+# The helper burns CPU, holds memory and sleeps in amounts far apart from
+# each other and from every budget, so the assertions are about units,
+# directions, classifications and exit codes, never about exact values a
+# loaded CI runner could miss.
+defaults:
+  scenario:
+    env:
+      GIT_AUTHOR_NAME: yahiko-e2e
+      GIT_AUTHOR_EMAIL: e2e@example.com
+      GIT_COMMITTER_NAME: yahiko-e2e
+      GIT_COMMITTER_EMAIL: e2e@example.com
+      GIT_CONFIG_NOSYSTEM: "1"
+
+scenarios:
+  - name: latency budgets on percentiles pass and fail
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: latency}
+            defaults: {warmup: 0, runs: 5}
+            benchmarks:
+              - name: fits
+                commands: {app: {command: [e2ehelper, sleep, 20ms]}}
+                budget:
+                  app:
+                    latency: {p95: "<= 20s", p99: "< 30s"}
+              - name: too slow
+                commands: {app: {command: [e2ehelper, sleep, 60ms]}}
+                budget:
+                  app:
+                    latency: {p90: "< 10ms"}
+      - run:
+          command: yahiko run --quiet --format json --output report.json
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "yahiko: exit 1: performance check failed: a budget or regression threshold was violated (the measurement itself succeeded)"
+      - assert:
+          file:
+            path: report.json
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets", length: 2}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].aggregation", equals: "p95"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].status", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.unit", equals: "ns"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.percentiles.p95", gte: 20000000}
+              - {path: "$.suites[0].benchmarks[1].commands[0].result", equals: "over_budget"}
+              - {path: "$.suites[0].benchmarks[1].commands[0].budgets[0].status", equals: "fail"}
+              - {path: "$.suites[0].benchmarks[1].commands[0].budgets[0].limit", equals: 10000000}
+              - {path: "$.suites[0].benchmarks[1].commands[0].budgets[0].actual", gte: 60000000}
+              - {path: "$.summary.exit_code", equals: 1}
+
+  - name: throughput divides declared work by latency and its budget is a floor
+    steps:
+      - run: {command: "e2ehelper pad 1048576 \"${workdir}/my suite/input data/large file.bin\""}
+      - assert: {exit_code: 0}
+      - fixture:
+          file: my suite/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: throughput}
+            defaults: {warmup: 0, runs: 5}
+            benchmarks:
+              - name: records
+                metrics:
+                  throughput:
+                    work: {value: 1000, unit: records}
+                commands: {app: {command: [e2ehelper, records, "1000", 50ms]}}
+                budget:
+                  app:
+                    throughput: {median: ">= 100 records/s"}
+              - name: unreachable floor
+                metrics:
+                  throughput:
+                    work: {value: 1000, unit: records}
+                commands: {app: {command: [e2ehelper, records, "1000", 50ms]}}
+                budget:
+                  app:
+                    throughput: {min: ">= 1000000 records/s"}
+              - name: file bytes
+                metrics:
+                  throughput:
+                    work: {file_size: input data/large file.bin}
+                commands: {app: {command: [e2ehelper, sleep, 20ms]}}
+                budget:
+                  app:
+                    throughput: {median: ">= 1KiB/s"}
+      - run:
+          command: yahiko run --format json --output report.json "my suite"
+      - assert:
+          exit_code: 1
+      - assert:
+          file:
+            path: report.json
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.unit", equals: "records/s"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.better", equals: "higher"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.work.value", equals: 1000}
+              # 1000 records in at least 50ms: at most 20000 records/s.
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.stats.median", lte: 20000}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.stats.median", gte: 100}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.samples", length: 5}
+              - {path: "$.suites[0].benchmarks[1].commands[0].result", equals: "over_budget"}
+              - {path: "$.suites[0].benchmarks[1].commands[0].budgets[0].operator", equals: ">="}
+              - {path: "$.suites[0].benchmarks[2].commands[0].result", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[2].commands[0].head.metrics.throughput.unit", equals: "bytes/s"}
+              - {path: "$.suites[0].benchmarks[2].commands[0].head.metrics.throughput.work.file_size", equals: "input data/large file.bin"}
+              - {path: "$.suites[0].benchmarks[2].commands[0].head.metrics.throughput.work.value", equals: null}
+      - run:
+          command: yahiko run --quiet "my suite"
+      - assert:
+          stdout:
+            contains: ["throughput\nBENCHMARK", "records/s", "MiB/s", "unreachable floor / app: budget throughput min >= 1.00M records/s not met"]
+
+  - name: cpu time and utilization separate a busy command from a sleeping one
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: cpu}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: busy
+                metrics: {cpu: true}
+                commands:
+                  burn: {command: [e2ehelper, burn, 200ms, "2"]}
+                  sleep: {command: [e2ehelper, sleep, 200ms]}
+                budget:
+                  burn:
+                    cpu: {total: {median: "<= 60s"}}
+                  sleep:
+                    cpu: {utilization: {median: "<= 60%"}}
+              - name: over budget
+                metrics: {cpu: {scope: process_tree}}
+                commands:
+                  burn: {command: [e2ehelper, burn, 100ms]}
+                budget:
+                  burn:
+                    cpu: {user: {max: "< 1ms"}}
+      - run:
+          command: yahiko run --quiet --format json --output report.json
+      - assert:
+          exit_code: 1
+      - assert:
+          file:
+            path: report.json
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.status", equals: "measured"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.scope", equals: "process_tree"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.unit", equals: "ns"}
+              # Two threads busy for 200ms: well over 100ms of CPU time.
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.stats.median", gte: 100000000}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_utilization.unit", equals: "percent"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_utilization.better", equals: "neutral"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_utilization.stats.median", gt: 60}
+              - {path: "$.suites[0].benchmarks[0].commands[1].result", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.cpu_utilization.stats.median", lt: 60}
+              - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.peak_rss.status", equals: "not_requested"}
+              - {path: "$.suites[0].benchmarks[0].commands[1].head.metrics.peak_rss.stats", equals: null}
+              - {path: "$.suites[0].benchmarks[1].commands[0].result", equals: "over_budget"}
+              - {path: "$.suites[0].benchmarks[1].commands[0].budgets[0].metric", equals: "cpu_user"}
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          stdout:
+            contains: ["cpu\nBENCHMARK", "UTILIZATION", "above 100% means more than one CPU was busy", "over budget / burn: budget cpu user max < 1.00ms not met"]
+
+  - name: peak rss reflects the memory a command holds
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: memory}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: holds 96MiB
+                metrics: {memory: true}
+                commands: {app: {command: [e2ehelper, alloc, "96"]}}
+                budget:
+                  app:
+                    memory: {peak_rss: {max: "<= 48MiB"}}
+              - name: holds 1MiB
+                metrics: {memory: true}
+                commands: {app: {command: [e2ehelper, alloc, "1"]}}
+                budget:
+                  app:
+                    memory: {peak_rss: {max: "<= 1GiB"}}
+      - run:
+          command: yahiko run --quiet --format json --output report.json
+      - assert:
+          exit_code: 1
+      - assert:
+          file:
+            path: report.json
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "over_budget"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.unit", equals: "bytes"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.stats.min", gte: 100663296}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].limit", equals: 50331648}
+              - {path: "$.suites[0].benchmarks[1].commands[0].result", equals: "pass"}
+              - {path: "$.suites[0].benchmarks[1].commands[0].head.metrics.peak_rss.stats.max", lt: 100663296}
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          stdout:
+            matches: "(?m)^holds 96MiB +app +[0-9.]+MiB +[0-9.]+MiB +OVER BUDGET$"
+
+  - name: several metrics are judged together and the failing one is named
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: together}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: everything
+                metrics:
+                  throughput:
+                    work: {value: 10, unit: files}
+                  cpu: true
+                  memory: true
+                commands: {app: {command: [e2ehelper, alloc, "64"]}}
+                budget:
+                  app:
+                    median: "< 60s"
+                    throughput: {median: ">= 0.01 files/s"}
+                    cpu: {total: {p95: "<= 60s"}}
+                    memory: {peak_rss: {median: "< 16MiB"}}
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          exit_code: 1
+          stdout:
+            contains:
+              - "latency\nBENCHMARK"
+              - "\nthroughput\nBENCHMARK"
+              - "\ncpu\nBENCHMARK"
+              - "\nmemory\nBENCHMARK"
+              - "\nbudgets\nBENCHMARK"
+              - "everything / app: budget peak rss median < 16.00MiB not met"
+              - "0 passed, 1 over budget"
+      - assert:
+          stdout:
+            matches: "(?m)^everything +app +throughput median +>= 0\\.01 files/s +\\S+ files/s +PASS$"
+
+  - name: cpu time covers the whole process tree
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: tree}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: children do the work
+                metrics: {cpu: true}
+                commands:
+                  parent: {command: [e2ehelper, tree, "2", "--", burn, 150ms]}
+      - run:
+          command: yahiko run --quiet --format json
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              # The parent itself only waits, using a few milliseconds; two
+              # children each burn 150ms. The bound leaves room for a loaded
+              # runner while staying far above what the parent alone uses.
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.stats.min", gte: 60000000}
+
+  - name: peak rss covers child processes on Unix
+    skip: {os: windows}
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: tree}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: a child holds memory
+                metrics: {memory: true}
+                commands:
+                  parent: {command: [e2ehelper, tree, "1", "--", alloc, "96"]}
+      - run:
+          command: yahiko run --quiet --format json
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.stats.min", gte: 100663296}
+
+  - name: peak rss of a multi-process tree is unsupported on Windows and fails unless skipped
+    only: {os: windows}
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: tree}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: fail policy
+                metrics: {cpu: true, memory: true}
+                commands:
+                  parent: {command: [e2ehelper, tree, "1", "--", alloc, "8"]}
+      - fixture:
+          file: skip.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: tree}
+            defaults: {warmup: 0, runs: 3}
+            benchmarks:
+              - name: skip policy
+                metrics: {cpu: true, memory: true, unsupported: skip}
+                commands:
+                  parent: {command: [e2ehelper, tree, "1", "--", alloc, "8"]}
+                budget:
+                  parent:
+                    memory: {peak_rss: {max: "<= 1MiB"}}
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          exit_code: 6
+          stdout: {contains: ["metric unsupported", "peak rss is not supported"]}
+          stderr: {contains: "yahiko: exit 6: a requested metric could not be measured"}
+      - run:
+          command: yahiko run --quiet --format json skip.yahiko.yaml
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.status", equals: "unsupported"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.stats", equals: null}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_total.status", equals: "measured"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].status", equals: "skipped"}
+
+  - name: a metric that cannot be collected exits 6, apart from a failing command
+    steps:
+      - fixture:
+          file: missing.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: missing work}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: no input
+                metrics:
+                  throughput:
+                    work: {file_size: does-not-exist.json}
+                commands: {app: {command: [e2ehelper, sleep, 1ms]}}
+      - fixture:
+          file: failing.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: failing command}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: broken
+                metrics: {cpu: true}
+                commands: {app: {command: [e2ehelper, exit, "3", "broken on purpose"]}}
+      - run:
+          command: yahiko run --quiet --format json --output missing.json missing.yahiko.yaml
+      - assert:
+          exit_code: 6
+          stderr: {contains: "yahiko: exit 6: a requested metric could not be measured"}
+      - assert:
+          file:
+            path: missing.json
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "metric_error"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.error.kind", equals: "metric_collection_failed"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.error.metric", equals: "throughput"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.status", equals: "failed"}
+              - {path: "$.summary.metric_error", equals: 1}
+              - {path: "$.summary.exit_code", equals: 6}
+      - run:
+          command: yahiko run --quiet failing.yahiko.yaml
+      - assert:
+          exit_code: 4
+          stdout: {contains: ["broken / app: exit code: exited with status 3", "stderr: broken on purpose"]}
+          stderr: {contains: "yahiko: exit 4: the measurement did not complete"}
+
+  - name: GitHub Actions annotations tell a performance failure from a measurement failure
+    env:
+      GITHUB_ACTIONS: "true"
+    steps:
+      - fixture:
+          file: budget.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: budget}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: heavy
+                metrics: {memory: true}
+                commands: {app: {command: [e2ehelper, alloc, "64"]}}
+                budget:
+                  app:
+                    memory: {peak_rss: {max: "<= 8MiB"}}
+      - fixture:
+          file: broken.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: broken}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: no input
+                metrics:
+                  throughput:
+                    work: {file_size: missing.bin}
+                commands: {app: {command: [e2ehelper, sleep, 1ms]}}
+              - name: crashes
+                commands: {app: {command: [e2ehelper, exit, "9"]}}
+      - run:
+          command: yahiko run --quiet --format json --output budget.json budget.yahiko.yaml
+      - assert:
+          exit_code: 1
+          stdout: {empty: true}
+          stderr:
+            contains: "::error file=budget.yahiko.yaml,title=yahiko%3A performance budget exceeded::heavy / app: peak rss max budget <= 8.00MiB, measured "
+            not_contains: "could not"
+      - run:
+          command: yahiko run --quiet broken.yahiko.yaml
+      - assert:
+          exit_code: 4
+          stderr:
+            contains:
+              - "::error file=broken.yahiko.yaml,title=yahiko%3A metric could not be measured::no input / app: metric collection failed: throughput work file_size missing.bin"
+              - "::error file=broken.yahiko.yaml,title=yahiko%3A benchmark could not run::crashes / app: exit code: exited with status 9"
+            not_contains: "performance budget exceeded"
+
+  - name: a cpu and memory regression is detected against the base revision
+    steps:
+      - fixture: {file: repo/work.txt, content: "burn 20ms\n"}
+      - fixture: {file: repo/memory.txt, content: "alloc 8 100ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: compare metrics}
+            build:
+              command: [e2ehelper, copy, work.txt, "$${artifact}"]
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: cpu
+                metrics: {cpu: true}
+                commands:
+                  app: {command: [e2ehelper, args-from, "$${artifact}"]}
+                regression:
+                  max_percent: 1000
+                  cpu: {max_percent: 50}
+              - name: memory
+                metrics: {memory: true}
+                setup:
+                  - command: [e2ehelper, copy, "$${root}/memory.txt", "$${workdir}/memory.txt"]
+                commands:
+                  app: {command: [e2ehelper, args-from, "$${workdir}/memory.txt"]}
+                regression:
+                  max_percent: 1000
+                  memory: {max_percent: 50, min_difference: 16MiB}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - fixture: {file: repo/work.txt, content: "burn 300ms\n"}
+      - fixture: {file: repo/memory.txt, content: "alloc 128 100ms\n"}
+      - run:
+          command: yahiko compare --against main --quiet --format json --output ${workdir}/compare.json
+          cwd: repo
+          timeout: 180s
+      - assert:
+          exit_code: 1
+      - assert:
+          file:
+            path: compare.json
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.better", equals: "lower"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.change_percent", gt: 100}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.difference", gt: 100000000}
+              - {path: "$.suites[0].benchmarks[1].commands[0].comparisons.peak_rss.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[1].commands[0].comparisons.peak_rss.unit", equals: "bytes"}
+              - {path: "$.suites[0].benchmarks[1].commands[0].comparisons.peak_rss.min_difference", equals: 16777216}
+              - {path: "$.suites[0].benchmarks[1].commands[0].base.metrics.peak_rss.samples", length: 10}
+              - {path: "$.summary.regression", equals: 2}
+      - run:
+          command: yahiko compare --against main --quiet
+          cwd: repo
+          timeout: 180s
+      - assert:
+          exit_code: 1
+          stdout:
+            contains: ["cpu total\nBENCHMARK", "peak rss\nBENCHMARK"]
+      - assert:
+          stdout:
+            matches: "(?m)^memory +[0-9.]+MiB +[0-9.]+MiB +\\+[0-9.]+MiB +\\+[0-9.]+% +\\S+ +\\+50% +REGRESSION$"
+
+  - name: throughput is compared as higher-is-better
+    steps:
+      - fixture: {file: repo/delay.txt, content: "sleep 40ms\n"}
+      - fixture:
+          file: repo/yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: compare throughput}
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: records
+                metrics:
+                  throughput:
+                    work: {value: 5000, unit: records}
+                commands:
+                  app: {command: [e2ehelper, args-from, "$${artifact}"]}
+                regression:
+                  throughput: {max_percent: 20}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - fixture: {file: repo/delay.txt, content: "sleep 250ms\n"}
+      - run:
+          command: yahiko compare --against main --quiet --format json
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 1
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.better", equals: "higher"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.change_percent", lt: -50}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.unit", equals: "records/s"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
+      # Committing the slow version and making the tree fast again turns
+      # the same change around: throughput rising is an improvement.
+      - run: {command: git -c commit.gpgsign=false commit -q -am slower, cwd: repo}
+      - fixture: {file: repo/delay.txt, content: "sleep 40ms\n"}
+      - run:
+          command: yahiko compare --against main --quiet --format json
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.verdict", equals: "improved"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.change_percent", gt: 100}
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "improved"}
+
+  - name: reports carry every metric as JSON, long CSV, raw samples and Markdown
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: reports}
+            defaults: {warmup: 0, runs: 4}
+            benchmarks:
+              - name: all metrics
+                metrics:
+                  throughput:
+                    work: {value: 100, unit: records}
+                  cpu: true
+                  memory: true
+                commands: {app: {command: [e2ehelper, alloc, "8"]}}
+                budget:
+                  app:
+                    latency: {p99: "<= 60s"}
+            report:
+              outputs:
+                - {format: json, path: out/report.json}
+                - {format: csv, path: out/report.csv}
+                - {format: samples-csv, path: out/samples.csv}
+                - {format: markdown, path: out/report.md}
+      - run:
+          command: yahiko run --quiet --summary out/summary.md
+      - assert:
+          exit_code: 0
+      - run:
+          command: e2ehelper json-schema ${env:YAHIKO_REPO}/schema/report.schema.json out/report.json
+      - assert:
+          exit_code: 0
+          stdout: {equals: "valid\n"}
+      - assert:
+          file:
+            path: out/report.json
+            json:
+              - {path: "$.schema_version", equals: "1"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.samples", length: 4}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.cpu_user.samples", length: 4}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.samples", length: 4}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.samples", length: 4}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.percentiles.p99", gt: 0}
+      - run:
+          command: e2ehelper csv-shape out/report.csv
+      - assert:
+          exit_code: 0
+          # A header, 10 statistics of each of 7 metrics, the relative
+          # speed and the budget.
+          stdout: {equals: "rows=73 columns=25\n"}
+      - assert:
+          file:
+            path: out/report.csv
+            contains:
+              - "suite,benchmark,command,result,record,side,metric,unit,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,reason,error_kind,error_message\n"
+              - "reports,all metrics,app,pass,stat,head,peak_rss,bytes,measured,count,4,"
+              - "reports,all metrics,app,pass,stat,head,throughput,records/s,measured,median,"
+              - "reports,all metrics,app,pass,budget,head,latency,ns,,p99,"
+      - run:
+          command: e2ehelper csv-shape out/samples.csv
+      - assert:
+          exit_code: 0
+          # A header and 4 runs of 7 metrics.
+          stdout: {equals: "rows=29 columns=8\n"}
+      - assert:
+          file:
+            path: out/samples.csv
+            contains: ["suite,benchmark,command,side,run,metric,unit,value\n", "reports,all metrics,app,head,4,cpu_utilization,percent,"]
+      - assert:
+          file:
+            path: out/report.md
+            contains: ["### Latency", "### Throughput", "### CPU", "### Memory", "### Budgets", "| Benchmark | Command | Peak RSS (median) | Peak RSS (max) | Result |", "not the heap size of a language runtime"]
+      - assert:
+          file:
+            path: out/summary.md
+            contains: ["## ✅ yahiko benchmarks: no regression", "#### CPU", "#### Memory", "| all metrics | app |"]
+
+  - name: invalid units, directions and malformed YAML are configuration errors
+    steps:
+      - fixture:
+          file: units.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: units}
+            benchmarks:
+              - name: wrong
+                metrics:
+                  memory: true
+                  throughput:
+                    work: {value: 100, unit: records}
+                commands: {app: {command: [e2ehelper, sleep, 1ms]}}
+                budget:
+                  app:
+                    memory: {peak_rss: {max: "<= 64mib"}}
+                    latency: {p100: "< 1s", median: ">= 1ms"}
+      - fixture:
+          file: rate.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: rate}
+            benchmarks:
+              - name: bytes for records
+                metrics:
+                  throughput:
+                    work: {value: 100, unit: records}
+                commands: {app: {command: [e2ehelper, sleep, 1ms]}}
+                budget:
+                  app:
+                    throughput: {median: ">= 5MiB/s"}
+      - fixture:
+          file: work.yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: work}
+            benchmarks:
+              - name: zero
+                metrics:
+                  gpu: true
+                  throughput:
+                    work: {value: 0}
+                commands: {app: {command: [e2ehelper, sleep, 1ms]}}
+      - fixture:
+          file: broken.yahiko.yaml
+          content: "version: \"1\"\nsuite: {name: broken\nbenchmarks: [\n"
+      - run:
+          command: yahiko validate units.yahiko.yaml
+      - assert:
+          exit_code: 2
+          stderr:
+            contains:
+              - "units.yahiko.yaml:12:34: benchmarks[0].budget.app.memory.peak_rss.max: invalid budget"
+              - 'benchmarks[0].budget.app.latency.p100: unknown aggregation "p100"'
+              - "benchmarks[0].budget.app.latency.median: invalid budget"
+              - "yahiko: the suite is invalid; nothing was run"
+      - run:
+          command: yahiko validate rate.yahiko.yaml
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "benchmarks[0].budget.app.throughput.median: the budget is in bytes/s but the declared work unit is records"
+      - run:
+          command: yahiko run work.yahiko.yaml
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: ['benchmarks[0].metrics.gpu: unknown key "gpu"', "benchmarks[0].metrics.throughput.work.value: must be greater than 0, got 0"]
+      - run:
+          command: yahiko validate broken.yahiko.yaml
+      - assert:
+          exit_code: 2
+          stderr: {contains: "broken.yahiko.yaml"}
+
+  - name: a timeout with metrics enabled still stops the process tree
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: timeout}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: hangs
+                metrics: {cpu: true, memory: true, unsupported: skip}
+                commands:
+                  spawner:
+                    command: [e2ehelper, spawn, "$${root}/grandchild-survived"]
+                    timeout: 500ms
+      - run:
+          command: yahiko run --quiet
+          timeout: 60s
+      - assert:
+          exit_code: 4
+          stdout: {contains: "hangs / spawner: timeout: timed out after 500ms and was stopped"}
+      - run:
+          command: e2ehelper sleep 3s
+      - assert:
+          file: {path: grandchild-survived, exists: false}
+
+  - name: a shell command keeps substituted values literal
+    env:
+      PAYLOAD: "x; e2ehelper write injected-sh & e2ehelper write injected-cmd"
+    steps:
+      - fixture:
+          file: yahiko.yaml
+          content: |
+            version: "1"
+            suite: {name: shell}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: quoted
+                metrics: {cpu: true, unsupported: skip}
+                commands:
+                  echo:
+                    command: "e2ehelper print $${env:PAYLOAD}"
+                    shell: true
+                    cwd: "$${root}"
+              - name: argv
+                commands:
+                  echo:
+                    command: [e2ehelper, print, "$${env:PAYLOAD}"]
+                    cwd: "$${root}"
+      - run:
+          command: yahiko run --quiet
+      - assert:
+          exit_code: 0
+      - assert:
+          file: {path: injected-sh, exists: false}
+      - assert:
+          file: {path: injected-cmd, exists: false}

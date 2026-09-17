@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -55,6 +56,13 @@ type env map[string]string
 
 func run(t *testing.T, dir string, e env, args ...string) result {
 	t.Helper()
+	return runWith(t, dir, e, nil, args...)
+}
+
+// runWith is run with a hook that adjusts the App before it runs, such as
+// replacing what the platform can measure.
+func runWith(t *testing.T, dir string, e env, adjust func(*App), args ...string) result {
+	t.Helper()
 	var stdout, stderr bytes.Buffer
 	base := os.Environ()
 	for k, v := range e {
@@ -77,6 +85,9 @@ func run(t *testing.T, dir string, e env, args ...string) result {
 		Getwd:    func() (string, error) { return dir, nil },
 		ReadFile: os.ReadFile,
 		Now:      time.Now,
+	}
+	if adjust != nil {
+		adjust(app)
 	}
 	// Commands resolve relative paths against the process working directory.
 	chdir(t, dir)
@@ -661,5 +672,94 @@ benchmarks:
 	r := run(t, base, nil, append([]string{"run", "--quiet"}, paths...)...)
 	if r.code != 0 {
 		t.Fatalf("suites from two repositories: %+v", r)
+	}
+}
+
+func TestRunUnsupportedMetrics(t *testing.T) {
+	dir := t.TempDir()
+	body := `version: "1"
+suite: {name: unsupported}
+defaults: {warmup: 0, runs: 2}
+benchmarks:
+  - name: needs memory
+    metrics: {memory: true, cpu: true%s}
+    setup:
+      - command: [@EXE@, write, "${root}/setup-ran"]
+    commands:
+      tool: {command: [@EXE@, sleep, 1ms]}
+    budget:
+      tool:
+        memory: {peak_rss: {max: "<= 1GiB"}}
+`
+	write(t, filepath.Join(dir, "fail.yahiko.yaml"), suite(t, fmt.Sprintf(body, "")))
+	write(t, filepath.Join(dir, "skip.yahiko.yaml"), suite(t, fmt.Sprintf(body, ", unsupported: skip")))
+	noMemory := func(a *App) {
+		a.Capabilities = func() (error, error) {
+			return nil, errors.New("peak rss is not supported: no rusage on this test platform")
+		}
+	}
+
+	r := runWith(t, dir, nil, noMemory, "run", "fail.yahiko.yaml", "--quiet")
+	if r.code != exitcode.Metric || !strings.Contains(r.stderr, `benchmark "needs memory": metrics.memory cannot be measured on this platform: peak rss is not supported`) ||
+		!strings.Contains(r.stderr, "metrics.unsupported: skip") || r.stdout != "" {
+		t.Fatalf("fail policy: %+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "setup-ran")); err == nil {
+		t.Fatal("setup ran although a requested metric was unsupported")
+	}
+
+	r = runWith(t, dir, nil, noMemory, "run", "skip.yahiko.yaml", "--quiet", "--format", "json")
+	if r.code != exitcode.OK {
+		t.Fatalf("skip policy: %+v", r)
+	}
+	var rep struct {
+		Suites []struct {
+			Benchmarks []struct {
+				Commands []struct {
+					Head struct {
+						Metrics map[string]struct {
+							Status string `json:"status"`
+							Reason string `json:"reason"`
+						} `json:"metrics"`
+					} `json:"head"`
+					Budgets []struct {
+						Status string `json:"status"`
+					} `json:"budgets"`
+				} `json:"commands"`
+			} `json:"benchmarks"`
+		} `json:"suites"`
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
+		t.Fatal(err)
+	}
+	c := rep.Suites[0].Benchmarks[0].Commands[0]
+	if c.Head.Metrics["peak_rss"].Status != "unsupported" || !strings.Contains(c.Head.Metrics["peak_rss"].Reason, "no rusage") ||
+		c.Head.Metrics["cpu_total"].Status != "measured" || c.Budgets[0].Status != "skipped" {
+		t.Fatalf("skip policy report: %+v", c)
+	}
+}
+
+func TestAnnotationsOnlyInGitHubActions(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "yahiko.yaml"), suite(t, `version: "1"
+suite: {name: annotations}
+defaults: {warmup: 0, runs: 2}
+benchmarks:
+  - name: slow
+    commands:
+      tool: {command: [@EXE@, sleep, 30ms]}
+    budget:
+      tool: {median: "< 1ms"}
+`))
+	r := run(t, dir, env{"GITHUB_ACTIONS": "true"}, "run", "--quiet")
+	if r.code != exitcode.Failed || !strings.Contains(r.stderr, "::error file=yahiko.yaml,title=yahiko%3A performance budget exceeded::slow / tool: latency median budget < 1.00ms, measured") {
+		t.Fatalf("in GitHub Actions: %+v", r)
+	}
+	if !strings.Contains(r.stderr, "yahiko: exit 1: performance check failed") {
+		t.Fatalf("no outcome line: %q", r.stderr)
+	}
+	r = run(t, dir, nil, "run", "--quiet")
+	if r.code != exitcode.Failed || strings.Contains(r.stderr, "::error") || strings.Contains(r.stdout, "::error") {
+		t.Fatalf("outside GitHub Actions: %+v", r)
 	}
 }

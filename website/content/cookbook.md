@@ -5,79 +5,289 @@ toc: true
 filter: true
 ---
 
-Every recipe here is a suite under [`examples/`](https://github.com/nao1215/yahiko/tree/main/examples) that you can run from a clone of the repository. The end-to-end suite runs each recipe (`test/e2e/atago/cookbook.atago.yaml`, one scenario per heading) on Linux, macOS and Windows, and a test fails if a recipe and its scenario drift apart.
+Every recipe here is a suite under [`examples/`](https://github.com/nao1215/yahiko/tree/main/examples) that you can run from a clone of the repository. The end-to-end suite runs each recipe (`test/e2e/atago/cookbook.atago.yaml`, one scenario per heading) on Linux, macOS and Windows, and a test fails if a recipe and its scenario drift apart. Recipes that reference other CLIs use `git`, which CI already has; nothing is downloaded.
 
-The examples measure two small programs in `examples/tools`: `wordcount`, a word counter with two implementations and a cache, and `sleepy`, a stand-in whose speed and exit status you control.
+The examples measure two small programs in `examples/tools`: `wordcount`, a word counter with a streaming, an in-memory and a parallel implementation, and `sleepy`, a stand-in whose run time, CPU use, child processes and exit status you control.
 
 ## Find a recipe
 
 | I want to | Recipes |
 |---|---|
-| measure one program | [Measure the startup time of one CLI](#measure-the-startup-time-of-one-cli) |
-| compare programs or implementations | [Compare several CLIs on the same input](#compare-several-clis-on-the-same-input), [Compare parsers on a stdin fixture](#compare-parsers-on-a-stdin-fixture), [Compare small, medium and large inputs](#compare-small-medium-and-large-inputs), [Understand the geometric mean](#understand-the-geometric-mean) |
+| keep a CLI within a budget | [Protect the startup latency of a CLI](#protect-the-startup-latency-of-a-cli), [Protect the throughput of large CSV and JSON processing](#protect-the-throughput-of-large-csv-and-json-processing) |
+| catch regressions against a base revision | [Detect a CPU time regression](#detect-a-cpu-time-regression), [Detect a peak RSS regression](#detect-a-peak-rss-regression), [Compare the Git base and head on every metric](#compare-the-git-base-and-head-on-every-metric) |
+| run it in CI | [Fail a GitHub Actions job when a performance budget is violated](#fail-a-github-actions-job-when-a-performance-budget-is-violated), [Cope with noise on GitHub-hosted runners](#cope-with-noise-on-github-hosted-runners) |
+| compare programs or inputs | [Compare similar CLIs on the same input](#compare-similar-clis-on-the-same-input), [Compare parsers on a stdin fixture](#compare-parsers-on-a-stdin-fixture), [Compare small, medium and large inputs](#compare-small-medium-and-large-inputs), [Understand the geometric mean](#understand-the-geometric-mean) |
+| understand the numbers | [Understand CPU utilization above 100%](#understand-cpu-utilization-above-100), [Understand process tree measurement on each OS](#understand-process-tree-measurement-on-each-os), [Handle a metric this platform cannot measure](#handle-a-metric-this-platform-cannot-measure) |
+| keep results | [Save JSON, CSV and Markdown reports locally](#save-json-csv-and-markdown-reports-locally) |
 | control state between runs | [Reset state before every run](#reset-state-before-every-run), [Clean up after success, failure or interruption](#clean-up-after-success-failure-or-interruption), [Benchmark a warm cache](#benchmark-a-warm-cache) |
-| guard CI | [Fail CI on an absolute budget](#fail-ci-on-an-absolute-budget), [Compare main with your working tree](#compare-main-with-your-working-tree), [Fail on a clear regression](#fail-on-a-clear-regression), [Compare a pull request with its base in GitHub Actions](#compare-a-pull-request-with-its-base-in-github-actions), [Handle noisy measurements](#handle-noisy-measurements) |
-| produce reports | [Write a Markdown table](#write-a-markdown-table), [Keep raw samples in JSON](#keep-raw-samples-in-json), [Export CSV](#export-csv), [Write a GitHub Actions job summary](#write-a-github-actions-job-summary) |
 | choose what runs | [Run only smoke benchmarks](#run-only-smoke-benchmarks) |
-| handle failures | [Stop a command that hangs](#stop-a-command-that-hangs), [Treat a non-zero exit as an error](#treat-a-non-zero-exit-as-an-error) |
-| use shell features | [Use a shell pipeline](#use-a-shell-pipeline) |
+| handle failures | [Stop a command that hangs](#stop-a-command-that-hangs), [Treat a non-zero exit as an error](#treat-a-non-zero-exit-as-an-error), [Use a shell pipeline](#use-a-shell-pipeline) |
 
-## Measure the startup time of one CLI
+## Protect the startup latency of a CLI
 
-You want to know how long a command takes to start and finish, and keep that measurement in the repository so anyone can repeat it.
+Your CLI must start quickly, and you want CI to fail when a change makes it slower than a limit you chose.
 
 <!-- example: examples/startup/yahiko.yaml -->
 ```yaml
 # yaml-language-server: $schema=../../schema/yahiko.schema.json
 #
-# Recipe: measure the startup time of one CLI.
-# https://nao1215.github.io/yahiko/cookbook/#measure-the-startup-time-of-one-cli
+# Recipe: protect the startup latency of a CLI.
+# https://nao1215.github.io/yahiko/cookbook/#protect-the-startup-latency-of-a-cli
 version: "1"
 
 suite:
   name: startup
-  description: How long git takes to start and print its version.
+  description: How long the word counter takes to start, print its version and exit.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
 
 defaults:
   warmup: 2
-  runs: 10
+  runs: 20
 
 benchmarks:
-  - name: git version
+  - name: version
     tags: [smoke]
     commands:
-      git:
+      wordcount:
         # A list of arguments runs without a shell, the same way on Linux,
         # macOS and Windows.
-        command: [git, --version]
+        command: ["${artifact}", -version]
+    # A budget is a limit you chose. When it is missed yahiko exits 1,
+    # whatever the base branch does. Keep CI limits generous: shared runners
+    # start processes several times slower than a laptop.
+    budget:
+      wordcount:
+        median: "< 250ms"
+        latency:
+          p95: "<= 500ms"
 ```
 
 ```console
 $ yahiko run examples/startup
 ```
 
-A table with one row: the median, mean and standard deviation of 10 runs after 2 warmup runs, and `PASS`.
+A latency table, a budgets table with `PASS` for the median and the 95th percentile, and exit status 0. When a budget is missed its row says `FAIL`, the latency row says `OVER BUDGET`, a note names the budget and the measured value, and yahiko exits 1.
 
-- The command is a list of arguments, so the same file runs on Linux, macOS and Windows without a shell.
-- A command this short mostly measures process creation. Use it to catch start-up regressions, not to compare algorithms.
+- `median: "< 250ms"` is a shorthand for `latency: {median: "< 250ms"}`. Percentiles such as `p95` or `p99.9` need the `latency:` form.
+- A command this short mostly measures process creation. It catches start-up regressions, not algorithmic ones.
+- A budget does not need a base revision, so the same file works in `yahiko run` on a laptop and in CI.
 
 Example: [`examples/startup`](https://github.com/nao1215/yahiko/tree/main/examples/startup)
 
-## Compare several CLIs on the same input
+## Protect the throughput of large CSV and JSON processing
 
-You want to see how different tools, or different modes of one tool, perform on exactly the same input.
+Your tool processes large files, and what matters is how much it gets through per second, not how long one file takes.
+
+<!-- example: examples/throughput/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: protect the throughput of large CSV and JSON processing.
+# https://nao1215.github.io/yahiko/cookbook/#protect-the-throughput-of-large-csv-and-json-processing
+version: "1"
+
+suite:
+  name: throughput
+  description: Bytes and records per second of the word counter on large CSV and JSON Lines inputs.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 10
+
+benchmarks:
+  - name: csv bytes
+    setup:
+      - command: ["${artifact}", -gen, "200000", -gen-format, csv, -o, "${workdir}/input.csv"]
+    metrics:
+      throughput:
+        # Throughput is work divided by latency, and yahiko never guesses the
+        # work: here it is the size of the input file, read before every run.
+        work:
+          file_size: "${workdir}/input.csv"
+          unit: bytes
+    commands:
+      wordcount:
+        command: ["${artifact}", "${workdir}/input.csv"]
+    budget:
+      wordcount:
+        # Higher is better, so a throughput budget is a floor.
+        throughput:
+          median: ">= 5MiB/s"
+
+  - name: jsonl records
+    setup:
+      - command: ["${artifact}", -gen, "200000", -gen-format, jsonl, -o, "${workdir}/input.jsonl"]
+    metrics:
+      throughput:
+        # A fixed amount of work in your own unit: records, lines, files.
+        work:
+          value: 200000
+          unit: records
+    commands:
+      wordcount:
+        command: ["${artifact}", "${workdir}/input.jsonl"]
+    budget:
+      wordcount:
+        throughput:
+          median: ">= 50000 records/s"
+          min: ">= 20000 records/s"
+```
+
+```console
+$ yahiko run examples/throughput
+```
+
+A throughput table in `MiB/s` for the CSV case and `records/s` for the JSON Lines case, and the budgets table. Throughput is computed per run, as the declared work divided by that run's latency.
+
+- yahiko never guesses the work. Declare either `value` (a fixed amount in your own `unit`) or `file_size` (the size of a file in bytes, read before every run, outside the measured time).
+- Throughput is better when higher, so a budget is a floor (`>=` or `>`) and a comparison calls a drop a regression. yahiko refuses `<=` on throughput.
+- The budget's unit must match the work: `MiB/s` needs `unit: bytes`, `records/s` needs `unit: records`.
+- `min` of throughput is the slowest run. A percentile such as `p95` is the 95th percentile of the throughput values, which is the fast end.
+
+Example: [`examples/throughput`](https://github.com/nao1215/yahiko/tree/main/examples/throughput)
+
+## Detect a CPU time regression
+
+A change made the program burn more CPU, even if the wall-clock time on your machine barely moved.
+
+<!-- example: examples/cpu-regression/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: detect a CPU time regression.
+# https://nao1215.github.io/yahiko/cookbook/#detect-a-cpu-time-regression
+#
+#   yahiko compare --against main examples/cpu-regression
+version: "1"
+
+suite:
+  name: cpu regression
+  description: CPU time of the word counter, compared between a base revision and the working tree.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 2
+  runs: 20
+
+benchmarks:
+  - name: count 50k lines
+    setup:
+      - command: ["${artifact}", -gen, "50000", -o, "${workdir}/input.txt"]
+    metrics:
+      # User and system CPU time of the process tree, read from the operating
+      # system when each run exits.
+      cpu: true
+    commands:
+      wordcount:
+        command: ["${artifact}", "${workdir}/input.txt"]
+    budget:
+      wordcount:
+        cpu:
+          total:
+            median: "<= 5s"
+    regression:
+      # Latency and CPU time get separate tolerances. CPU time ignores time
+      # spent waiting, so it moves less when the runner is busy.
+      max_percent: 25
+      cpu:
+        max_percent: 20
+        # A difference smaller than this is never a regression, however large
+        # it is in percent.
+        min_difference: 5ms
+```
+
+```console
+$ yahiko compare --against main examples/cpu-regression
+```
+
+Two comparison tables, `latency` and `cpu total`, each with `BASE`, `HEAD`, `DIFF`, `CHANGE`, `CONFIDENCE`, `TOLERANCE` and `RESULT`. When the head uses clearly more CPU time the `cpu total` row says `REGRESSION` and yahiko exits 1. The end-to-end suite proves it by shrinking the word counter's read buffer in a scratch repository, which multiplies its read calls.
+
+- CPU time is user plus system time of the process tree, reported by the operating system when each run exits. It does not include time spent waiting, so it is often steadier than latency on a busy machine, but frequency scaling and a busy host still move it.
+- `cpu.max_percent` and `cpu.min_difference` are separate from the latency tolerance. `min_difference` keeps a large percentage of a tiny amount from failing CI.
+- CPU utilization is reported but never judged as a regression: more CPU per second can mean better parallelism.
+
+Example: [`examples/cpu-regression`](https://github.com/nao1215/yahiko/tree/main/examples/cpu-regression)
+
+## Detect a peak RSS regression
+
+A change made the program hold much more memory at its peak, and you want the pull request to fail.
+
+<!-- example: examples/memory-regression/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: detect a peak RSS regression.
+# https://nao1215.github.io/yahiko/cookbook/#detect-a-peak-rss-regression
+#
+#   yahiko compare --against main examples/memory-regression
+version: "1"
+
+suite:
+  name: memory regression
+  description: Peak resident set size of the word counter, compared between two revisions.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 12
+
+benchmarks:
+  - name: count 200k lines
+    setup:
+      - command: ["${artifact}", -gen, "200000", -o, "${workdir}/input.txt"]
+    metrics:
+      memory: true
+    commands:
+      wordcount:
+        command: ["${artifact}", "${workdir}/input.txt"]
+    budget:
+      wordcount:
+        memory:
+          peak_rss:
+            max: "<= 512MiB"
+    regression:
+      max_percent: 50
+      memory:
+        max_percent: 20
+        min_difference: 4MiB
+```
+
+```console
+$ yahiko compare --against main examples/memory-regression
+```
+
+A `peak rss` comparison table in MiB. When the head holds clearly more memory the row says `REGRESSION` and yahiko exits 1. The end-to-end suite proves it by switching the word counter's default implementation to one that reads the whole input into memory.
+
+- Peak RSS is the largest resident set size of any single process in the tree, as the operating system recorded it. It is not the heap size or the allocation count of a language runtime, and it is not the sum of processes running at the same time.
+- Memory samples are often identical run to run, so the comparison is usually decisive. `min_difference` stops a few hundred KiB of allocator noise from failing CI.
+- A budget on `max` is a hard ceiling for the worst run; a budget on `median` tolerates an outlier.
+
+Example: [`examples/memory-regression`](https://github.com/nao1215/yahiko/tree/main/examples/memory-regression)
+
+## Compare similar CLIs on the same input
+
+You want to see how different tools, or different modes of one tool, perform on exactly the same input, including how much CPU and memory each uses.
 
 <!-- example: examples/compare-clis/yahiko.yaml -->
 ```yaml
 # yaml-language-server: $schema=../../schema/yahiko.schema.json
 #
-# Recipe: compare several CLIs on the same input.
-# https://nao1215.github.io/yahiko/cookbook/#compare-several-clis-on-the-same-input
+# Recipe: compare similar CLIs on the same input.
+# https://nao1215.github.io/yahiko/cookbook/#compare-similar-clis-on-the-same-input
 version: "1"
 
 suite:
   name: compare CLIs
-  description: Two word counters and git hashing the same file.
+  description: Two word counter implementations and git hashing the same file.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -90,6 +300,12 @@ benchmarks:
   - name: count a 20k-line file
     setup:
       - command: ["${artifact}", -gen, "20000", -o, "${workdir}/input.txt"]
+    metrics:
+      cpu: true
+      memory: true
+      # git on Windows runs through a launcher process; measure everything
+      # else there instead of stopping.
+      unsupported: skip
     baseline: scanner
     commands:
       scanner:
@@ -104,12 +320,513 @@ benchmarks:
 $ yahiko run examples/compare-clis
 ```
 
-One row per command. `RELATIVE` is each median divided by the `baseline` command's median, so `scanner` shows `1.00x` and the others show how many times slower or faster they are.
+One row per command in each of the latency, CPU and memory tables. `RELATIVE` is each median latency divided by the `baseline` command's, so `scanner` shows `1.00x`. The `readall` row holds noticeably more memory than `scanner`, because it reads the whole file at once.
 
 - The commands run interleaved in a seeded random order, so a slow moment on the machine is shared rather than hitting one tool.
 - `setup` generates the input once into `${workdir}`; every command reads the same file.
+- `unsupported: skip` keeps the recipe running on Windows, where `git` may start a helper process whose peak RSS Windows does not record.
 
 Example: [`examples/compare-clis`](https://github.com/nao1215/yahiko/tree/main/examples/compare-clis)
+
+## Compare the Git base and head on every metric
+
+Before pushing, you want to know whether your changes, committed or not, made the program slower, less productive, hungrier for CPU or for memory than `main`.
+
+<!-- example: examples/git-compare/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: compare the Git base and head on every metric.
+# https://nao1215.github.io/yahiko/cookbook/#compare-the-git-base-and-head-on-every-metric
+#
+#   yahiko compare --against main examples/git-compare
+version: "1"
+
+suite:
+  name: git compare
+  description: The word counter built from a base revision and from the working tree.
+
+# In a comparison the build runs twice: once in a temporary worktree of the
+# base revision and once in your working tree, uncommitted changes included.
+# ${root} is this directory inside the tree being built.
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 2
+  runs: 20
+  regression:
+    metric: median
+    max_percent: 10
+    confidence: 0.95
+
+benchmarks:
+  - name: count 50k lines
+    setup:
+      - command: ["${artifact}", -gen, "50000", -o, "${workdir}/input.txt"]
+    stdin: "${workdir}/input.txt"
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.txt"
+      cpu: true
+      memory: true
+    commands:
+      wordcount:
+        command: ["${artifact}"]
+    regression:
+      # Every measured metric is compared, each in the direction that is
+      # worse for it: throughput regresses when it drops.
+      throughput:
+        max_percent: 10
+      cpu:
+        max_percent: 15
+        min_difference: 2ms
+      memory:
+        max_percent: 10
+        min_difference: 2MiB
+```
+
+```console
+$ yahiko compare --against main examples/git-compare
+```
+
+One comparison table per metric: `latency`, `throughput`, `cpu total` and `peak rss`. The tolerance column shows the direction that counts as worse: `+10%` for latency, `-10%` for throughput. The log says whether uncommitted changes were included.
+
+- The base is checked out into a temporary Git worktree and built there. Your working tree, index and branches are never modified, and the worktree is removed on success, failure and Ctrl+C.
+- Both builds are measured on this machine in the same invocation, interleaved round by round, so every metric sees the same noise. Results from different machines are never compared.
+- A regression needs a change beyond the tolerance and bootstrap confidence above `confidence`; see [Regression detection](/regression-detection/). Use `--format json` to keep the raw samples of both revisions.
+
+Example: [`examples/git-compare`](https://github.com/nao1215/yahiko/tree/main/examples/git-compare)
+
+## Fail a GitHub Actions job when a performance budget is violated
+
+Every pull request must stay within its budgets and must not regress against its base branch, and the job log has to say whether a failure is about performance or about the measurement.
+
+<!-- example: examples/github-actions/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: the suite .github/workflows/benchmark.yml runs, locally or in CI.
+# https://nao1215.github.io/yahiko/cookbook/#fail-a-github-actions-job-when-a-performance-budget-is-violated
+#
+#   yahiko run examples/github-actions
+#   YAHIKO_BASE_REF=main yahiko ci examples/github-actions
+version: "1"
+
+suite:
+  name: github actions
+  description: Budgets and regression checks the pull request workflow enforces.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 2
+  runs: 20
+  regression:
+    max_percent: 15
+    confidence: 0.95
+
+benchmarks:
+  - name: count 50k lines
+    setup:
+      - command: ["${artifact}", -gen, "50000", -o, "${workdir}/input.txt"]
+    stdin: "${workdir}/input.txt"
+    metrics:
+      throughput:
+        work:
+          value: 50000
+          unit: lines
+      cpu: true
+      memory: true
+    commands:
+      wordcount:
+        command: ["${artifact}"]
+    # Absolute budgets hold on every run, with or without a base revision.
+    # Shared runners are slow and noisy, so the limits leave a wide margin.
+    budget:
+      wordcount:
+        latency:
+          p95: "<= 2s"
+        throughput:
+          median: ">= 10000 lines/s"
+        cpu:
+          total:
+            median: "<= 2s"
+        memory:
+          peak_rss:
+            max: "<= 256MiB"
+    regression:
+      throughput:
+        max_percent: 15
+      cpu:
+        max_percent: 20
+        min_difference: 5ms
+      memory:
+        max_percent: 10
+        min_difference: 4MiB
+```
+
+The workflow:
+
+<!-- example: examples/github-actions/benchmark.yml -->
+```yaml
+# Copy this file to .github/workflows/benchmark.yml.
+# Recipe: fail a GitHub Actions job when a performance budget is violated.
+# https://nao1215.github.io/yahiko/cookbook/#fail-a-github-actions-job-when-a-performance-budget-is-violated
+name: Benchmark
+
+on:
+  pull_request:
+
+# Read-only: yahiko needs no secret and no write token, so pull requests from
+# forks run it safely. Do not use pull_request_target, which would run the
+# pull request's code with the base repository's secrets.
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The base commit must exist locally for the temporary worktree.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+      - run: go install github.com/nao1215/yahiko@latest
+      # Finds the pull request's base commit from the event, compares it with
+      # the checked-out head on every metric the suite measures, writes a
+      # summary to the job page and annotations to the pull request, and
+      # exits 1 on a missed budget or a confirmed regression. Exit 4 or 6
+      # means the measurement itself failed, not the performance.
+      - run: yahiko ci
+```
+
+```console
+$ yahiko run examples/github-actions
+```
+
+Locally, `yahiko run` checks the same budgets without a base revision. In the workflow, `yahiko ci` compares with the pull request's base, writes the tables to the job summary, adds an annotation for every missed budget or regression, and exits:
+
+| Exit | The job failed because |
+|---|---|
+| `1` | a budget was missed or a regression was confirmed: the code got slower, hungrier or less productive |
+| `4` | a command, hook, build or Git operation failed: the measurement did not complete |
+| `6` | a requested metric could not be measured: performance was not judged |
+
+The last line of the log says the same in words, and annotations are titled `performance budget exceeded`, `performance regression`, `benchmark could not run` or `metric could not be measured`.
+
+- The workflow is `pull_request` with `contents: read` and no secrets. yahiko refuses `pull_request_target`.
+- Check out with `fetch-depth: 0` so the base commit exists locally.
+- The same suite file runs unchanged on a laptop and in CI; only the command differs.
+
+Example: [`examples/github-actions`](https://github.com/nao1215/yahiko/tree/main/examples/github-actions)
+
+## Save JSON, CSV and Markdown reports locally
+
+You want results you can archive, load into a spreadsheet, paste into a pull request, or analyze yourself.
+
+<!-- example: examples/reports/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: save JSON, CSV and Markdown reports locally.
+# https://nao1215.github.io/yahiko/cookbook/#save-json-csv-and-markdown-reports-locally
+#
+#   yahiko run examples/reports --format json --output result.json
+#   yahiko run examples/reports --format csv --output result.csv
+#   yahiko run examples/reports --format samples-csv --output samples.csv
+#   yahiko run examples/reports --format markdown --output result.md
+#   yahiko run examples/reports --summary summary.md
+version: "1"
+
+suite:
+  name: reports
+  description: Two ways to count the same file, for report examples.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 10
+
+benchmarks:
+  - name: count 20k lines
+    setup:
+      - command: ["${artifact}", -gen, "20000", -o, "${workdir}/input.txt"]
+    metrics:
+      throughput:
+        work:
+          value: 20000
+          unit: lines
+      cpu: true
+      memory: true
+    baseline: scanner
+    commands:
+      scanner:
+        command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]
+      readall:
+        command: ["${artifact}", -impl, readall, "${workdir}/input.txt"]
+```
+
+```console
+$ yahiko run examples/reports --format json --output result.json
+$ yahiko run examples/reports --format csv --output result.csv
+$ yahiko run examples/reports --format samples-csv --output samples.csv
+$ yahiko run examples/reports --format markdown --output result.md
+```
+
+- `result.json` has `schema_version` `"1"` and, for every command, `head.metrics` with each metric's unit, direction, status, statistics, percentiles and every raw sample. It validates against `schema/report.schema.json`.
+- `result.csv` is long: one row per statistic, budget or comparison of one metric, with `record`, `metric`, `unit`, `statistic` and `value` columns and no structured data inside a cell.
+- `samples.csv` has one row per measured value of every run, keyed by `run`, so the metrics of one run can be joined.
+- `result.md` has one table per metric group and a budgets table, headed by the suite name.
+
+To write several reports on every run, list them under `report.outputs` in the suite, or append a job summary with `--summary FILE`. Reports never include environment variables or host names.
+
+Example: [`examples/reports`](https://github.com/nao1215/yahiko/tree/main/examples/reports)
+
+## Understand CPU utilization above 100%
+
+The CPU table says `246%` and you want to know whether that is a bug.
+
+<!-- example: examples/cpu-utilization/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: understand CPU utilization above 100%.
+# https://nao1215.github.io/yahiko/cookbook/#understand-cpu-utilization-above-100
+version: "1"
+
+suite:
+  name: cpu utilization
+  description: A single-threaded and a multi-threaded word count of the same file.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/wordcount]
+
+defaults:
+  warmup: 1
+  runs: 8
+
+benchmarks:
+  - name: count 500k lines
+    setup:
+      - command: ["${artifact}", -gen, "500000", -o, "${workdir}/input.txt"]
+    metrics:
+      cpu: true
+    baseline: scanner
+    commands:
+      scanner:
+        command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]
+      parallel:
+        command: ["${artifact}", -impl, parallel, -workers, "4", "${workdir}/input.txt"]
+    budget:
+      scanner:
+        cpu:
+          # Utilization is CPU time divided by wall-clock time. A
+          # single-threaded program stays near or below 100%.
+          utilization:
+            median: "<= 150%"
+```
+
+```console
+$ yahiko run examples/cpu-utilization
+```
+
+`scanner` shows a utilization near 100%, `parallel` well above it on a machine with several CPUs, while its latency is lower.
+
+- Utilization is total CPU time divided by wall-clock time, times 100. One CPU busy for the whole run is 100%; four CPUs busy for the whole run is 400%. It is not a share of the machine, and it is not divided by the number of CPUs.
+- A Go, Java or .NET program runs garbage collection and runtime threads next to your code, so even a single-threaded program can exceed 100% slightly.
+- A value far below 100% means the program waited: for I/O, a lock, a child process or a sleep.
+- Utilization has no better direction, so it can carry a budget in either direction but is never judged as a regression.
+
+Example: [`examples/cpu-utilization`](https://github.com/nao1215/yahiko/tree/main/examples/cpu-utilization)
+
+## Understand process tree measurement on each OS
+
+Your command starts other processes, a shell, `make`, a compiler, and you need to know what the CPU and memory numbers include.
+
+<!-- example: examples/process-tree/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: understand process tree measurement on each OS.
+# https://nao1215.github.io/yahiko/cookbook/#understand-process-tree-measurement-on-each-os
+version: "1"
+
+suite:
+  name: process tree
+  description: CPU time of a program that does its work itself, and of one that delegates it to two child processes.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/sleepy]
+
+defaults:
+  warmup: 1
+  runs: 6
+
+benchmarks:
+  - name: spin 100ms
+    metrics:
+      cpu:
+        # The started process and its descendants. Only process_tree exists.
+        scope: process_tree
+    commands:
+      alone:
+        command: ["${artifact}", -busy, -ms, "100"]
+      two-children:
+        # The parent only waits; each child spins for 100ms.
+        command: ["${artifact}", -busy, -ms, "100", -children, "2"]
+```
+
+```console
+$ yahiko run examples/process-tree
+```
+
+`alone` shows about 100ms of CPU time, `two-children` about 200ms: the CPU time of the two children counts, although the parent itself only waits.
+
+| | Linux, macOS, BSD | Windows |
+|---|---|---|
+| CPU time | the process and every descendant its parents waited for (`wait4` usage) | every process that was part of the command's Job Object |
+| Peak RSS | the largest peak of the process or any descendant its parents waited for | the peak working set of the started process, reported only when it started no child processes |
+| Not included | a descendant still running when the command exits, or orphaned before it exits | a child started in the microseconds before the process joined the job |
+
+- Neither platform adds up processes that ran at the same time: peak RSS is the largest single process.
+- yahiko reads these values from the operating system after each run exits, without polling, so collecting them adds nothing to the measured time. The peak is the kernel's own high-water mark, so a short spike is not missed the way a sampling profiler can miss it; memory that was reserved but never touched, or swapped out, never counted as resident.
+- `shell: true` adds the shell process to the tree: its start-up time, CPU time and memory count too.
+
+Example: [`examples/process-tree`](https://github.com/nao1215/yahiko/tree/main/examples/process-tree)
+
+## Cope with noise on GitHub-hosted runners
+
+Comparisons on shared runners flip between pass and fail, and you want results you can trust without buying a dedicated machine.
+
+<!-- example: examples/noisy/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: cope with noise on GitHub-hosted runners.
+# https://nao1215.github.io/yahiko/cookbook/#cope-with-noise-on-github-hosted-runners
+#
+#   yahiko compare --against main examples/noisy
+#   yahiko compare --against main --fail-on-inconclusive examples/noisy
+version: "1"
+
+suite:
+  name: noisy
+  description: A stand-in program with bimodal run times, and a steady one with noise-tolerant settings.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/sleepy]
+
+defaults:
+  # Warmup runs absorb one-off costs such as a cold file cache.
+  warmup: 1
+  # More runs make the bootstrap interval narrower on a noisy machine.
+  runs: 16
+
+benchmarks:
+  - name: bimodal
+    commands:
+      sleepy:
+        command: ["${artifact}", -ms, "10", -jitter-ms, "50", -state, "${workdir}/calls"]
+    regression:
+      max_percent: 10
+      confidence: 0.95
+      # The alternating run time gives a coefficient of variation near 0.7.
+      # Above max_cv a comparison is inconclusive instead of pass or fail.
+      max_cv: 0.3
+
+  - name: steady
+    metrics:
+      cpu: true
+    commands:
+      sleepy:
+        command: ["${artifact}", -ms, "30"]
+    regression:
+      # A wider tolerance than the default 10%, and an absolute floor: a
+      # change of less than 2ms is never a regression on a shared runner,
+      # however large it is in percent.
+      max_percent: 20
+      min_difference: 2ms
+      cpu:
+        max_percent: 50
+        min_difference: 5ms
+```
+
+```console
+$ yahiko compare --against main examples/noisy
+```
+
+`bimodal` is `INCONCLUSIVE` with the reason `measurements are noisier than max_cv`; `steady` passes. yahiko exits 0. With `--fail-on-inconclusive` the same run exits 1.
+
+- Inconclusive is not a pass: it means yahiko cannot tell. It exits 0 by default so noise does not teach people to ignore the check.
+- Revisions are measured interleaved, round by round, so a noisy neighbor slows both. More `runs` narrow the bootstrap interval; `warmup` absorbs one-off costs.
+- `min_difference` sets the smallest change worth failing CI for, per metric; `max_percent` sets the relative tolerance.
+- Prefer an absolute budget with a wide margin for hard limits, and a relative comparison for trends. CPU time and peak RSS are usually steadier than latency on a shared runner.
+- A single-digit percentage change of a millisecond command is below what a shared runner can resolve. Measure a representative workload instead.
+
+Example: [`examples/noisy`](https://github.com/nao1215/yahiko/tree/main/examples/noisy)
+
+## Handle a metric this platform cannot measure
+
+The same suite runs on Linux and Windows, and one metric cannot be measured on one of them.
+
+<!-- example: examples/unsupported-metrics/yahiko.yaml -->
+```yaml
+# yaml-language-server: $schema=../../schema/yahiko.schema.json
+#
+# Recipe: handle a metric this platform cannot measure.
+# https://nao1215.github.io/yahiko/cookbook/#handle-a-metric-this-platform-cannot-measure
+version: "1"
+
+suite:
+  name: unsupported metrics
+  description: Peak RSS of a command that starts a child process, which Windows cannot report.
+
+build:
+  command: [go, build, -o, "${artifact}", ../tools/sleepy]
+
+defaults:
+  warmup: 0
+  runs: 5
+  metrics:
+    cpu: true
+    memory: true
+    # The default, fail, stops before measuring when a requested metric
+    # cannot be measured here. skip measures everything else and reports the
+    # metric as unsupported, with its budgets and comparisons skipped.
+    unsupported: skip
+
+benchmarks:
+  - name: parent and child
+    commands:
+      sleepy:
+        command: ["${artifact}", -ms, "20", -children, "1"]
+    budget:
+      sleepy:
+        memory:
+          peak_rss:
+            max: "<= 256MiB"
+```
+
+```console
+$ yahiko run examples/unsupported-metrics
+```
+
+On Linux and macOS every metric is measured and the budget passes. On Windows the command starts a child process, so peak RSS is reported as `unsupported`, its budget as `SKIPPED` with the reason, CPU time is still measured, and yahiko exits 0.
+
+- Without `unsupported: skip`, the default `fail` stops before building or running anything when a platform cannot measure a requested metric at all, and exits 6 when it turns out at run time. A budget that silently disappeared would read as a pass.
+- An unsupported metric is never reported as zero: its `stats` are `null`, its status says `unsupported`, and the reason says why.
+- A metric the platform supports but failed to report is a `metric_collection_failed` error with exit status 6 under either policy, because it cannot be told apart from a broken measurement.
+
+Example: [`examples/unsupported-metrics`](https://github.com/nao1215/yahiko/tree/main/examples/unsupported-metrics)
 
 ## Compare parsers on a stdin fixture
 
@@ -390,498 +1107,6 @@ $ yahiko run examples/cache
 - The warmup run of `warm cache` is also a cache hit, because `setup` ran before it.
 
 Example: [`examples/cache`](https://github.com/nao1215/yahiko/tree/main/examples/cache)
-
-## Fail CI on an absolute budget
-
-You have a limit that must hold on every run, independent of the base branch: a start-up time, a response time.
-
-<!-- example: examples/budget/yahiko.yaml -->
-```yaml
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
-#
-# Recipe: fail CI when an absolute median budget is exceeded.
-# https://nao1215.github.io/yahiko/cookbook/#fail-ci-on-an-absolute-budget
-version: "1"
-
-suite:
-  name: budget
-  description: A contract on how long git may take to start.
-
-defaults:
-  warmup: 2
-  runs: 10
-
-benchmarks:
-  - name: git version
-    commands:
-      git:
-        command: [git, --version]
-    # A budget is a contract you chose. When the median is not below the
-    # limit, yahiko exits 1 regardless of noise.
-    budget:
-      git:
-        median: "< 2s"
-        max: "<= 5s"
-```
-
-```console
-$ yahiko run examples/budget
-```
-
-`PASS` while the median is below 2s and the slowest run at most 5s. When a budget is missed the row says `OVER BUDGET`, a line names the budget and the measured value, and yahiko exits 1.
-
-- Budgets are contracts, not statistics: noise does not excuse a miss. Keep CI budgets generous enough for shared runners.
-- Budgets can use `mean`, `median`, `min` and `max`, with `<` or `<=`.
-
-Example: [`examples/budget`](https://github.com/nao1215/yahiko/tree/main/examples/budget)
-
-## Compare main with your working tree
-
-Before pushing, you want to know whether your changes, committed or not, made the program slower than `main`.
-
-<!-- example: examples/git-compare/yahiko.yaml -->
-```yaml
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
-#
-# Recipes: compare a Git revision with the working tree, locally or in CI.
-# https://nao1215.github.io/yahiko/cookbook/#compare-main-with-your-working-tree
-#
-#   yahiko compare --against main examples/git-compare
-version: "1"
-
-suite:
-  name: git compare
-  description: The word counter built from a base revision and from the working tree.
-
-# In a comparison the build runs twice: once in a temporary worktree of the
-# base revision and once in your working tree, uncommitted changes included.
-# ${root} is this directory inside the tree being built.
-build:
-  command: [go, build, -o, "${artifact}", ../tools/wordcount]
-
-defaults:
-  warmup: 2
-  runs: 20
-  regression:
-    metric: median
-    max_percent: 10
-    confidence: 0.95
-
-benchmarks:
-  - name: count 50k lines
-    setup:
-      - command: ["${artifact}", -gen, "50000", -o, "${workdir}/input.txt"]
-    stdin: "${workdir}/input.txt"
-    commands:
-      wordcount:
-        command: ["${artifact}"]
-```
-
-```console
-$ yahiko compare --against main examples/git-compare
-```
-
-A `BASE`/`HEAD` table with the change, the confidence and `PASS`. The log says whether uncommitted changes were included.
-
-- The base is checked out into a temporary Git worktree and built there. Your working tree, index and branches are never modified, and the worktree is removed on success, failure and Ctrl+C.
-- Both builds run on this machine in the same invocation, interleaved; results from different machines are never compared.
-
-Example: [`examples/git-compare`](https://github.com/nao1215/yahiko/tree/main/examples/git-compare)
-
-## Fail on a clear regression
-
-A change made the program clearly slower, and CI must fail instead of letting it merge.
-
-<!-- example: examples/git-compare/yahiko.yaml -->
-```yaml
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
-#
-# Recipes: compare a Git revision with the working tree, locally or in CI.
-# https://nao1215.github.io/yahiko/cookbook/#compare-main-with-your-working-tree
-#
-#   yahiko compare --against main examples/git-compare
-version: "1"
-
-suite:
-  name: git compare
-  description: The word counter built from a base revision and from the working tree.
-
-# In a comparison the build runs twice: once in a temporary worktree of the
-# base revision and once in your working tree, uncommitted changes included.
-# ${root} is this directory inside the tree being built.
-build:
-  command: [go, build, -o, "${artifact}", ../tools/wordcount]
-
-defaults:
-  warmup: 2
-  runs: 20
-  regression:
-    metric: median
-    max_percent: 10
-    confidence: 0.95
-
-benchmarks:
-  - name: count 50k lines
-    setup:
-      - command: ["${artifact}", -gen, "50000", -o, "${workdir}/input.txt"]
-    stdin: "${workdir}/input.txt"
-    commands:
-      wordcount:
-        command: ["${artifact}"]
-```
-
-```console
-$ yahiko compare --against main examples/git-compare
-```
-
-The row says `REGRESSION` with a large positive `CHANGE` and a confidence above 95%, and yahiko exits 1. The end-to-end suite proves this by shrinking the word counter's read buffer in a scratch repository.
-
-- A regression needs both a change beyond `max_percent` and bootstrap confidence above `confidence`; see [Regression detection](/regression-detection/).
-- Use `--format json` to keep the raw samples of both revisions as evidence.
-
-Example: [`examples/git-compare`](https://github.com/nao1215/yahiko/tree/main/examples/git-compare)
-
-## Compare a pull request with its base in GitHub Actions
-
-Every pull request should be compared with its base branch in CI, safely for pull requests from forks.
-
-<!-- example: examples/github-actions/yahiko.yaml -->
-```yaml
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
-#
-# Recipe: the suite benchmark.yml runs in GitHub Actions.
-# https://nao1215.github.io/yahiko/cookbook/#compare-main-with-your-working-tree
-#
-#   YAHIKO_BASE_REF=main yahiko ci examples/github-actions
-version: "1"
-
-suite:
-  name: github actions
-  description: The word counter built from a base revision and from the working tree.
-
-# In a comparison the build runs twice: once in a temporary worktree of the
-# base revision and once in your working tree, uncommitted changes included.
-# ${root} is this directory inside the tree being built.
-build:
-  command: [go, build, -o, "${artifact}", ../tools/wordcount]
-
-defaults:
-  warmup: 2
-  runs: 20
-  regression:
-    metric: median
-    max_percent: 10
-    confidence: 0.95
-
-benchmarks:
-  - name: count 50k lines
-    setup:
-      - command: ["${artifact}", -gen, "50000", -o, "${workdir}/input.txt"]
-    stdin: "${workdir}/input.txt"
-    commands:
-      wordcount:
-        command: ["${artifact}"]
-```
-
-The workflow:
-
-<!-- example: examples/github-actions/benchmark.yml -->
-```yaml
-# Copy this file to .github/workflows/benchmark.yml.
-# Recipe: compare a pull request with its base in GitHub Actions.
-# https://nao1215.github.io/yahiko/cookbook/#compare-a-pull-request-with-its-base-in-github-actions
-name: Benchmark
-
-on:
-  pull_request:
-
-# Read-only: yahiko needs no secret and no write token, so pull requests from
-# forks run it safely. Do not use pull_request_target, which would run the
-# pull request's code with the base repository's secrets.
-permissions:
-  contents: read
-
-jobs:
-  benchmark:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The base commit must exist locally for the temporary worktree.
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: stable
-      - run: go install github.com/nao1215/yahiko@latest
-      # Finds the pull request's base commit from the event, compares it with
-      # the checked-out head, writes a summary to the job page, and exits 1 on
-      # a confirmed regression.
-      - run: yahiko ci
-```
-
-```console
-$ yahiko ci examples/github-actions
-```
-
-In the job log, the comparison table; on the job page, a summary headed by a one-line verdict. The job fails on a confirmed regression. Copy `examples/github-actions/benchmark.yml` into `.github/workflows/`.
-
-- The workflow is `pull_request` with `contents: read` and no secrets. yahiko refuses `pull_request_target`.
-- Check out with `fetch-depth: 0` so the base commit exists locally.
-
-Example: [`examples/github-actions`](https://github.com/nao1215/yahiko/tree/main/examples/github-actions)
-
-## Handle noisy measurements
-
-Your measurements are too noisy to call, and you want to decide whether that fails CI.
-
-<!-- example: examples/noisy/yahiko.yaml -->
-```yaml
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
-#
-# Recipes: see an inconclusive comparison, and decide whether it fails CI.
-# https://nao1215.github.io/yahiko/cookbook/#handle-noisy-measurements
-#
-#   yahiko compare --against main examples/noisy
-#   yahiko compare --against main --fail-on-inconclusive examples/noisy
-version: "1"
-
-suite:
-  name: noisy
-  description: A stand-in program whose run time alternates between 10ms and 60ms.
-
-build:
-  command: [go, build, -o, "${artifact}", ../tools/sleepy]
-
-defaults:
-  warmup: 0
-  runs: 12
-
-benchmarks:
-  - name: bimodal
-    commands:
-      sleepy:
-        command: ["${artifact}", -ms, "10", -jitter-ms, "50", -state, "${workdir}/calls"]
-    regression:
-      max_percent: 10
-      confidence: 0.95
-      # The alternating run time gives a coefficient of variation near 0.7.
-      # Above max_cv a comparison is inconclusive instead of pass or fail.
-      max_cv: 0.3
-```
-
-```console
-$ yahiko compare --against main examples/noisy
-```
-
-`INCONCLUSIVE`, with the reason `measurements are noisier than max_cv`, and exit status 0. With `--fail-on-inconclusive` the same run exits 1.
-
-- Inconclusive is not a pass: it means yahiko cannot tell. Add runs, measure a heavier workload, or use a quieter machine.
-- `sleepy` is a stand-in program whose run time alternates between 10ms and 60ms.
-
-Example: [`examples/noisy`](https://github.com/nao1215/yahiko/tree/main/examples/noisy)
-
-## Write a Markdown table
-
-You want benchmark results you can paste into a README, a pull request, a blog post or release notes.
-
-<!-- example: examples/reports/yahiko.yaml -->
-```yaml
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
-#
-# Recipes: Markdown, JSON with raw samples, CSV and a GitHub job summary.
-# https://nao1215.github.io/yahiko/cookbook/#write-a-markdown-table
-#
-#   yahiko run examples/reports --format markdown
-#   yahiko run examples/reports --format json --output result.json
-#   yahiko run examples/reports --format csv --output result.csv
-#   yahiko run examples/reports --summary summary.md
-version: "1"
-
-suite:
-  name: reports
-  description: Two ways to count the same file, for report examples.
-
-build:
-  command: [go, build, -o, "${artifact}", ../tools/wordcount]
-
-defaults:
-  warmup: 1
-  runs: 10
-
-benchmarks:
-  - name: count 20k lines
-    setup:
-      - command: ["${artifact}", -gen, "20000", -o, "${workdir}/input.txt"]
-    baseline: scanner
-    commands:
-      scanner:
-        command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]
-      readall:
-        command: ["${artifact}", -impl, readall, "${workdir}/input.txt"]
-```
-
-```console
-$ yahiko run examples/reports --format markdown
-```
-
-A GitHub-flavored Markdown table with median, mean, standard deviation, min, max, run count, both ratios and the result, followed by a line describing the machine.
-
-- Names are escaped, so a `|` cannot break the table.
-- `--output FILE` writes the report to a file instead of standard output.
-
-Example: [`examples/reports`](https://github.com/nao1215/yahiko/tree/main/examples/reports)
-
-## Keep raw samples in JSON
-
-You want every measured duration, unrounded, for your own analysis or as evidence attached to a CI run.
-
-<!-- example: examples/reports/yahiko.yaml -->
-```yaml
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
-#
-# Recipes: Markdown, JSON with raw samples, CSV and a GitHub job summary.
-# https://nao1215.github.io/yahiko/cookbook/#write-a-markdown-table
-#
-#   yahiko run examples/reports --format markdown
-#   yahiko run examples/reports --format json --output result.json
-#   yahiko run examples/reports --format csv --output result.csv
-#   yahiko run examples/reports --summary summary.md
-version: "1"
-
-suite:
-  name: reports
-  description: Two ways to count the same file, for report examples.
-
-build:
-  command: [go, build, -o, "${artifact}", ../tools/wordcount]
-
-defaults:
-  warmup: 1
-  runs: 10
-
-benchmarks:
-  - name: count 20k lines
-    setup:
-      - command: ["${artifact}", -gen, "20000", -o, "${workdir}/input.txt"]
-    baseline: scanner
-    commands:
-      scanner:
-        command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]
-      readall:
-        command: ["${artifact}", -impl, readall, "${workdir}/input.txt"]
-```
-
-```console
-$ yahiko run examples/reports --format json --output result.json
-```
-
-`result.json` has `schema_version` `"1"`, integer nanoseconds everywhere, every run in `samples_ns`, the environment, the seed and the exit status.
-
-- The schema is published as `schema/report.schema.json`.
-- The report never includes environment variables or host names.
-
-Example: [`examples/reports`](https://github.com/nao1215/yahiko/tree/main/examples/reports)
-
-## Export CSV
-
-You want the results in a spreadsheet or a database.
-
-<!-- example: examples/reports/yahiko.yaml -->
-```yaml
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
-#
-# Recipes: Markdown, JSON with raw samples, CSV and a GitHub job summary.
-# https://nao1215.github.io/yahiko/cookbook/#write-a-markdown-table
-#
-#   yahiko run examples/reports --format markdown
-#   yahiko run examples/reports --format json --output result.json
-#   yahiko run examples/reports --format csv --output result.csv
-#   yahiko run examples/reports --summary summary.md
-version: "1"
-
-suite:
-  name: reports
-  description: Two ways to count the same file, for report examples.
-
-build:
-  command: [go, build, -o, "${artifact}", ../tools/wordcount]
-
-defaults:
-  warmup: 1
-  runs: 10
-
-benchmarks:
-  - name: count 20k lines
-    setup:
-      - command: ["${artifact}", -gen, "20000", -o, "${workdir}/input.txt"]
-    baseline: scanner
-    commands:
-      scanner:
-        command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]
-      readall:
-        command: ["${artifact}", -impl, readall, "${workdir}/input.txt"]
-```
-
-```console
-$ yahiko run examples/reports --format csv --output result.csv
-```
-
-A header line and one row per command (per revision in a comparison), with integer nanosecond columns.
-
-- The column list is fixed; new columns are only added at the end.
-
-Example: [`examples/reports`](https://github.com/nao1215/yahiko/tree/main/examples/reports)
-
-## Write a GitHub Actions job summary
-
-You want the results on the job page, even when running `yahiko run` rather than `yahiko ci`.
-
-<!-- example: examples/reports/yahiko.yaml -->
-```yaml
-# yaml-language-server: $schema=../../schema/yahiko.schema.json
-#
-# Recipes: Markdown, JSON with raw samples, CSV and a GitHub job summary.
-# https://nao1215.github.io/yahiko/cookbook/#write-a-markdown-table
-#
-#   yahiko run examples/reports --format markdown
-#   yahiko run examples/reports --format json --output result.json
-#   yahiko run examples/reports --format csv --output result.csv
-#   yahiko run examples/reports --summary summary.md
-version: "1"
-
-suite:
-  name: reports
-  description: Two ways to count the same file, for report examples.
-
-build:
-  command: [go, build, -o, "${artifact}", ../tools/wordcount]
-
-defaults:
-  warmup: 1
-  runs: 10
-
-benchmarks:
-  - name: count 20k lines
-    setup:
-      - command: ["${artifact}", -gen, "20000", -o, "${workdir}/input.txt"]
-    baseline: scanner
-    commands:
-      scanner:
-        command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]
-      readall:
-        command: ["${artifact}", -impl, readall, "${workdir}/input.txt"]
-```
-
-```console
-$ yahiko run examples/reports --summary summary.md
-```
-
-`summary.md` gets a verdict line and the Markdown tables appended. In a workflow, pass `--summary "$GITHUB_STEP_SUMMARY"`.
-
-- `yahiko ci` appends to `$GITHUB_STEP_SUMMARY` without the flag.
-
-Example: [`examples/reports`](https://github.com/nao1215/yahiko/tree/main/examples/reports)
 
 ## Run only smoke benchmarks
 

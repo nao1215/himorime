@@ -263,7 +263,7 @@ func TestJudgeCompareDirections(t *testing.T) {
 	}
 	out.Reset()
 	_ = WriteGitHubSummary(&out, r)
-	for _, want := range []string{"#### Peak rss", "| m | tool | 32.00MiB | 48.00MiB | +16.00MiB | +50.0% |"} {
+	for _, want := range []string{"#### Peak RSS", "| m | tool | 32.00MiB | 48.00MiB | +16.00MiB | +50.0% |"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("summary lacks %q:\n%s", want, out.String())
 		}
