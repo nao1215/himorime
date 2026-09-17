@@ -217,8 +217,8 @@ scenarios:
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
-      # The program now waits 200ms instead of 10ms: slower, but no more CPU
-      # time or memory.
+      # The program now waits 200ms instead of 10ms after its 150ms of work:
+      # slower, but no more CPU time or memory.
       - run:
           command: e2ehelper replace examples/tools/sleepy/main.go "time.Sleep(d)" "time.Sleep(d + 190*time.Millisecond)"
           cwd: repo
@@ -227,19 +227,20 @@ scenarios:
           command: himorime compare --against main --quiet --format json examples/gate-cpu-memory
           cwd: repo
           timeout: 600s
-      # The latency regression is real and not gated, so nothing fails the
-      # run. The result can still be inconclusive on Windows, where the CPU
-      # time of a program this short is inconclusive by itself; that is
-      # issue #9 and not what this recipe is about.
+      # The 150ms of CPU and the memory are the same in both revisions, so
+      # the gated comparisons pass and the run does not fail. The latency
+      # regression is real and not gated.
       - assert:
           exit_code: 0
           stdout:
             json:
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: false}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.verdict", equals: "pass"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.cpu_total.gate", equals: true}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.peak_rss.verdict", equals: "pass"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.peak_rss.gate", equals: true}
-              - {path: "$.suites[0].benchmarks[0].commands[0].result", matches: "^(pass|inconclusive)$"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
               - {path: "$.summary.not_gated.regression", equals: 1}
               - {path: "$.summary.regression", equals: 0}
               - {path: "$.summary.exit_code", equals: 0}
@@ -250,7 +251,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^wait for input +.* REGRESSION \\(NOT GATED\\)$"
+            matches: "(?m)^work then wait +.* REGRESSION \\(NOT GATED\\)$"
       - assert:
           stdout: {contains: "not gated: 1 regressed"}
 
