@@ -393,6 +393,10 @@ func (v *validator) resolveWork(p path, raw RawWork) *Work {
 		}
 		if unit != metric.BytesUnit {
 			v.add(p.key("unit"), "remove unit or write unit: bytes", "file_size measures bytes, so its unit must be bytes, not %q", unit)
+			// The unit the writer has to put here is bytes. Carrying the
+			// rejected one further would make the budget and tolerance
+			// checks below repeat it back as the unit to write.
+			unit = metric.BytesUnit
 		}
 	} else {
 		w.Value = *raw.Value
@@ -401,6 +405,7 @@ func (v *validator) resolveWork(p path, raw RawWork) *Work {
 		}
 		if metric.IsByteUnit(unit) && unit != metric.BytesUnit {
 			v.add(p.key("unit"), "convert the value to bytes and write unit: bytes; throughput is then shown as KiB/s, MiB/s and so on", "work unit %q is a byte size multiple", unit)
+			unit = metric.BytesUnit
 		}
 	}
 	w.Unit = unit

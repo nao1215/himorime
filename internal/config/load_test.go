@@ -591,3 +591,74 @@ func TestLoadRejectsMetrics(t *testing.T) {
 		})
 	}
 }
+
+// TestLoadReportsAWrongWorkUnitOnce pins that a work unit himorime rejects is
+// not used to build the hints of the budget and tolerance errors that follow
+// it: a writer who fixes the unit must not be told to write it again.
+func TestLoadReportsAWrongWorkUnitOnce(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		src   string
+		want  []string
+		field string
+	}{
+		{
+			name: "byte multiple with a byte rate everywhere",
+			src: minimal("") + `    metrics:
+      throughput: {work: {value: 1000, unit: KB}}
+    budget:
+      tool:
+        throughput: {median: ">= 1KB/s"}
+    regression:
+      throughput: {min_difference: 1KB/s}
+`,
+			want:  []string{`work unit "KB" is a byte size multiple`},
+			field: "benchmarks[0].metrics.throughput.work.unit",
+		},
+		{
+			name: "file size in records with a byte rate budget",
+			src: minimal("") + `    metrics:
+      throughput: {work: {file_size: in.json, unit: records}}
+    budget:
+      tool:
+        throughput: {median: ">= 1MiB/s"}
+`,
+			want:  []string{"its unit must be bytes"},
+			field: "benchmarks[0].metrics.throughput.work.unit",
+		},
+		{
+			name: "byte multiple with a budget in another unit",
+			src: minimal("") + `    metrics:
+      throughput: {work: {value: 1000, unit: KB}}
+    budget:
+      tool:
+        throughput: {median: ">= 1000 records/s"}
+`,
+			want:  []string{`work unit "KB" is a byte size multiple`, "the budget is in records/s"},
+			field: "benchmarks[0].metrics.throughput.work.unit",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseString(t, tt.src)
+			var verr *ValidationError
+			if !errors.As(err, &verr) {
+				t.Fatalf("Load() error = %v, want a ValidationError\n%s", err, tt.src)
+			}
+			if len(verr.Issues) != len(tt.want) {
+				t.Fatalf("issues = %d, want %d:\n%v\nsource:\n%s", len(verr.Issues), len(tt.want), err, tt.src)
+			}
+			for i, w := range tt.want {
+				if !strings.Contains(verr.Issues[i].Message, w) {
+					t.Errorf("issue %d = %q, want it to contain %q", i, verr.Issues[i].Message, w)
+				}
+			}
+			if verr.Issues[0].Field != tt.field {
+				t.Errorf("first issue field = %q, want %q", verr.Issues[0].Field, tt.field)
+			}
+		})
+	}
+}
+
