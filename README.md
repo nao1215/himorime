@@ -13,6 +13,9 @@ compares against a Git base revision, and fails CI when performance gets
 worse. The same file and the same command work on your laptop and in GitHub
 Actions.
 
+himorime is a sister project of [atago](https://github.com/nao1215/atago):
+atago tests what a CLI does, himorime tests how fast and how lean it does it.
+
 ## Install
 
 ```console
