@@ -311,7 +311,7 @@ scenarios:
   # Linux counts the peak RSS of the process that starts a command as part of
   # the command's. himorime starts commands from a small spawner, so a tiny
   # command no longer reports himorime's own 10MiB and more.
-  - name: peak rss of a tiny command is not raised by himorime on Linux
+  - name: peak rss of a command smaller than its starter is reported at the floor on Linux
     only: {os: linux}
     steps:
       - fixture:
@@ -331,12 +331,14 @@ scenarios:
           exit_code: 0
           stdout:
             json:
-              # himorime itself holds about 10MiB. The spawner that starts a
-              # command whose memory is measured holds 5 to 9MiB, depending on
-              # how the binary was built.
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.stats.median", lt: 9500000}
+              # true uses less memory than the process that starts it, so
+              # every run is at the floor: the report says at most the floor,
+              # never a precise value that is really the starter's. How low
+              # the floor is depends on how the binary was built (coverage
+              # instrumentation makes it larger), so it is pinned by the Go
+              # test that holds 200MiB, not here.
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.floor", gt: 0}
-              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.samples_at_floor", gte: 0}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.samples_at_floor", equals: 10}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.floor", equals: 0}
 
   - name: peak rss of a multi-process tree is unsupported on Windows and fails unless skipped
