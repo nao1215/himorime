@@ -28,8 +28,8 @@ const (
 	recordBudget     = "budget"
 	recordComparison = "comparison"
 	recordError      = "error"
-	// recordNewInHead is the only row of a suite the base revision does not
-	// have; reason says so.
+	// recordNewInHead is the first row of a suite the base revision does
+	// not have; reason says so. The rows after it are those of a plain run.
 	recordNewInHead = "new_in_head"
 )
 
@@ -90,13 +90,14 @@ func (b *csvRowBuilder) setError(e *Error) *csvRowBuilder {
 }
 
 func suiteRows(mode Mode, s Suite) [][]string {
-	if s.Error != nil {
-		return [][]string{newRow(s.Name, "", "", s.Result, recordError).setError(s.Error).row}
-	}
-	if s.NewInHead {
-		return [][]string{newRow(s.Name, "", "", s.Result, recordNewInHead).set("reason", newInHeadLine(s)).row}
-	}
 	var rows [][]string
+	if s.NewInHead {
+		rows = append(rows, newRow(s.Name, "", "", s.Result, recordNewInHead).set("reason", newInHeadLine(s)).row)
+	}
+	if s.Error != nil {
+		return append(rows, newRow(s.Name, "", "", s.Result, recordError).setError(s.Error).row)
+	}
+	mode = suiteMode(mode, s)
 	for _, b := range s.Benchmarks {
 		if len(b.Commands) == 0 {
 			rows = append(rows, newRow(s.Name, b.Name, "", b.Result, recordError).setError(b.Error).row)

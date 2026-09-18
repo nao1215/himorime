@@ -663,52 +663,81 @@ func TestResultOrder(t *testing.T) {
 }
 
 // newSuiteReport judges a comparison of an existing suite and of a suite the
-// base revision does not have.
-func newSuiteReport(t *testing.T) *Report {
+// base revision does not have, measured in the head only, within its budget
+// or over it.
+func newSuiteReport(t *testing.T, budget string) *Report {
 	t.Helper()
 	existing := compareResult("ok", samples(10*time.Millisecond, 20, 0), samples(10*time.Millisecond, 20, 0))
+	fresh := runResult("fresh", "", map[string][]time.Duration{"app": samples(5*time.Millisecond, 10, 0)}, "app")
+	fresh.Benchmark.Budgets = []config.Budget{latencyBudget(t, "app", metric.AggMedian, budget)}
 	r := &Report{Environment: Environment{LogicalCPUs: 1}}
 	Judge(r, []SuiteInput{
 		{Suite: &config.Suite{Name: "old", Benchmarks: []config.Benchmark{existing.Benchmark}}, File: "himorime.yaml", Benchmarks: []runner.BenchmarkResult{existing}},
-		{Suite: &config.Suite{Name: "added", Benchmarks: []config.Benchmark{{Name: "fresh"}}}, File: "bench/himorime.yaml", NewInHead: true},
+		{Suite: &config.Suite{Name: "added", Benchmarks: []config.Benchmark{fresh.Benchmark}}, File: "bench/himorime.yaml", NewInHead: true, Benchmarks: []runner.BenchmarkResult{fresh}},
 	}, Options{Mode: ModeCompare, Seed: 7})
 	return r
 }
 
 func TestJudgeSuiteNewInHead(t *testing.T) {
 	t.Parallel()
-	r := newSuiteReport(t)
+	r := newSuiteReport(t, "<= 1s")
 	s := r.Suites[1]
-	if !s.NewInHead || s.Error != nil || s.Result != ResultPass || s.Benchmarks == nil || len(s.Benchmarks) != 0 || s.GeometricMean != nil {
+	if !s.NewInHead || s.Error != nil || s.Result != ResultPass || len(s.Benchmarks) != 1 || s.GeometricMean != nil {
 		t.Fatalf("new suite = %+v", s)
+	}
+	c := s.Benchmarks[0].Commands[0]
+	if c.Base != nil || c.Comparisons != nil || c.Head == nil || len(c.Budgets) != 1 || c.Budgets[0].Status != BudgetPass {
+		t.Fatalf("a new suite's command is judged as in a plain run: %+v", c)
 	}
 	if r.Suites[0].NewInHead || len(r.Suites[0].Benchmarks) != 1 {
 		t.Fatalf("existing suite = %+v", r.Suites[0])
 	}
-	if r.Summary.Suites != 2 || r.Summary.NewSuites != 1 || r.Summary.Benchmarks != 1 || r.Summary.Commands != 1 || r.Summary.Error != 0 || r.Summary.ExitCode != exitcode.OK {
+	if r.Summary.Suites != 2 || r.Summary.NewSuites != 1 || r.Summary.Benchmarks != 2 || r.Summary.Commands != 2 || r.Summary.Pass != 2 || r.Summary.ExitCode != exitcode.OK {
 		t.Fatalf("summary = %+v", r.Summary)
 	}
+
+	// An exceeded budget of the new suite fails the comparison.
+	r = newSuiteReport(t, "<= 1ms")
+	if r.Suites[1].Result != ResultOverBudget || r.Summary.OverBudget != 1 || r.Summary.ExitCode != exitcode.Failed {
+		t.Fatalf("over budget: suite %+v, summary %+v", r.Suites[1], r.Summary)
+	}
+
+	// So does its failed build.
 	only := &Report{}
-	Judge(only, []SuiteInput{{Suite: &config.Suite{Name: "added"}, File: "bench/himorime.yaml", NewInHead: true}}, Options{Mode: ModeCompare, FailOnInconclusive: true})
-	if only.Summary.ExitCode != exitcode.OK || only.Summary.NewSuites != 1 || only.Summary.Pass != 0 {
-		t.Fatalf("a run whose only suite is new = %+v", only.Summary)
+	Judge(only, []SuiteInput{{Suite: &config.Suite{Name: "added"}, File: "bench/himorime.yaml", NewInHead: true, BuildFailure: &runner.Failure{Kind: runner.FailBuild, Message: "exit status 2"}}}, Options{Mode: ModeCompare})
+	if !only.Suites[0].NewInHead || only.Suites[0].Result != ResultError || only.Summary.NewSuites != 1 || only.Summary.ExitCode != exitcode.Execution {
+		t.Fatalf("a new suite whose build failed = %+v", only.Summary)
 	}
 }
 
 func TestRenderSuiteNewInHead(t *testing.T) {
 	t.Parallel()
-	r := newSuiteReport(t)
-	const line = "new in this revision: bench does not exist in the base revision, so there is nothing to compare yet"
+	r := newSuiteReport(t, "<= 1s")
+	const line = "new in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked"
 
 	var term bytes.Buffer
 	if err := WriteTerminal(&term, r, TerminalOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	text := term.String()
-	if !strings.Contains(text, "suite: added (bench/himorime.yaml)\n"+line+"\n\n") {
-		t.Errorf("terminal:\n%s", text)
+	_, addedText, found := strings.Cut(text, "suite: added")
+	if !found {
+		t.Fatalf("terminal lacks the new suite:\n%s", text)
 	}
-	if !strings.HasSuffix(text, "1 passed · 1 benchmark · 1 suite new in this revision · seed 7 · exit 0\n") {
+	addedText = "suite: added" + addedText
+	for _, want := range []string{
+		"suite: added (bench/himorime.yaml)\n" + line + "\nlatency\nBENCHMARK  COMMAND  MEDIAN",
+		"\nbudgets\n",
+		"PASS",
+	} {
+		if !strings.Contains(addedText, want) {
+			t.Errorf("terminal lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(addedText, "CONFIDENCE") {
+		t.Errorf("a new suite has nothing to compare:\n%s", text)
+	}
+	if !strings.HasSuffix(text, "2 passed · 2 benchmarks · 1 suite new in this revision · seed 7 · exit 0\n") {
 		t.Errorf("terminal summary line:\n%s", text)
 	}
 
@@ -716,7 +745,8 @@ func TestRenderSuiteNewInHead(t *testing.T) {
 	if err := WriteMarkdown(&md, r); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(md.String(), "## added\n\nNew in this revision: bench does not exist in the base revision, so there is nothing to compare yet.\n\n") || strings.Contains(md.String(), "**") {
+	if !strings.Contains(md.String(), "## added\n\nNew in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked.\n\n") ||
+		!strings.Contains(md.String(), "| fresh | app |") || strings.Contains(md.String(), "**") {
 		t.Errorf("markdown:\n%s", md.String())
 	}
 
@@ -727,14 +757,12 @@ func TestRenderSuiteNewInHead(t *testing.T) {
 	if !strings.Contains(summary.String(), " · 1 suite new in this revision\n") || !strings.Contains(summary.String(), "New in this revision: bench") {
 		t.Errorf("job summary:\n%s", summary.String())
 	}
-	only := &Report{}
-	Judge(only, []SuiteInput{{Suite: &config.Suite{Name: "added"}, File: "bench/himorime.yaml", NewInHead: true}}, Options{Mode: ModeCompare})
 	summary.Reset()
-	if err := WriteGitHubSummary(&summary, only); err != nil {
+	if err := WriteGitHubSummary(&summary, newSuiteReport(t, "<= 1ms")); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(summary.String(), "## ✅ himorime benchmark comparison: nothing to compare yet, every suite is new in this revision\n") {
-		t.Errorf("job summary of a new suite only:\n%s", summary.String())
+	if !strings.HasPrefix(summary.String(), "## ❌ himorime benchmark comparison: budget exceeded\n") {
+		t.Errorf("job summary of a new suite over its budget:\n%s", summary.String())
 	}
 
 	var ann bytes.Buffer
@@ -753,14 +781,29 @@ func TestRenderSuiteNewInHead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	last := rows[len(rows)-1]
-	if last[csvCol("suite")] != "added" || last[csvCol("record")] != "new_in_head" || last[csvCol("result")] != "pass" || last[csvCol("reason")] != line || last[csvCol("error_kind")] != "" {
-		t.Errorf("csv row = %q", last)
-	}
-	for _, row := range rows[1 : len(rows)-1] {
+	var added [][]string
+	for _, row := range rows[1:] {
 		if row[csvCol("suite")] == "added" {
-			t.Errorf("a new suite has a single row: %q", row)
+			added = append(added, row)
 		}
+	}
+	if len(added) < 2 || added[0][csvCol("record")] != "new_in_head" || added[0][csvCol("result")] != "pass" || added[0][csvCol("reason")] != line {
+		t.Fatalf("csv rows of the new suite = %q", added)
+	}
+	var budgets int
+	for _, row := range added[1:] {
+		switch row[csvCol("record")] {
+		case "comparison":
+			t.Errorf("a new suite has no comparison rows: %q", row)
+		case "budget":
+			budgets++
+		}
+		if row[csvCol("side")] == "base" {
+			t.Errorf("a new suite has no base rows: %q", row)
+		}
+	}
+	if budgets != 1 {
+		t.Errorf("csv budget rows of the new suite = %d, want 1", budgets)
 	}
 
 	var js bytes.Buffer

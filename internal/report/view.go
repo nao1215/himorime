@@ -89,8 +89,17 @@ func checksNote(s Summary) string {
 
 // newInHeadLine explains a suite the base revision does not have. The
 // directory is taken from the suite path as the user gave it.
+// suiteMode is the mode a suite is shown in: a suite new in this revision
+// was measured and judged as a plain run, even in a comparison.
+func suiteMode(mode Mode, s Suite) Mode {
+	if s.NewInHead {
+		return ModeRun
+	}
+	return mode
+}
+
 func newInHeadLine(s Suite) string {
-	return fmt.Sprintf("new in this revision: %s does not exist in the base revision, so there is nothing to compare yet", filepath.Dir(s.File))
+	return fmt.Sprintf("new in this revision: %s does not exist in the base revision, so only this revision is measured and its budgets are checked", filepath.Dir(s.File))
 }
 
 // newSuitesNote counts the suites the base revision does not have, or

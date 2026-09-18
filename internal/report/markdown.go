@@ -57,21 +57,21 @@ func writeMarkdownBody(sb *strings.Builder, r *Report, level int) {
 		if s.Description != "" {
 			sb.WriteString(EscapeMarkdown(s.Description) + "\n\n")
 		}
+		if s.NewInHead {
+			line := newInHeadLine(s)
+			fmt.Fprintf(sb, "%s.\n\n", EscapeMarkdown(strings.ToUpper(line[:1])+line[1:]))
+		}
 		if s.Error != nil {
 			fmt.Fprintf(sb, "**Error:** %s\n\n", EscapeMarkdown(errorLine(s.Error)))
 			continue
 		}
-		if s.NewInHead {
-			line := newInHeadLine(s)
-			fmt.Fprintf(sb, "%s.\n\n", EscapeMarkdown(strings.ToUpper(line[:1])+line[1:]))
-			continue
-		}
-		if r.Mode == ModeCompare {
+		mode := suiteMode(r.Mode, s)
+		if mode == ModeCompare {
 			markdownCompare(sb, s, level)
 		} else {
 			markdownRun(sb, s, level)
 		}
-		markdownNotes(sb, r.Mode, s)
+		markdownNotes(sb, mode, s)
 	}
 	markdownEnvironment(sb, r)
 }

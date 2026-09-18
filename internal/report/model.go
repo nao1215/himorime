@@ -108,8 +108,9 @@ type Suite struct {
 	Result      Result `json:"result"`
 	Error       *Error `json:"error"`
 	// NewInHead is true in a comparison when the suite directory does not
-	// exist in the base revision. Nothing was built, run or compared, so
-	// Benchmarks is empty and the suite does not change the exit status.
+	// exist in the base revision. Only the head side was built and run, as
+	// in a plain run: its commands have no base and no comparisons, and its
+	// budgets and failures decide the result.
 	NewInHead  bool        `json:"new_in_head"`
 	Benchmarks []Benchmark `json:"benchmarks"`
 	// GeometricMean is present only when every command completed every case.
