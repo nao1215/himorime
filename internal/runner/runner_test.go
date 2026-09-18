@@ -2,7 +2,9 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -90,6 +92,20 @@ func TestMain(m *testing.M) {
 		}
 	case "tty":
 		os.Exit(ttyHelper(args))
+	case "readonly":
+		// A tree whose directories cannot be written, as a Go module cache is.
+		sub := filepath.Join(args[0], "ro", "sub")
+		if err := os.MkdirAll(sub, 0o700); err != nil {
+			os.Exit(5)
+		}
+		if err := os.WriteFile(filepath.Join(sub, "f"), []byte("x"), 0o400); err != nil {
+			os.Exit(5)
+		}
+		for _, d := range []string{sub, filepath.Dir(sub)} {
+			if err := os.Chmod(d, 0o500); err != nil {
+				os.Exit(5)
+			}
+		}
 	case "pwd":
 		wd, _ := os.Getwd()
 		_, _ = io.WriteString(os.Stdout, wd)
@@ -555,6 +571,60 @@ func TestRemoveTempRefusesOutsidePaths(t *testing.T) {
 	}
 	if err := removeTemp(base, filepath.Join(base, "does-not-exist")); err != nil {
 		t.Fatalf("removing a missing directory: %v", err)
+	}
+}
+
+func TestRemoveTempRemovesReadOnlyDirectoriesWithoutLeavingIt(t *testing.T) {
+	t.Parallel()
+	base := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Chmod(outside, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(outside, 0o700) })
+	inside := filepath.Join(base, "work")
+	sub := filepath.Join(inside, "ro", "sub")
+	if err := os.MkdirAll(sub, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "f"), []byte("x"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Symlink(outside, filepath.Join(sub, "escape")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, d := range []string{sub, filepath.Dir(sub)} {
+		if err := os.Chmod(d, 0o500); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := removeTemp(base, inside); err != nil {
+		t.Fatalf("removeTemp: %v", err)
+	}
+	if _, err := os.Lstat(inside); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("%s is still there: %v", inside, err)
+	}
+	if info, err := os.Stat(outside); err != nil || info.Mode().Perm() != 0o500 {
+		t.Fatalf("the directory a symlink pointed to changed: %v, %v", info.Mode(), err)
+	}
+}
+
+func TestMeasureRemovesAWorkdirHoldingReadOnlyDirectories(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	b := bench("readonly", 2, f.command("ok", "ok"))
+	b.Setup = []config.Exec{f.helper("readonly", "${workdir}")}
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
+	if res.Failure != nil {
+		t.Fatalf("failure: %+v", res.Failure)
+	}
+	entries, _ := os.ReadDir(filepath.Join(f.runner.TempDir, SideHead))
+	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), "workdir-") {
+			t.Fatalf("workdir %s was left behind", e.Name())
+		}
 	}
 }
 
