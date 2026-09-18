@@ -444,14 +444,15 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		}
 	}
 
-	for _, side := range sides {
+	if len(sides) == 2 {
 		// The change adds this suite: the base revision has nothing to
-		// compare against, which is reported, not treated as a failure, so
-		// the pull request that adopts himorime does not fail.
-		if _, err := os.Stat(side.Root); side.Name == runner.SideBase && errors.Is(err, fs.ErrNotExist) {
-			m.logf("suite %q (%s): new in this revision; %s does not exist in the base revision, so nothing is measured", s.Name, ls.display, filepath.Dir(ls.display))
+		// compare against, so the working tree is measured alone and judged
+		// as a plain run would judge it. A broken build or an exceeded
+		// budget fails the pull request that adds it, not the next one.
+		if _, err := os.Stat(sides[0].Root); errors.Is(err, fs.ErrNotExist) {
+			m.logf("suite %q (%s): new in this revision; %s does not exist in the base revision, so only this revision is measured", s.Name, ls.display, filepath.Dir(ls.display))
 			in.NewInHead = true
-			return in
+			sides = sides[1:]
 		}
 	}
 	m.logf("suite %q (%s): %s", s.Name, ls.display, plural(len(s.Benchmarks), "benchmark"))

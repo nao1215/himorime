@@ -276,7 +276,7 @@
           "$ref": "#/definitions/error"
         },
         "new_in_head": {
-          "description": "True in a comparison when the suite directory does not exist in the base revision. Nothing was built, run or compared: benchmarks is empty, result stays pass and the suite does not change the exit status.",
+          "description": "True in a comparison when the suite directory does not exist in the base revision. Only the working tree was built and run, as in a plain run: its commands have a null base and null comparisons, and its budgets and failures decide its result and the exit status.",
           "type": "boolean"
         },
         "benchmarks": {
@@ -684,7 +684,7 @@
           "minimum": 0
         },
         "new_suites": {
-          "description": "Suites with new_in_head: the base revision does not have them, so nothing of them was compared. They never change the exit status.",
+          "description": "Suites with new_in_head: the base revision does not have them, so they were measured in the working tree only and nothing of them was compared.",
           "type": "integer",
           "minimum": 0
         }

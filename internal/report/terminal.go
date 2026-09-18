@@ -45,21 +45,21 @@ func WriteTerminal(w io.Writer, r *Report, o TerminalOptions) error {
 			sb.WriteString("\n")
 		}
 		fmt.Fprintf(&sb, "suite: %s (%s)\n", cellText(s.Name), cellText(s.File))
+		if s.NewInHead {
+			sb.WriteString(newInHeadLine(s) + "\n")
+		}
 		if s.Error != nil {
 			fmt.Fprintf(&sb, "error: %s\n", errorLine(s.Error))
 			writeStderr(&sb, s.Error)
 			continue
 		}
-		if s.NewInHead {
-			sb.WriteString(newInHeadLine(s) + "\n")
-			continue
-		}
-		if r.Mode == ModeCompare {
+		mode := suiteMode(r.Mode, s)
+		if mode == ModeCompare {
 			compareTable(&sb, s, o)
 		} else {
 			runTable(&sb, s, o)
 		}
-		details(&sb, r.Mode, s, true)
+		details(&sb, mode, s, true)
 	}
 	sb.WriteString("\n")
 	summaryLine(&sb, r)

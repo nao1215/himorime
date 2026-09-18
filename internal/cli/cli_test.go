@@ -520,9 +520,9 @@ func TestCompare(t *testing.T) {
 	}
 }
 
-// newSuite would fail if anything ran: its build copies a file that does not
+// brokenNewSuite fails when it runs: its build copies a file that does not
 // exist, and its setup hook exits non-zero.
-const newSuite = `version: "1"
+const brokenNewSuite = `version: "1"
 suite: {name: added}
 build:
   command: [@EXE@, copy, missing.txt, "${artifact}"]
@@ -538,28 +538,50 @@ benchmarks:
         command: [@EXE@, sleep-from, "${artifact}"]
 `
 
+// newSuite builds and runs, within its budget.
+const newSuite = `version: "1"
+suite: {name: added}
+build:
+  command: [@EXE@, copy, delay.txt, "${artifact}"]
+defaults:
+  warmup: 0
+  runs: 10
+benchmarks:
+  - name: fresh
+    commands:
+      app:
+        command: [@EXE@, sleep-from, "${artifact}"]
+    budget:
+      app: {median: "<= 10s"}
+`
+
 func TestCompareSuiteNewInHead(t *testing.T) {
 	dir := compareRepo(t)
-	write(t, filepath.Join(dir, "bench", "himorime.yaml"), suite(t, newSuite))
+	write(t, filepath.Join(dir, "bench", "himorime.yaml"), suite(t, brokenNewSuite))
 
+	// The base has no suite to compare with, so the working tree is measured
+	// alone, and a suite that cannot run fails the pull request that adds it.
 	r := run(t, dir, nil, "compare", "--against", "main", "bench")
-	if r.code != exitcode.OK {
-		t.Fatalf("a suite added by the change must not fail the comparison: %+v", r)
+	if r.code != exitcode.Execution {
+		t.Fatalf("a broken suite added by the change must fail the comparison: %+v", r)
 	}
 	for _, want := range []string{
 		"suite: added (bench/himorime.yaml)",
-		"new in this revision: bench does not exist in the base revision, so there is nothing to compare yet",
+		"new in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked",
+		"error: build failed",
 		"1 suite new in this revision",
-		"exit 0",
+		"exit 4",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("stdout lacks %q:\n%s", want, r.stdout)
 		}
 	}
-	if strings.Contains(r.stdout, "PASS") || strings.Contains(r.stdout, "error") {
-		t.Errorf("a new suite is neither a pass nor an error:\n%s", r.stdout)
+	if strings.Contains(r.stderr, "building base") {
+		t.Errorf("nothing is built in the base revision:\n%s", r.stderr)
 	}
 
+	write(t, filepath.Join(dir, "bench", "himorime.yaml"), suite(t, newSuite))
+	write(t, filepath.Join(dir, "bench", "delay.txt"), "1ms\n")
 	type reportJSON struct {
 		Suites []struct {
 			Name       string            `json:"name"`
@@ -580,19 +602,19 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
 		t.Fatalf("%v\n%s", err, r.stdout)
 	}
-	if r.code != exitcode.OK || len(rep.Suites) != 1 || !rep.Suites[0].NewInHead || rep.Suites[0].Error != nil || rep.Suites[0].Benchmarks == nil || len(rep.Suites[0].Benchmarks) != 0 ||
-		rep.Summary.NewSuites != 1 || rep.Summary.Commands != 0 || rep.Summary.ExitCode != exitcode.OK {
+	if r.code != exitcode.OK || len(rep.Suites) != 1 || !rep.Suites[0].NewInHead || rep.Suites[0].Error != nil || rep.Suites[0].Result != "pass" || len(rep.Suites[0].Benchmarks) != 1 ||
+		rep.Summary.NewSuites != 1 || rep.Summary.Commands != 1 || rep.Summary.ExitCode != exitcode.OK {
 		t.Fatalf("report = %+v\n%s", rep, r.stdout)
 	}
 
-	// The suite that exists on both revisions is still measured and judged.
+	// The suite that exists on both revisions is still compared.
 	r = run(t, dir, nil, "compare", "--against", "main", "--format", "json", "--quiet", "himorime.yaml", "bench")
 	rep = reportJSON{}
 	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
 		t.Fatalf("%v\n%s", err, r.stdout)
 	}
 	if r.code != exitcode.OK || len(rep.Suites) != 2 || rep.Suites[0].NewInHead || len(rep.Suites[0].Benchmarks) != 1 || !rep.Suites[1].NewInHead ||
-		rep.Summary.Suites != 2 || rep.Summary.NewSuites != 1 || rep.Summary.Commands != 1 {
+		rep.Summary.Suites != 2 || rep.Summary.NewSuites != 1 || rep.Summary.Commands != 2 {
 		t.Fatalf("mixed report = %+v\n%s", rep, r.stdout)
 	}
 	write(t, filepath.Join(dir, "delay.txt"), "400ms\n")
@@ -600,7 +622,8 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 		t.Fatalf("a regression next to a new suite: %+v", r)
 	}
 
-	// A plain run measures the new suite as usual, so its broken build fails.
+	// A plain run measures the new suite as usual and does not call it new.
+	write(t, filepath.Join(dir, "bench", "himorime.yaml"), suite(t, brokenNewSuite))
 	if r := run(t, dir, nil, "run", "--quiet", "bench"); r.code != exitcode.Execution || strings.Contains(r.stdout, "new in this revision") {
 		t.Fatalf("run: %+v", r)
 	}
