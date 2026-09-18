@@ -634,6 +634,35 @@ func TestMeasureRemovesAWorkdirHoldingReadOnlyDirectories(t *testing.T) {
 	}
 }
 
+func TestMeasureSaysTheWorkingDirectoryIsMissing(t *testing.T) {
+	t.Parallel()
+	t.Run("command", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		c := f.command("pwd", "ok")
+		c.Cwd = "${workdir}/nope"
+		res := f.runner.Measure(context.Background(), bench("cwd", 1, c), []Side{f.side})
+		m := res.Commands[0].Sides[SideHead]
+		if m.Failure == nil || m.Failure.Kind != FailStart || !strings.Contains(m.Failure.Message, "(cwd ${workdir}/nope) does not exist") {
+			t.Fatalf("failure = %+v, want a start failure naming the missing working directory", m.Failure)
+		}
+		if strings.Contains(m.Failure.Message, "hook") {
+			t.Fatalf("a command's failure talks about hooks: %s", m.Failure.Message)
+		}
+	})
+	t.Run("setup in the benchmark's cwd", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		b := bench("cwd", 1, f.command("ok", "ok"))
+		b.Setup = []config.Exec{f.helper("ok")}
+		b.Setup[0].Cwd = "${workdir}/sub"
+		res := f.runner.Measure(context.Background(), b, []Side{f.side})
+		if res.Failure == nil || res.Failure.Kind != FailSetup || !strings.Contains(res.Failure.Message, "(cwd ${workdir}/sub) does not exist") || !strings.Contains(res.Failure.Message, "needs cwd: ${workdir}") {
+			t.Fatalf("failure = %+v, want a setup failure naming the directory and how to create it", res.Failure)
+		}
+	})
+}
+
 func TestBuild(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
