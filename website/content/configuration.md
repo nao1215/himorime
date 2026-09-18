@@ -4,7 +4,7 @@ description: The himorime.yaml suite format, version 1. Every key, its default, 
 toc: true
 ---
 
-A suite is a YAML file, `himorime.yaml` by default. `himorime run`, `compare`, `ci`, `list` and `validate` take files and directories as arguments; a directory contributes its `himorime.yaml` and every `*.himorime.yaml` in it.
+A suite is a YAML file, `himorime.yaml` by default. It measures the repository that contains the suite: in a comparison, himorime builds and runs that repository at the base and head revisions. A command from another repository is compared as an installed command; a suite does not build or check out another repository. `himorime run`, `compare`, `ci`, `list` and `validate` take files and directories as arguments; a directory contributes its `himorime.yaml` and every `*.himorime.yaml` in it.
 
 ## Editor support
 
