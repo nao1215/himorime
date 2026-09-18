@@ -19,11 +19,11 @@ Every round runs each compared command once for each revision, in an order shuff
 | Metric | Compared value | Worse when | Settings |
 |---|---|---|---|
 | latency | the statistic of the run times | it grows | `regression.latency` |
-| throughput | the statistic of work / latency per run | it shrinks | `regression.throughput` |
+| throughput | work / the selected latency statistic | it shrinks | derived from `regression.latency` |
 | CPU time | the statistic of user + system time | it grows | `regression.cpu` |
 | peak RSS | the statistic of the runs' peaks | it grows | `regression.memory` |
 
-CPU utilization, user and system time are reported but not compared: they are parts of CPU time, or have no better direction. Each compared metric gets its own verdict; the command's result is the worst verdict of the gated metrics, so a memory regression fails the check even when latency passed.
+CPU utilization, user and system time are reported but not compared: they are parts of CPU time, or have no better direction. Latency, CPU and memory each get their own verdict; the command's result is the worst verdict of the gated metrics, so a memory regression fails the check even when latency passed. Throughput derives its verdict from latency and never gates or counts a second time. A throughput budget still fails a run independently.
 
 ## The statistic
 
@@ -35,7 +35,7 @@ degradation = change        for latency, CPU time and peak RSS
 degradation = -change       for throughput
 ```
 
-The same `max_percent` therefore means the same thing for every metric: how much worse it may get. A throughput drop of 8% and a latency increase of 8% are both a degradation of 8%; a throughput increase is an improvement.
+For independent metrics, `max_percent` is the tolerated increase. The throughput row converts latency's change and confidence interval through the reciprocal, reversing the interval endpoints, and copies the verdict and probabilities. A +10% latency tolerance is a 9.09% rate drop; the corresponding improvement threshold is an 11.11% rate increase. `max_percent` on the derived row describes the regression threshold only. `min_difference` is applied in latency units, so consult the latency row for that threshold. This remains coherent for both mean and median: the derived value is work / the latency statistic, not the mean or median of per-run rates.
 
 It then runs a percentile bootstrap: 2,000 times, it draws as many samples as each side has, with replacement, from that side's samples, and computes the change of the metric between the two resamples. The resulting distribution of changes gives:
 
@@ -52,15 +52,15 @@ In order:
 | Verdict | When |
 |---|---|
 | `inconclusive` | Either side has fewer than `min_samples` samples. |
-| `inconclusive` | Either side's spread exceeds `max_cv`: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (stddev / mean) when the statistic is `mean`. |
+| `inconclusive` | Either side's spread exceeds `max_cv` and the observed ranges overlap or touch: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (stddev / mean) when the statistic is `mean`. |
 | `pass` | `min_difference` is set and the absolute difference is smaller. |
 | `regression` | The observed degradation exceeds `max_percent` and `probability_regression` ≥ `confidence`. |
 | `improved` | The observed degradation is below `-max_percent` and `probability_improvement` ≥ `confidence`. |
 | `pass` | The probability that the degradation is within `max_percent` is at least `confidence`. |
 | `inconclusive` | Anything else: the change is too close to the tolerance to call. |
-| `skipped` | The metric was unsupported on one side (`metrics.unsupported: skip`); it is not judged. |
+| `skipped` | The metric was unsupported on one side, both RSS statistics were at their floors, or derived throughput lacked constant equal work; it is not judged. |
 
-A regression therefore needs three things at once: enough samples, an observed degradation beyond the tolerance, and enough evidence that it is not noise. One slow run cannot fail a build; a consistently slow head does. The verdict is deterministic: the same samples, settings and seed always give the same verdict and exit status.
+A regression therefore needs three things at once: enough samples, an observed degradation beyond the tolerance, and enough evidence that it is not noise. When every head sample exceeds every base sample (or vice versa), within-side dispersion does not erase the observed ordering. Such samples pass the noise gate but still need all the remaining checks, including bootstrap confidence beyond the tolerance. This is evidence about the observed samples, not proof that future executions cannot overlap. The verdict is deterministic: the same samples, settings and seed always give the same verdict and exit status.
 
 ## Minimum meaningful change
 
@@ -69,7 +69,6 @@ A percentage alone misleads for small values: 10% of a 2ms command is 200µs, le
 ```yaml
 regression:
   latency: {max_percent: 10, min_difference: 2ms}
-  throughput: {max_percent: 10, min_difference: "1000 records/s"}
   cpu: {max_percent: 15, min_difference: 5ms}
   memory: {max_percent: 5, min_difference: 1MiB}
 ```

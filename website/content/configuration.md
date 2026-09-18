@@ -60,7 +60,6 @@ benchmarks:
     regression:
       confidence: 0.95
       latency: {metric: median, max_percent: 10}
-      throughput: {max_percent: 8}
       cpu: {max_percent: 10, min_difference: 2ms}
       memory: {max_percent: 5, min_difference: 1MiB}
 ```
@@ -120,7 +119,7 @@ budget:
 
 The operator follows the metric's direction. Latency, CPU time and peak RSS are better when lower, so their budgets are upper bounds (`<`, `<=`). Throughput is better when higher, so its budgets are lower bounds (`>`, `>=`). CPU utilization has no better direction and takes either. A budget on a metric the benchmark does not measure is a validation error.
 
-`regression` sets how a comparison judges each metric. `confidence`, `min_samples`, `max_cv` and `commands` apply to every metric. `latency`, `throughput`, `cpu` (total CPU time) and `memory` (peak RSS) each take the same four keys, and each metric is compared whenever the benchmark measures it:
+`regression` sets how a comparison judges each independent metric. `confidence`, `min_samples`, `max_cv` and `commands` apply to latency, CPU and memory. `latency`, `cpu` (total CPU time) and `memory` (peak RSS) each take the same four keys. Throughput derives its comparison from latency; `regression.throughput` is rejected. Use `regression.latency` for relative changes or a throughput budget for an absolute rate limit:
 
 ```yaml
 regression:
@@ -131,7 +130,7 @@ regression:
 ```
 
 - `metric` is the compared statistic, `median` or `mean`.
-- `max_percent` is the tolerated degradation in the metric's worse direction: an increase for latency, CPU time and peak RSS, a decrease for throughput.
+- `max_percent` is the tolerated increase for latency, CPU time and peak RSS. Throughput displays the corresponding reciprocal tolerance from latency.
 - `min_difference` is the smallest absolute change that can count at all.
 - `gate` (default `true`) says whether the metric's verdict decides the result and the exit status. With `gate: false` the metric is still compared and reported with its verdict, marked as not gated, but a regression or an inconclusive result never fails the run.
 
@@ -268,10 +267,10 @@ Commands and hooks (`setup`, `prepare_each`, `cleanup`) inherit himorime's envir
 | `regression.confidence` | `0.95` |
 | `regression.min_samples` | `10` |
 | `regression.max_cv` | `0.5` |
-| `regression.latency, throughput, cpu, memory: metric` | `median` |
-| `regression.latency, throughput, cpu, memory: max_percent` | `10` |
-| `regression.latency, throughput, cpu, memory: min_difference` | `unset (none)` |
-| `regression.latency, throughput, cpu, memory: gate` | `true` |
+| `regression.latency, cpu, memory: metric` | `median` |
+| `regression.latency, cpu, memory: max_percent` | `10` |
+| `regression.latency, cpu, memory: min_difference` | `unset (none)` |
+| `regression.latency, cpu, memory: gate` | `true` |
 | `metrics.cpu, metrics.memory` | `false` |
 | `metrics.unsupported` | `fail` |
 | `metrics.throughput.work.unit` | `operations (value), bytes (file_size)` |
@@ -447,20 +446,19 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 |---|---|---|
 | `confidence` |  | Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95. |
 | `min_samples` |  | Fewest samples per side for a verdict. In a comparison, adaptive runs keep measuring until every compared command has this many; fewer is inconclusive. Default 10. |
-| `max_cv` |  | A side whose spread exceeds this is inconclusive: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (standard deviation / mean) when the statistic is mean; 0 disables the check. Default 0.5. |
+| `max_cv` |  | Overlapping or touching sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. Completely separated ranges still need the sample count, tolerance and bootstrap confidence checks. 0 disables the noise check. Default 0.5. |
 | `commands` |  | Compare only these commands. Default: every command. |
 | `latency` |  | How latency (wall-clock time; lower is better) is compared. |
-| `throughput` |  | How throughput (higher is better, so a drop is a degradation) is compared. |
 | `cpu` |  | How total CPU time (lower is better) is compared. |
 | `memory` |  | How peak RSS (lower is better) is compared. |
 
-### regression.latency, regression.throughput, regression.cpu, regression.memory
+### regression.latency, regression.cpu, regression.memory
 
 | Key | Required | Description |
 |---|---|---|
 | `metric` |  | Statistic compared: median (default) or mean. |
 | `max_percent` |  | Tolerated degradation in percent: a number such as 10, or a string such as "10%". Default 10. |
-| `min_difference` |  | The smallest absolute difference that can be a regression or an improvement; smaller differences pass. A duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory, a rate in the work unit such as "1000 records/s" for throughput. Default: none. |
+| `min_difference` |  | The smallest absolute difference that can be a regression or an improvement; smaller differences pass. A duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory. Default: none. |
 | `gate` |  | Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run. |
 
 ### report

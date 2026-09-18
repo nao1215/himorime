@@ -379,10 +379,8 @@ benchmarks:
       wordcount:
         command: ["${artifact}"]
     regression:
-      # Every measured metric is compared, each in the direction that is
-      # worse for it: throughput regresses when it drops.
-      throughput:
-        max_percent: 10
+      # Throughput derives its verdict from latency. CPU and memory are
+      # independent measurements with their own tolerances.
       cpu:
         max_percent: 15
         min_difference: 2ms
@@ -587,8 +585,6 @@ benchmarks:
           peak_rss:
             max: "<= 256MiB"
     regression:
-      throughput:
-        max_percent: 15
       cpu:
         max_percent: 20
         min_difference: 5ms

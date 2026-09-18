@@ -28,7 +28,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 		t.Errorf("command defaults = %+v", c)
 	}
 	metricDefault := MetricRegression{Metric: MetricMedian, MaxPercent: 10, Gate: true}
-	want := Regression{Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Latency: metricDefault, Throughput: metricDefault, CPU: metricDefault, Memory: metricDefault}
+	want := Regression{Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Latency: metricDefault, CPU: metricDefault, Memory: metricDefault}
 	if !reflect.DeepEqual(b.Regression, want) {
 		t.Errorf("regression defaults = %+v, want %+v", b.Regression, want)
 	}
@@ -100,7 +100,7 @@ benchmarks:
 	if r.Latency.Metric != MetricMean || r.Latency.MaxPercent != 15 || r.Latency.Gate || r.Confidence != 0.9 || r.MinSamples != 12 || r.MaxCV != 0 || !reflect.DeepEqual(r.Commands, []string{"one"}) {
 		t.Errorf("benchmark regression = %+v", r)
 	}
-	if !r.CPU.Gate || !r.Memory.Gate || !r.Throughput.Gate {
+	if !r.CPU.Gate || !r.Memory.Gate {
 		t.Errorf("metrics without a gate setting must stay gated: %+v", r)
 	}
 	if second.Regression.Latency.MaxPercent != 5 || second.Regression.Commands != nil {
@@ -462,7 +462,6 @@ benchmarks:
           peak_rss: {max: "<= 64MiB"}
     regression:
       latency: {min_difference: 2ms}
-      throughput: {metric: mean, max_percent: "8%", min_difference: 1MiB/s}
       memory: {max_percent: 5, min_difference: 512KiB}
   - name: records
     metrics:
@@ -510,13 +509,13 @@ benchmarks:
 		t.Errorf("budgets:\n got %v\nwant %v", got, want)
 	}
 	r := large.Regression
-	if r.Latency.MinDifference != 2e6 || r.Throughput.Metric != MetricMean || r.Throughput.MaxPercent != 8 || r.Throughput.MinDifference != 1<<20 {
+	if r.Latency.MinDifference != 2e6 {
 		t.Errorf("regression = %+v", r)
 	}
 	if r.CPU.MaxPercent != 12 || r.Memory.MaxPercent != 5 || r.Memory.MinDifference != 512<<10 || r.Memory.Metric != MetricMedian {
 		t.Errorf("inherited regression = %+v", r)
 	}
-	for name, wantPct := range map[metric.Name]float64{metric.Latency: 10, metric.Throughput: 8, metric.CPUTotal: 12, metric.PeakRSS: 5} {
+	for name, wantPct := range map[metric.Name]float64{metric.Latency: 10, metric.CPUTotal: 12, metric.PeakRSS: 5} {
 		if mr, ok := r.For(name); !ok || mr.MaxPercent != wantPct {
 			t.Errorf("For(%s) = %+v, %v", name, mr, ok)
 		}
@@ -592,7 +591,7 @@ func TestLoadRejectsMetrics(t *testing.T) {
 		{"regression min_difference type", withMetrics("memory: true", "", "memory: {min_difference: 5ms}"), "invalid byte size", "benchmarks[0].regression.memory.min_difference"},
 		{"latency min_difference type", withMetrics("", "", "latency: {min_difference: 1MiB}"), "invalid duration", "benchmarks[0].regression.latency.min_difference"},
 		{"gate for an unmeasured metric", withMetrics("", "", "cpu: {gate: false}"), "regression.cpu is set but this benchmark does not measure cpu", "benchmarks[0].regression.cpu"},
-		{"throughput min_difference unit", withMetrics("throughput: {work: {value: 5, unit: records}}", "", "throughput: {min_difference: 1MiB/s}"), "min_difference is in bytes/s but the declared work unit is records", "benchmarks[0].regression.throughput.min_difference"},
+		{"independent throughput regression is rejected", withMetrics("throughput: {work: {value: 5, unit: records}}", "", "throughput: {max_percent: 10}"), `unknown key "throughput"`, "benchmarks[0].regression.throughput"},
 		{"regression metric p95", withMetrics("cpu: true", "", "cpu: {metric: p95}"), "must be one of: median, mean", "benchmarks[0].regression.cpu.metric"},
 		{"samples format in report", "version: \"1\"\nsuite: {name: x}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\nreport: {outputs: [{format: samples, path: x.csv}]}\n", "must be one of", "report.outputs[0].format"},
 	}
@@ -635,8 +634,6 @@ func TestLoadReportsAWrongWorkUnitOnce(t *testing.T) {
     budget:
       tool:
         throughput: {median: ">= 1KB/s"}
-    regression:
-      throughput: {min_difference: 1KB/s}
 `,
 			want:  []string{`work unit "KB" is a byte size multiple`},
 			field: "benchmarks[0].metrics.throughput.work.unit",

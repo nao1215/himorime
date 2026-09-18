@@ -9,6 +9,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/csv"
 	"errors"
@@ -34,6 +35,7 @@ func subcommand(name string) (func([]string) error, bool) {
 		"remove": remove, "require": require, "replace": replace, "consume": consume, "event": event,
 		"interrupt": interrupt, "burn": burn, "alloc": alloc, "records": records, "tree": tree,
 		"print": printOut, "getenv": getenv, "terminal": terminal, "pad": pad, "args-from": argsFrom, "json-schema": jsonSchema, "csv-shape": csvShape,
+		"capture-report": captureReport,
 	}[name]
 	return run, ok
 }
@@ -47,8 +49,36 @@ func main() {
 		fail(fmt.Sprintf("unknown subcommand %q", os.Args[1]))
 	}
 	if err := run(os.Args[2:]); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.ExitCode())
+		}
 		fail(err.Error())
 	}
+}
+
+// captureReport keeps complete JSON output even when an assertion later
+// fails and atago removes its scenario directory. It preserves both streams
+// and the exit status of the measured CLI.
+func captureReport(args []string) error {
+	if err := need(args, 2, "capture-report NAME COMMAND [ARGS...]"); err != nil {
+		return err
+	}
+	dir := os.Getenv("HIMORIME_E2E_REPORT_DIR")
+	if dir == "" || filepath.Base(args[0]) != args[0] {
+		return errors.New("capture-report needs HIMORIME_E2E_REPORT_DIR and a plain file name")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	var out bytes.Buffer
+	cmd := exec.Command(args[1], args[2:]...)
+	cmd.Stdout, cmd.Stderr = io.MultiWriter(os.Stdout, &out), os.Stderr
+	runErr := cmd.Run()
+	if err := os.WriteFile(filepath.Join(dir, args[0]+".json"), out.Bytes(), 0o600); err != nil {
+		return err
+	}
+	return runErr
 }
 
 func fail(msg string) {

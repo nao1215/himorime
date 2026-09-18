@@ -108,7 +108,8 @@ func lineWith(t *testing.T, text, word string) string {
 // TestComparePeakRSSAtTheFloor: a side at its floor is compared as if it
 // used the whole floor. Only the verdict that assumption cannot overstate
 // stands: a regression away from a base at its floor, an improvement down to
-// a head at its floor. Anything else is inconclusive.
+// a head at its floor. Other one-sided cases are inconclusive; two sides
+// below their floors are skipped.
 func TestComparePeakRSSAtTheFloor(t *testing.T) {
 	t.Parallel()
 	floor := repeat(5<<20, 20)

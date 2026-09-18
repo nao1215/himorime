@@ -94,7 +94,6 @@ func defaultRegression() Regression {
 		MinSamples: DefaultMinSamples,
 		MaxCV:      DefaultMaxCV,
 		Latency:    metricDefault,
-		Throughput: metricDefault,
 		CPU:        metricDefault,
 		Memory:     metricDefault,
 	}
@@ -118,7 +117,6 @@ func (v *validator) applyRegression(base Regression, raw *RawRegression, p path)
 		r.Commands = raw.Commands
 	}
 	r.Latency = v.applyMetricRegression(r.Latency, raw.Latency, p.key("latency"), metric.KindDuration)
-	r.Throughput = v.applyMetricRegression(r.Throughput, raw.Throughput, p.key("throughput"), metric.KindRate)
 	r.CPU = v.applyMetricRegression(r.CPU, raw.CPU, p.key("cpu"), metric.KindDuration)
 	r.Memory = v.applyMetricRegression(r.Memory, raw.Memory, p.key("memory"), metric.KindBytes)
 	return r
@@ -136,8 +134,7 @@ func (v *validator) applyMetricRegression(base MetricRegression, raw *RawMetricR
 		r.MaxPercent = raw.MaxPercent.Value
 	}
 	if raw.MinDifference != nil {
-		r.MinDifference, r.unit = v.quantity(p.key("min_difference"), k, *raw.MinDifference)
-		r.unitPath = p.key("min_difference")
+		r.MinDifference, _ = v.quantity(p.key("min_difference"), k, *raw.MinDifference)
 	}
 	if raw.Gate != nil {
 		r.Gate = *raw.Gate
@@ -359,10 +356,6 @@ func (v *validator) resolveBenchmark(p path, rb RawBenchmark, d *RawDefaults, ba
 		}
 		v.checkRegressionMetrics(p.key("regression"), rb.Regression, b.Metrics)
 	}
-	if b.Metrics.Throughput != nil && b.Regression.Throughput.unit != "" && b.Regression.Throughput.unit != b.Metrics.Throughput.Unit {
-		v.add(b.Regression.Throughput.unitPath, "write min_difference in the declared work unit, such as \"1000 "+b.Metrics.Throughput.Unit+"/s\"",
-			"min_difference is in %s/s but the declared work unit is %s", b.Regression.Throughput.unit, b.Metrics.Throughput.Unit)
-	}
 	return b
 }
 
@@ -373,7 +366,7 @@ func (v *validator) checkRegressionMetrics(p path, raw *RawRegression, m Metrics
 		key   string
 		group metric.Group
 		set   bool
-	}{{"throughput", metric.GroupThroughput, raw.Throughput != nil}, {"cpu", metric.GroupCPU, raw.CPU != nil}, {"memory", metric.GroupMemory, raw.Memory != nil}} {
+	}{{"cpu", metric.GroupCPU, raw.CPU != nil}, {"memory", metric.GroupMemory, raw.Memory != nil}} {
 		if x.set && !m.Collects(x.group) {
 			v.add(p.key(x.key), metricHint(x.group), "regression.%s is set but this benchmark does not measure %s", x.key, x.group)
 		}

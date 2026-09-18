@@ -34,7 +34,7 @@ func cmd(name string) config.Command {
 
 func regression() config.Regression {
 	d := config.MetricRegression{Metric: config.MetricMedian, MaxPercent: 10, Gate: true}
-	return config.Regression{Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Latency: d, Throughput: d, CPU: d, Memory: d}
+	return config.Regression{Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Latency: d, CPU: d, Memory: d}
 }
 
 func runResult(name string, baseline string, cmds map[string][]time.Duration, order ...string) runner.BenchmarkResult {
@@ -919,8 +919,8 @@ func TestCompareRefusesAVerdictWhenTheWorkDiffers(t *testing.T) {
 	if tp == nil {
 		t.Fatal("no throughput comparison")
 	}
-	if tp.Verdict != string(stats.VerdictInconclusive) {
-		t.Errorf("verdict = %s, want inconclusive; a smaller input is not a slower program", tp.Verdict)
+	if tp.Verdict != VerdictSkipped {
+		t.Errorf("verdict = %s, want skipped; a smaller input is not a slower program", tp.Verdict)
 	}
 	if !strings.Contains(tp.Reason, "1000") || !strings.Contains(tp.Reason, "250") {
 		t.Errorf("reason = %q, want both amounts of work", tp.Reason)

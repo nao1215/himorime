@@ -196,7 +196,6 @@ func TestSchemaKeysMatchRawStructs(t *testing.T) {
 		{"throughput", def("metrics")["properties"].(map[string]any)["throughput"].(map[string]any), RawThroughput{}, nil},
 		{"work", def("work"), RawWork{}, nil},
 		{"collector", def("collector")["oneOf"].([]any)[1].(map[string]any), RawCollector{}, nil},
-		{"throughput regression", def("throughputRegression"), RawMetricRegression{}, nil},
 		{"cpu regression", def("cpuRegression"), RawMetricRegression{}, nil},
 		{"memory regression", def("memoryRegression"), RawMetricRegression{}, nil},
 		{"regression (defaults)", def("regression"), RawRegression{}, []string{"commands"}},

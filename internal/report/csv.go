@@ -19,7 +19,7 @@ var CSVHeader = []string{
 	"metric", "unit", "scope", "source", "process_aggregation", "status", "statistic", "value",
 	"operator", "limit", "base", "head", "difference",
 	"change_percent", "ci_low_percent", "ci_high_percent", "probability_regression", "max_percent",
-	"verdict", "gate", "reason", "error_kind", "error_message",
+	"verdict", "gate", "reason", "error_kind", "error_message", "derived_from",
 }
 
 // CSV record types.
@@ -161,6 +161,7 @@ func commandRows(mode Mode, s Suite, b Benchmark, c Command) [][]string {
 			continue
 		}
 		row := newRow(s.Name, b.Name, c.Name, c.Result, recordComparison).
+			set("derived_from", mc.DerivedFrom).
 			set("metric", mc.Metric).set("unit", mc.Unit).set("statistic", mc.Statistic).
 			set("max_percent", floatCell(mc.MaxPercent)).set("verdict", mc.Verdict).set("gate", strconv.FormatBool(mc.Gate)).set("reason", mc.Reason)
 		if mc.Verdict != VerdictSkipped {

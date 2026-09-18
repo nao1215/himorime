@@ -36,4 +36,14 @@ jobs:
         with:
           version: ${{ env.ATAGO_VERSION }}
       - name: run the E2E suite
+        env:
+          HIMORIME_E2E_REPORT_DIR: ${{ runner.temp }}/himorime-e2e-reports
         run: go run ./test/e2e/run
+      - name: retain comparison reasons and samples
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-reports-${{ matrix.os }}
+          path: ${{ runner.temp }}/himorime-e2e-reports
+          if-no-files-found: warn
+          retention-days: 14

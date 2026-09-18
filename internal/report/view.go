@@ -57,7 +57,7 @@ func hasNotGated(s Suite) bool {
 	for _, b := range s.Benchmarks {
 		for _, c := range b.Commands {
 			for _, mc := range c.Comparisons {
-				if !mc.Gate {
+				if !mc.Gate && mc.DerivedFrom == "" {
 					return true
 				}
 			}
@@ -411,6 +411,9 @@ func comparisonLabel(c Command, mc *MetricComparison, name metric.Name) (string,
 	}
 	if !mc.Gate {
 		label := verdictLabel(result) + " " + labelNotGated
+		if mc.DerivedFrom != "" {
+			label = verdictLabel(result) + " (FROM LATENCY)"
+		}
 		if overBudget {
 			return verdictLabel(ResultOverBudget) + ", " + label, ResultOverBudget
 		}
@@ -466,6 +469,9 @@ func commandNotes(mode Mode, b Benchmark, c Command) []string {
 			name = def.Label + " (not gated) "
 		}
 		switch {
+		case mc.Verdict == VerdictSkipped && mc.Reason != "":
+			notes = append(notes, fmt.Sprintf("%s: %sskipped: %s", label, name, mc.Reason))
+		case mc.DerivedFrom != "":
 		case mc.Verdict == string(ResultInconclusive) && mc.Reason != "":
 			notes = append(notes, fmt.Sprintf("%s: %sinconclusive: %s", label, name, mc.Reason))
 		case mc.Verdict == string(ResultRegression) && !mc.Gate:

@@ -80,7 +80,7 @@ Because throughput is computed per run, `min` is the slowest run and `p95` is th
 
 Reports record the measured work, not only the declared amount: `work.measured_min` and `work.measured_max` in JSON, `measured_work_min` and `measured_work_max` rows in CSV. The work can differ between runs and between revisions.
 
-A comparison whose two revisions measured different work is inconclusive, and its reason names both amounts: a `file_size` fixture that grew or shrank changes throughput without the command running any faster or slower. The declared `value` is the same for both revisions, because a comparison reads one suite file, from the working tree.
+A throughput comparison is derived from the latency comparison: its value is work divided by the selected latency statistic, and its verdict and confidence come from latency. This differs from the statistics of per-run rates shown for a plain run, which are also used by throughput budgets. Derivation requires constant, equal work on both revisions. If work differs between revisions or varies between runs, the throughput comparison is skipped and the reason names the measured ranges. A `file_size` fixture that grew or shrank changes throughput without the command running any faster or slower. The declared `value` is the same for both revisions, because a comparison reads one suite file, from the working tree.
 
 ## CPU time and utilization
 

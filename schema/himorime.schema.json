@@ -552,16 +552,13 @@
           "maximum": 100000
         },
         "max_cv": {
-          "description": "A side whose spread exceeds this is inconclusive: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (standard deviation / mean) when the statistic is mean; 0 disables the check. Default 0.5.",
+          "description": "Overlapping or touching sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. Completely separated ranges still need the sample count, tolerance and bootstrap confidence checks. 0 disables the noise check. Default 0.5.",
           "type": "number",
           "minimum": 0,
           "maximum": 10
         },
         "latency": {
           "$ref": "#/definitions/latencyRegression"
-        },
-        "throughput": {
-          "$ref": "#/definitions/throughputRegression"
         },
         "cpu": {
           "$ref": "#/definitions/cpuRegression"
@@ -589,7 +586,7 @@
           "maximum": 100000
         },
         "max_cv": {
-          "description": "A side whose spread exceeds this is inconclusive: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (standard deviation / mean) when the statistic is mean; 0 disables the check. Default 0.5.",
+          "description": "Overlapping or touching sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. Completely separated ranges still need the sample count, tolerance and bootstrap confidence checks. 0 disables the noise check. Default 0.5.",
           "type": "number",
           "minimum": 0,
           "maximum": 10
@@ -605,9 +602,6 @@
         },
         "latency": {
           "$ref": "#/definitions/latencyRegression"
-        },
-        "throughput": {
-          "$ref": "#/definitions/throughputRegression"
         },
         "cpu": {
           "$ref": "#/definitions/cpuRegression"
@@ -904,34 +898,8 @@
           "$ref": "#/definitions/percent"
         },
         "min_difference": {
-          "description": "The smallest absolute difference that can be a regression or an improvement; smaller differences pass. A duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory, a rate in the work unit such as \"1000 records/s\" for throughput. Default: none.",
+          "description": "The smallest absolute difference that can be a regression or an improvement; smaller differences pass. A duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory. Default: none.",
           "$ref": "#/definitions/duration"
-        },
-        "gate": {
-          "description": "Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run.",
-          "type": "boolean"
-        }
-      }
-    },
-    "throughputRegression": {
-      "description": "How throughput (higher is better, so a drop is a degradation) is compared.",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "metric": {
-          "description": "Statistic compared: median (default) or mean.",
-          "enum": [
-            "median",
-            "mean"
-          ]
-        },
-        "max_percent": {
-          "description": "Tolerated degradation in percent: a number such as 10, or a string such as \"10%\". Default 10.",
-          "$ref": "#/definitions/percent"
-        },
-        "min_difference": {
-          "description": "The smallest absolute difference that can be a regression or an improvement, such as \"1000 records/s\". Default: none.",
-          "$ref": "#/definitions/rate"
         },
         "gate": {
           "description": "Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run.",

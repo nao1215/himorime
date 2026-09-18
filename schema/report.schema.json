@@ -650,7 +650,7 @@
           ]
         },
         "not_gated": {
-          "description": "Metric comparisons with gate: false, counted by verdict. They never change a command's result or the exit status.",
+          "description": "Independent metric comparisons with gate: false, counted by verdict. Derived throughput rows are not counted again.",
           "type": "object",
           "required": [
             "pass",
@@ -679,7 +679,7 @@
           }
         },
         "skipped": {
-          "description": "Budgets and comparisons skipped because their metric is unsupported on this platform (metrics.unsupported: skip), and budgets a peak RSS at the measurement floor cannot decide.",
+          "description": "Skipped budgets and comparisons: unsupported metrics, unobservable peak RSS, or derived throughput without constant equal work.",
           "type": "integer",
           "minimum": 0
         },
@@ -952,8 +952,12 @@
             "peak_rss"
           ]
         },
+        "derived_from": {
+          "description": "Independent comparison supplying this verdict; derived comparisons do not gate or count again. Throughput is work divided by the selected latency statistic, with a reciprocal change and interval.",
+          "enum": ["latency"]
+        },
         "statistic": {
-          "description": "Compared statistic.",
+          "description": "Compared statistic (of latency for a derived throughput comparison).",
           "enum": [
             "median",
             "mean"
