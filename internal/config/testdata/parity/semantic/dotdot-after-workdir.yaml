@@ -1,7 +1,7 @@
-# expect: leaves the project
+# expect: must not contain .. after ${workdir}
 version: "1"
 suite: {name: x}
 benchmarks:
   - name: a
-    stdin: "${root}/../../etc/passwd"
+    stdin: "${workdir}/../x"
     commands: {a: {command: [a]}}
