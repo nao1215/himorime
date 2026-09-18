@@ -67,7 +67,7 @@ A comparison shows one table per compared metric: `latency`, and `throughput`, `
 ```text
 latency
 BENCHMARK     BASE     HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
-df small    1.84ms   1.89ms  +50.00µs   +2.7%         low       +10%  PASS
+df small    1.84ms   1.89ms  +50.00µs   +2.7%      100.0%       +10%  PASS
 df large   14.20ms  16.41ms   +2.21ms  +15.6%       98.1%       +10%  REGRESSION
 
 throughput
@@ -78,7 +78,7 @@ df large   72.10MiB/s  62.40MiB/s  -9.70MiB/s  -13.5%       97.2%        -8%  RE
 - `BASE` and `HEAD` are the compared statistic (median unless configured).
 - `DIFF` is `HEAD - BASE` and `CHANGE` is `(HEAD - BASE) / BASE`. Their sign is the direction the value moved, not whether that is better.
 - `TOLERANCE` is `max_percent` in the metric's worse direction: `+` for latency, CPU time and peak RSS, `-` for throughput.
-- `CONFIDENCE` is the bootstrap probability that the change exceeds the tolerance in the direction it went, shown as `low` below 50%.
+- `CONFIDENCE` is the bootstrap probability behind `RESULT`: that the change stays within the tolerance for `PASS` (`1 - probability_regression`), that it exceeds the tolerance for `REGRESSION` and `IMPROVED`, and the highest of these, below `confidence`, for a change too close to call. It is `-` when something else decided the result: `min_difference`, too few samples, `max_cv`, the peak RSS floor or different throughput work.
 - `RESULT` is `PASS`, `IMPROVED`, `REGRESSION`, `INCONCLUSIVE`, `SKIPPED`, `OVER BUDGET` or an error. A metric with `gate: false` adds `(NOT GATED)`, such as `REGRESSION (NOT GATED)`: the verdict is shown but did not decide the result, and the summary line counts it as `not gated: 1 regressed`. See [What fails the run](/regression-detection/#what-fails-the-run).
 
 Values are rounded for reading: durations in ns, µs, ms or s, sizes in B, KiB, MiB or GiB, rates with a k, M or G prefix, all with two decimals. Colors are used only on an interactive terminal and never by `himorime ci`; `--no-color` and `NO_COLOR` turn them off.

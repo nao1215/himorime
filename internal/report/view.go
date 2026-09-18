@@ -8,6 +8,7 @@ import (
 
 	"github.com/nao1215/himorime/internal/metric"
 	"github.com/nao1215/himorime/internal/proc"
+	"github.com/nao1215/himorime/internal/stats"
 )
 
 // The view helpers turn judged results into the text the terminal table,
@@ -336,19 +337,25 @@ func FormatMetricTolerance(mc *MetricComparison) string {
 	return sign + trimFloat(mc.MaxPercent) + "%"
 }
 
-// formatMetricConfidence renders the probability that the change is real in
-// the direction it was observed: worse or better.
+// formatMetricConfidence renders the bootstrap probability that decided the
+// verdict: that the change stays within the tolerance for a pass, that it
+// exceeds it for a regression or an improvement, and the highest of these,
+// below the required one, for a change too close to call. A verdict the
+// probabilities did not decide, such as one below min_difference, too noisy
+// or skipped, shows "-".
 func formatMetricConfidence(mc *MetricComparison) string {
-	degrading := mc.ChangePercent > 0
-	if mc.Better == string(metric.HigherIsBetter) {
-		degrading = mc.ChangePercent < 0
-	}
-	p := mc.ProbImprovement
-	if degrading {
+	var p float64
+	switch {
+	case mc.Verdict == string(stats.VerdictRegression):
 		p = mc.ProbRegression
-	}
-	if p < 0.5 {
-		return "low"
+	case mc.Verdict == string(stats.VerdictImproved):
+		p = mc.ProbImprovement
+	case mc.Verdict == string(stats.VerdictPass) && mc.Reason == "":
+		p = 1 - mc.ProbRegression
+	case mc.Verdict == string(stats.VerdictInconclusive) && mc.Reason == stats.ReasonTooClose:
+		p = max(mc.ProbRegression, mc.ProbImprovement, 1-mc.ProbRegression)
+	default:
+		return "-"
 	}
 	return fmt.Sprintf("%.1f%%", p*100)
 }

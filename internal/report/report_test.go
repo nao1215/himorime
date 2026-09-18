@@ -277,23 +277,49 @@ func TestFormatHelpers(t *testing.T) {
 	if FormatChange(2.74) != "+2.7%" || FormatChange(-12) != "-12.0%" || FormatChange(0.01) != "+0.0%" {
 		t.Error("FormatChange")
 	}
-	c := &MetricComparison{Better: "lower", ChangePercent: 15.6, ProbRegression: 0.981, MaxPercent: 10}
+	// CONFIDENCE is the probability that decided the verdict, so it never
+	// reads as a doubt next to the verdict it backs.
+	c := &MetricComparison{Better: "lower", ChangePercent: 15.6, ProbRegression: 0.981, MaxPercent: 10, Verdict: "regression"}
 	if formatMetricConfidence(c) != "98.1%" || FormatMetricTolerance(c) != "+10%" {
 		t.Errorf("confidence/tolerance = %s %s", formatMetricConfidence(c), FormatMetricTolerance(c))
 	}
-	c = &MetricComparison{Better: "lower", ChangePercent: 2.7, ProbRegression: 0.1, MaxPercent: 7.5}
-	if formatMetricConfidence(c) != "low" || FormatMetricTolerance(c) != "+7.5%" || FormatMetricTolerance(nil) != "-" {
-		t.Error("low confidence")
+	c = &MetricComparison{Better: "lower", ChangePercent: 2.7, ProbRegression: 0.01, MaxPercent: 7.5, Verdict: "pass"}
+	if formatMetricConfidence(c) != "99.0%" || FormatMetricTolerance(c) != "+7.5%" || FormatMetricTolerance(nil) != "-" {
+		t.Errorf("pass confidence = %s", formatMetricConfidence(c))
 	}
-	c = &MetricComparison{Better: "lower", ChangePercent: -30, ProbImprovement: 0.99}
+	c = &MetricComparison{Better: "lower", ChangePercent: -30, ProbImprovement: 0.99, Verdict: "improved"}
 	if formatMetricConfidence(c) != "99.0%" {
 		t.Error("improvement confidence")
 	}
 	// Throughput degrades when it drops: the tolerance points down, and a
 	// drop is judged by the probability of a regression.
-	c = &MetricComparison{Better: "higher", ChangePercent: -20, ProbRegression: 0.97, ProbImprovement: 0, MaxPercent: 8}
+	c = &MetricComparison{Better: "higher", ChangePercent: -20, ProbRegression: 0.97, ProbImprovement: 0, MaxPercent: 8, Verdict: "regression"}
 	if formatMetricConfidence(c) != "97.0%" || FormatMetricTolerance(c) != "-8%" {
 		t.Errorf("throughput confidence/tolerance = %s %s", formatMetricConfidence(c), FormatMetricTolerance(c))
+	}
+	// Too close to call: the highest of the three probabilities, which is
+	// below the required one.
+	c = &MetricComparison{Better: "lower", ChangePercent: 9, ProbRegression: 0.4, ProbImprovement: 0, Verdict: "inconclusive", Reason: stats.ReasonTooClose}
+	if formatMetricConfidence(c) != "60.0%" {
+		t.Errorf("too close confidence = %s", formatMetricConfidence(c))
+	}
+	c = &MetricComparison{Better: "lower", ChangePercent: 30, ProbRegression: 0.2, ProbImprovement: 0.7, Verdict: "inconclusive", Reason: stats.ReasonTooClose}
+	if formatMetricConfidence(c) != "80.0%" {
+		t.Errorf("too close confidence = %s", formatMetricConfidence(c))
+	}
+	// A verdict the probabilities did not decide shows none of them.
+	for _, c := range []*MetricComparison{
+		{Better: "lower", ChangePercent: 40, ProbRegression: 0.3, Verdict: "pass", Reason: stats.ReasonBelowMinDiff},
+		{Better: "lower", ChangePercent: 40, ProbRegression: 0.99, Verdict: "inconclusive", Reason: stats.ReasonNoisy},
+		{Better: "lower", ChangePercent: 40, ProbRegression: 0.99, Verdict: "inconclusive", Reason: stats.ReasonFewSamples},
+		{Better: "lower", Verdict: "inconclusive", Reason: stats.ReasonNoSamples},
+		{Better: "lower", ChangePercent: 40, ProbRegression: 0.99, Verdict: "inconclusive", Reason: ReasonAtFloor},
+		{Better: "higher", ChangePercent: -40, ProbRegression: 0.99, Verdict: "inconclusive", Reason: "the work differs between the revisions: 1 in the base, 2 in the head"},
+		{Better: "lower", Verdict: VerdictSkipped, Reason: "failed"},
+	} {
+		if got := formatMetricConfidence(c); got != "-" {
+			t.Errorf("confidence of %s (%s) = %q, want -", c.Verdict, c.Reason, got)
+		}
 	}
 }
 
@@ -341,7 +367,7 @@ func TestTerminalCompareTable(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"BENCHMARK     BASE     HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT",
-		"df small    1.84ms   1.89ms  +50.00µs   +2.7%         low       +10%  PASS",
+		"df small    1.84ms   1.89ms  +50.00µs   +2.7%      100.0%       +10%  PASS",
 		"df large   14.20ms  16.41ms   +2.21ms  +15.6%      100.0%       +10%  REGRESSION",
 		"geometric mean over 2 cases (head relative to base): head/base 1.09x",
 		"1 passed, 1 regressed",

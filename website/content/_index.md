@@ -9,13 +9,13 @@ $ himorime compare --against main
 suite: jsonize benchmarks (himorime.yaml)
 latency
 BENCHMARK     BASE     HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
-df small    1.84ms   1.89ms  +50.00µs   +2.7%         low       +10%  PASS
+df small    1.84ms   1.89ms  +50.00µs   +2.7%      100.0%       +10%  PASS
 df large   14.20ms  16.41ms   +2.21ms  +15.6%       98.1%       +10%  REGRESSION
 
 peak rss
 BENCHMARK       BASE      HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
-df small     9.82MiB   9.84MiB  +16.00KiB  +0.2%         low        +5%  PASS
-df large    31.40MiB  31.52MiB  +128.00KiB  +0.4%         low        +5%  PASS
+df small     9.82MiB   9.84MiB  +16.00KiB  +0.2%      100.0%        +5%  PASS
+df large    31.40MiB  31.52MiB  +128.00KiB  +0.4%      100.0%        +5%  PASS
 ```
 
 It measures:
