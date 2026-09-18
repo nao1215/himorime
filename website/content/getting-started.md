@@ -58,8 +58,11 @@ himorime: the suite is invalid; nothing was run
 ```console
 $ himorime run
 suite: my benchmarks (himorime.yaml)
-BENCHMARK    COMMAND   MEDIAN    MEAN    STDDEV  RELATIVE  RESULT
-help output  mytool    2.10ms  2.14ms  110.30µs     1.00x  PASS
+BENCHMARK    COMMAND  MEDIAN    MEAN    STDDEV  RELATIVE  RESULT
+help output  mytool   2.10ms  2.14ms  110.30µs     1.00x  PASS
+RELATIVE is the median divided by the baseline command's median, or by the fastest command's when no baseline is set.
+
+1 passed · 1 benchmark · seed 5398001677524849 · exit 0
 ```
 
 Without `runs`, himorime measures adaptively: at least 10 runs and 2 seconds per command, at most 100 runs. Progress goes to standard error and the report to standard output, so `himorime run --format json > result.json` stays clean.
