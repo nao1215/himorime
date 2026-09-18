@@ -3,6 +3,7 @@
 package proc
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -34,9 +35,20 @@ func setTerminalSize(f *os.File) error {
 
 // pendingInput returns how many typed bytes the command has not read yet. In
 // line mode a partial line does not count: the command cannot read it yet.
+//
+// Linux moves what is written to a pseudo-terminal into its input queue
+// asynchronously, a few microseconds later or more on a busy machine, so a
+// key just typed could be counted as read before it arrived. Polling the
+// terminal side makes the kernel finish moving it first (n_tty_poll flushes
+// the pending buffer), so the count includes every key typed so far. On
+// macOS a write reaches the queue before it returns, and the poll is
+// harmless.
 func pendingInput(f *os.File) (int, error) {
 	var n int
 	err := control(f, func(fd int) error {
+		if _, err := unix.Poll([]unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}, 0); err != nil && !errors.Is(err, unix.EINTR) { //nolint:gosec // G115: a descriptor fits in an int32
+			return err
+		}
 		var err error
 		n, err = unix.IoctlGetInt(fd, ioctlInputQueue)
 		return err

@@ -27,11 +27,6 @@ const (
 	// typingPoll is how often the typist looks at the terminal while it waits
 	// for the command to be ready or to read a key.
 	typingPoll = 20 * time.Microsecond
-	// arrivalWindow bounds how long the typist waits to see a key reach the
-	// input queue. Linux moves what is written to a pseudo-terminal into its
-	// input queue asynchronously, within microseconds; a key never seen there
-	// within the window was read as soon as it arrived.
-	arrivalWindow = time.Millisecond
 )
 
 // ErrTerminalUnsupported is returned by OpenTerminal where himorime cannot
@@ -212,12 +207,9 @@ func (t *Terminal) waitReady() bool {
 	}
 }
 
-// waitRead waits until the key just typed has reached the input queue and
-// the command has read everything in it. It returns false when the run ended
-// first.
+// waitRead waits until the command has read everything typed. It returns
+// false when the run ended first.
 func (t *Terminal) waitRead() bool {
-	arrived := false
-	deadline := time.Now().Add(arrivalWindow)
 	for {
 		if stopped(t.stop) {
 			return false
@@ -226,17 +218,11 @@ func (t *Terminal) waitRead() bool {
 		if err != nil {
 			return false
 		}
-		switch {
-		case n > 0:
-			arrived = true
-			if !t.pause() {
-				return false
-			}
-		case arrived || time.Now().After(deadline):
+		if n == 0 {
 			return true
-		default:
-			// The key is on its way into the queue, which takes microseconds.
-			runtime.Gosched()
+		}
+		if !t.pause() {
+			return false
 		}
 	}
 }
