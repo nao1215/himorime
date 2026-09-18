@@ -570,7 +570,12 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 	mc.ProbImprovement = res.ProbImprovement
 	mc.Verdict = string(res.Verdict)
 	mc.Reason = res.Reason
-	if res.Base.Count > 0 && res.Head.Count > 0 && (baseAtFloor || headAtFloor) {
+	if res.Base.Count > 0 && res.Head.Count > 0 && baseAtFloor && headAtFloor {
+		// Neither side rose above the starter's own peak RSS, so memory was
+		// not observable for this comparison. This is skipped rather than
+		// inconclusive: no classification was attempted or is required.
+		mc.Verdict, mc.Reason = VerdictSkipped, ReasonAtFloor
+	} else if res.Base.Count > 0 && res.Head.Count > 0 && (baseAtFloor || headAtFloor) {
 		// A side at its floor is compared as if it used the whole floor,
 		// the most it can have used. That can only understate a change away
 		// from that side, so a regression from a base at its floor, or an
@@ -906,8 +911,8 @@ func summarize(r *Report) {
 }
 
 // countChecks counts the comparisons that are not gated, by verdict, and the
-// budgets and comparisons skipped because their metric is unsupported or a
-// peak RSS at the floor cannot decide them.
+// budgets and comparisons skipped because their metric is unsupported or
+// peak RSS could not be observed beyond the measurement floor.
 func countChecks(r *Report) {
 	sum := &r.Summary
 	for _, s := range r.Suites {

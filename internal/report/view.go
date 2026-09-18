@@ -82,7 +82,7 @@ func checksNote(s Summary) string {
 		parts = append(parts, "not gated: "+strings.Join(p, ", "))
 	}
 	if s.Skipped > 0 {
-		parts = append(parts, fmt.Sprintf("%d checks skipped (unsupported metric)", s.Skipped))
+		parts = append(parts, fmt.Sprintf("%d checks skipped", s.Skipped))
 	}
 	return strings.Join(parts, " · ")
 }

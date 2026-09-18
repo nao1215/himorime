@@ -503,7 +503,7 @@ func TestSkippedChecksAreCounted(t *testing.T) {
 	}
 	var out bytes.Buffer
 	_ = WriteTerminal(&out, r, TerminalOptions{})
-	if !strings.Contains(out.String(), "2 checks skipped (unsupported metric)") || !strings.Contains(out.String(), "SKIPPED") {
+	if !strings.Contains(out.String(), "2 checks skipped") || !strings.Contains(out.String(), "SKIPPED") {
 		t.Errorf("terminal:\n%s", out.String())
 	}
 }

@@ -352,8 +352,8 @@ type Summary struct {
 	// They never change a command's result, so they are counted apart.
 	NotGated VerdictCounts `json:"not_gated"`
 	// Skipped counts the budgets and comparisons skipped because their
-	// metric is unsupported on this platform (metrics.unsupported: skip), and
-	// the budgets a peak RSS at the measurement floor cannot decide.
+	// metric is unsupported on this platform (metrics.unsupported: skip), or
+	// peak RSS could not be observed beyond the measurement floor.
 	Skipped int `json:"skipped"`
 	// NewSuites counts the suites with new_in_head: suites the base revision
 	// does not have, so nothing of them was compared.
