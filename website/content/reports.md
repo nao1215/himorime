@@ -100,7 +100,7 @@ It is supplementary. The per-case rows are the result. An arithmetic mean of rat
 - `comparisons` holds each compared metric with `statistic`, `base`, `head`, `difference`, `change_percent`, the bootstrap interval, both tail probabilities, `max_percent`, `min_difference`, the verdict, its reason, and `gate`: `false` when the metric has `gate: false` and its verdict did not decide the result. `comparisons` is `null` outside a comparison.
 - `environment` records the operating system, architecture, CPU model, logical CPU count, Go version and CI provider, and `tools` the versions of the tools named in `report.versions`, as `name` and `version` in the order the suites list them (`[]` when none are named). `himorime_version`, `seed` and `git` (head and base commits, and whether the working tree was dirty) complete what is needed to reproduce a run. Host names, user names and environment variables are never recorded.
 - `summary` counts command results, `metric_error` among them, and `exit_code` is the exit status of the run. `not_gated` counts the comparisons with `gate: false` by verdict, and `skipped` the budgets and comparisons skipped because their metric is unsupported, and the budgets a peak RSS at the floor cannot decide; neither changes a result.
-- In a comparison, a suite whose directory does not exist in the base revision has `new_in_head: true`, no benchmarks and result `pass`, and is counted in `summary.new_suites`. It never changes the exit status.
+- In a comparison, a suite whose directory does not exist in the base revision has `new_in_head: true` and is counted in `summary.new_suites`. It was measured in the working tree only, as in a plain run: its commands have `base` and `comparisons` null, and its budgets and failures decide its result.
 
 ```console
 $ himorime run --format json --output result.json
@@ -115,7 +115,7 @@ $ jq '.suites[].benchmarks[].commands[] | {name, p95: .head.metrics.latency.stat
 suite,benchmark,command,result,record,side,metric,unit,scope,source,process_aggregation,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,gate,reason,error_kind,error_message
 ```
 
-- `record` is `stat`, `budget`, `comparison`, `error` or `new_in_head`, the only row of a suite the base revision does not have, with the explanation in `reason`.
+- `record` is `stat`, `budget`, `comparison`, `error` or `new_in_head`, the first row of a suite the base revision does not have, with the explanation in `reason`; the rows after it are those of a plain run.
 - A `stat` row has `side` (`base` or `head`), `metric`, `unit`, `scope`, `source`, `process_aggregation`, `status`, `statistic` (`count`, `min`, `median`, `mean`, `max`, `stddev`, `cv`, `robust_cv`, percentiles, `floor` and `samples_at_floor` for `peak_rss`, `measured_work_min` and `measured_work_max` for `throughput`, and `relative_to_baseline` or `relative_to_fastest` for latency) and `value`. A requested metric that was not measured has one row with its status and reason.
 - A `budget` row has `statistic` (the aggregation), `value` (the measured value), `operator`, `limit` and `verdict`.
 - A `comparison` row has `base`, `head`, `difference`, `change_percent`, the interval, `probability_regression`, `max_percent`, `verdict` and `gate` (`true` or `false`).

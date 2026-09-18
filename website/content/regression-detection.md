@@ -94,9 +94,9 @@ A benchmark can carry absolute budgets and compare several metrics, and not ever
 | Any metric | unsupported and `metrics.unsupported: fail` (the default) | nothing runs | 6 |
 | Any metric | the platform supports it but reading it failed | `metric_error` | 6 |
 | The command | failed, timed out, or a hook failed | `error` | 4 |
-| The suite | its directory does not exist in the base revision | nothing runs; `new_in_head`, counted in `summary.new_suites` | 0 |
+| The suite | its directory does not exist in the base revision | the working tree is measured and judged as by `himorime run`; `new_in_head`, counted in `summary.new_suites` | as by `himorime run` |
 
-On the pull request that adds a suite, the base revision has no suite directory, so there is nothing to compare: the suite is reported as new in this revision, nothing is built or run for it, and it does not change the exit status. Other suites of the same run are judged as usual.
+On the pull request that adds a suite, the base revision has no suite directory, so there is nothing to compare: the suite is reported as new in this revision, and only the working tree is built and run. Its budgets and failures count as in `himorime run`, so a broken build exits 4 and an exceeded budget exits 1 on the pull request that adds the suite. Other suites of the same run are compared as usual.
 
 Budgets are always enforced: a budget you do not want to fail on is a budget to remove. `gate` exists for comparisons, where a metric can be worth seeing without being worth failing on. To gate on CPU time and memory and only report latency:
 
