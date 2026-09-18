@@ -70,7 +70,7 @@ func TestThroughputBudgetStillGatesWithLatencyDisabled(t *testing.T) {
 	t.Parallel()
 	b := throughputCompareResult("budget", 1000, 1000, samples(time.Second, 20, 0), samples(2*time.Second, 20, 0))
 	b.Benchmark.Regression.Latency.Gate = false
-	b.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.Throughput, "median", ">= 750 operations/s")}
+	b.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.Throughput, "median", ">= 750B/s")}
 	r := judge(ModeCompare, false, b)
 	if r.Summary.OverBudget != 1 || r.Summary.ExitCode != 1 {
 		t.Fatalf("rate budget did not fail: %+v", r.Summary)
