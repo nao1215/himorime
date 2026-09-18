@@ -663,16 +663,17 @@ func nonNil(s []string) []string {
 // Reasons a geometric mean is absent because it would say nothing, as opposed
 // to absent because data is missing. Only the latter is worth a note.
 const (
-	reasonTooFewCases    = "needs at least two cases"
-	reasonTooFewCommands = "needs at least two commands per benchmark"
-	reasonNewInHead      = "the suite does not exist in the base revision"
+	reasonTooFewCases     = "needs at least two cases"
+	reasonTooFewCommands  = "needs at least two commands per benchmark"
+	reasonNoSharedCommand = "the benchmarks share no command"
+	reasonNewInHead       = "the suite does not exist in the base revision"
 )
 
 // GeometricMeanNote returns the explanation worth showing for a missing
 // geometric mean, or "" when there is nothing to explain.
 func GeometricMeanNote(s Suite) string {
 	switch s.GeometricMeanUnavailable {
-	case "", reasonTooFewCases, reasonTooFewCommands, reasonNewInHead:
+	case "", reasonTooFewCases, reasonTooFewCommands, reasonNoSharedCommand, reasonNewInHead:
 		return ""
 	}
 	return s.GeometricMeanUnavailable
@@ -682,9 +683,16 @@ func runGeoMean(s Suite) (*GeometricMean, string) {
 	if len(s.Benchmarks) < 2 {
 		return nil, reasonTooFewCases
 	}
-	names := commandSet(s.Benchmarks[0])
+	// A geometric mean summarizes implementations compared across cases, which
+	// share their command names. A suite whose benchmarks share none, such as
+	// a regression suite with a start-up benchmark of one command, is not
+	// such a comparison, whatever order its benchmarks are in.
+	names, shared := commandNames(s.Benchmarks)
 	if len(names) < 2 {
 		return nil, reasonTooFewCommands
+	}
+	if !shared {
+		return nil, reasonNoSharedCommand
 	}
 	if reason := completeCases(s.Benchmarks, names); reason != "" {
 		return nil, reason
@@ -717,11 +725,6 @@ func completeCases(benchmarks []Benchmark, names []string) string {
 		for _, n := range names {
 			if !contains(set, n) {
 				return fmt.Sprintf("command %q is missing from benchmark %q", n, b.Name)
-			}
-		}
-		for _, n := range set {
-			if !contains(names, n) {
-				return fmt.Sprintf("command %q is missing from benchmark %q", n, benchmarks[0].Name)
 			}
 		}
 		for _, c := range b.Commands {
@@ -797,6 +800,34 @@ func compareGeoMean(s Suite) (*GeometricMean, string) {
 		return nil, "a ratio is not positive"
 	}
 	return &GeometricMean{Reference: "base", Cases: len(ratios), Values: []GeometricItem{{Command: "head/base", Ratio: gm}}}, ""
+}
+
+// commandNames returns every command name of the benchmarks that completed,
+// sorted, and whether at least one of them is in each of those benchmarks. A
+// benchmark that failed before its commands ran has none, and is reported by
+// completeCases instead.
+func commandNames(benchmarks []Benchmark) ([]string, bool) {
+	count := map[string]int{}
+	completed := 0
+	for _, b := range benchmarks {
+		if b.Error != nil {
+			continue
+		}
+		completed++
+		for _, n := range commandSet(b) {
+			count[n]++
+		}
+	}
+	names := make([]string, 0, len(count))
+	shared := false
+	for n, c := range count {
+		names = append(names, n)
+		if c == completed {
+			shared = true
+		}
+	}
+	sort.Strings(names)
+	return names, shared
 }
 
 func commandSet(b Benchmark) []string {
