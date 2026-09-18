@@ -222,7 +222,7 @@ benchmarks:
         command: [sh, parse.sh]                # each revision's own parse.sh
 ```
 
-A relative path that exists only in the working tree fails the base revision, with a hint to use `${head_root}`. The suite directory itself must exist in the base revision. A suite with a `build` measures `${artifact}`, which each revision builds from its own tree.
+A relative path that exists only in the working tree fails the base revision, with a hint to use `${head_root}`. A suite directory the base revision does not have is new in this revision: only the working tree is built and measured (see [Regression detection](/regression-detection/)). A suite with a `build` measures `${artifact}`, which each revision builds from its own tree.
 
 - Paths may start with `${root}`, `${head_root}` or `${workdir}`. Absolute paths, `~`, and `..` after a variable are rejected.
 - After symbolic links are resolved, a path must stay inside the Git repository (or the suite's directory outside Git), the base worktree, or `${workdir}`. `stdout`, `stderr` and report paths may not climb out of their base directory at all.
