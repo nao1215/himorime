@@ -203,7 +203,7 @@ func compareTable(sb *strings.Builder, s Suite, o TerminalOptions) {
 		}
 		compareMetricTable(sb, s, o, def)
 	}
-	sb.WriteString("BASE and HEAD show the compared statistic; CONFIDENCE is the bootstrap probability that the change exceeds TOLERANCE in its direction.\n")
+	sb.WriteString("BASE and HEAD show the compared statistic; CONFIDENCE is the bootstrap probability behind RESULT: that the change stays within TOLERANCE for PASS, that it exceeds it for REGRESSION and IMPROVED, the highest of these for INCONCLUSIVE, and - when something else decided.\n")
 	if hasNotGated(s) {
 		sb.WriteString("(NOT GATED) marks a metric with gate: false: it is compared and reported, but never fails the run.\n")
 	}

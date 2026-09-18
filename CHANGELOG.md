@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Changed
+
+- The `CONFIDENCE` column of comparison tables in the terminal, Markdown and job summaries shows the probability that decided `RESULT`: that the change stays within the tolerance for `PASS`, as before for `REGRESSION` and `IMPROVED`, and the highest of these for a change too close to call. A pass used to show `low`, which read as an unsure pass, and a comparison made inconclusive by noise or too few samples could show `99.0%`; a result the probabilities did not decide now shows `-`. JSON and CSV are unchanged.
+
 ## [0.1.3] - 2026-09-18
 
 ### Changed
