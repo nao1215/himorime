@@ -145,7 +145,7 @@ See [Regression detection](/regression-detection/) for how budgets, gates, `--fa
 
 After Ctrl+C, running commands are stopped and cleanup runs; interrupt a second time to quit at once, skipping the remaining cleanup.
 
-A process a command or hook leaves running in the background is stopped when that command or hook exits, on every platform. himorime measures commands, it does not manage services: a hook cannot start a server that outlives it.
+A process a command or hook leaves running in the background is stopped when that command or hook exits, on every platform. himorime measures commands, it does not manage services: a hook cannot start a server that outlives it. In v0.x, commands that require a resident service are out of scope; benchmark what setup leaves on disk, or leave that command unmeasured.
 
 A failing `setup` or `cleanup` fails the benchmark. A failing `prepare_each` fails the command it prepared. Hook output is not shown unless the hook fails, in which case the tail of its standard error is.
 
