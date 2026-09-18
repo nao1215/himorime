@@ -178,6 +178,22 @@ See [Reports](/reports/#publish-results-in-documentation) for what a section loo
 
 A command's standard output and standard error are discarded by default and never mixed with himorime's own report. Set `stdout` or `stderr` to a path inside `${workdir}` to keep the latest run's output. When a run fails, the last lines of its standard error are shown in the report either way, with secrets masked.
 
+A program that only does its work on a terminal, such as an interactive shell, a line editor or a TUI, takes another path when its input is a file. `terminal: true` on a benchmark runs every command of it on a pseudo-terminal of 80 columns and 24 rows, on Linux and macOS:
+
+```yaml
+- name: shell completion
+  terminal: true
+  stdin: {content: "SELECT * FROM us\t\n.exit\n"}
+  commands:
+    sqly:
+      command: ["${artifact}", "${workdir}/users.csv"]
+```
+
+- Standard input, output and error are the terminal, and it is the command's controlling terminal. `stdin` is typed into it as the command starts, before the program may have switched it to raw mode; the program still reads every key.
+- Nothing closes a terminal's input, so the input has to end the program (`.exit`, `q`, or Ctrl-D written as `\u0004`); `timeout` stops one that keeps waiting.
+- What the command writes, echoed input included, goes to `stdout` when it is set. `stderr` cannot be set, because both streams are the terminal. A failure shows the tail of that output.
+- himorime types the input and reads the output outside the process tree, so neither is counted as the command's CPU time or memory.
+
 ## Variables
 
 Commands, `cwd`, `env` values, `stdin` and hooks may use these variables:
@@ -354,6 +370,7 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
 | `exit_codes` |  | Exit statuses that count as success. Default [0]. |
 | `stdin` |  | Standard input of every run: a fixture path (reopened for each run), or a mapping with file or content. |
+| `terminal` |  | Run every command on a pseudo-terminal of 80 columns and 24 rows (Linux and macOS): standard input, output and error are the terminal, stdin is typed into it, and what the command writes goes to stdout. The input must end the program. stderr cannot be set. |
 | `setup` |  | Processes run once per benchmark (per revision in a comparison) before any warmup. A failure fails the benchmark. |
 | `prepare_each` |  | Processes run before every warmup and measured run, outside the measured time. |
 | `cleanup` |  | Processes run after the benchmark whether it passed, failed or was interrupted. |

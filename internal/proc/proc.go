@@ -47,6 +47,10 @@ type Spec struct {
 	// outside the measured interval, so commands whose memory is not measured
 	// are started directly.
 	MeasureMemory bool
+	// Terminal says that Stdin, Stdout and Stderr are the terminal side of a
+	// Terminal. The command then starts a new session with that terminal as
+	// its controlling terminal, as it would when started from a shell.
+	Terminal bool
 }
 
 // Result is the outcome of Run.
@@ -113,7 +117,7 @@ func run(ctx context.Context, s Spec, now Clock, attachTree func(*exec.Cmd) (*tr
 	// Bound that wait so a stray descendant cannot hold a finished command for
 	// long. himorime's runner always passes files or nil.
 	cmd.WaitDelay = waitDelay
-	configure(cmd)
+	configure(cmd, s.Terminal)
 
 	select {
 	case <-ctx.Done():

@@ -13,6 +13,7 @@ The same suite runs on all three when commands are written as argument lists. Th
 | Stopping a process tree on timeout, Ctrl+C, or when the command exits | the command joins its own process group before it runs, and the group receives SIGKILL | the command is created suspended, assigned to a Job Object and only then resumed; the job is terminated, and himorime waits until it is empty |
 | `${artifact}` and `${exe}` | no suffix | `.exe` |
 | Program lookup | `PATH` | `PATH` and `PATHEXT` |
+| `terminal: true` | a pseudo-terminal from `/dev/ptmx`; the command starts a new session with it as the controlling terminal | not supported; the benchmark fails with exit 4 (also on the BSDs) |
 
 Because a Windows command runs no code before it belongs to its Job Object, every process it starts is in the job too: nothing escapes being stopped or having its CPU time counted, however quickly it starts. The time between creating the suspended process and resuming it is not counted as latency. If the process cannot be assigned to a job, for example because a parent job forbids it, himorime kills the still suspended process and reports the run as an `internal` error instead of measuring it without the guarantees. On Unix a descendant that moves itself into another process group or session (a daemon does) leaves the group and is not stopped with it.
 

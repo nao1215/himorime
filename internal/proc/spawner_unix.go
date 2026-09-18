@@ -61,6 +61,8 @@ type spawnRequest struct {
 	Stdout       int  `json:"stdout"`
 	Stderr       int  `json:"stderr"`
 	CollectUsage bool `json:"collect_usage"`
+	// Terminal is Spec.Terminal: stdin is the terminal to make controlling.
+	Terminal bool `json:"terminal,omitempty"`
 }
 
 type spawnReply struct {
@@ -321,7 +323,7 @@ func serveRequest(c *spawnConn, req spawnRequest, files []*os.File, wakeR, wakeW
 	if f := pick(req.Stderr); f != nil {
 		cmd.Stderr = f
 	}
-	configure(cmd)
+	configure(cmd, req.Terminal)
 
 	// The watch starts before the measured interval, so starting it never
 	// competes with the command.

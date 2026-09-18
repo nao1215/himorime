@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nao1215/himorime/internal/config"
@@ -224,6 +225,11 @@ func (r *Runner) Measure(ctx context.Context, b config.Benchmark, sides []Side) 
 		}
 		skipped[p.Group] = p.Reason
 		r.logf("benchmark %q: skipping %s metrics: %s", b.Name, p.Group, p.Reason)
+	}
+
+	if b.Terminal && !proc.TerminalSupported() {
+		res.Failure = &Failure{Kind: FailStart, Message: proc.ErrTerminalUnsupported.Error()}
+		return res
 	}
 
 	for _, st := range states {
@@ -590,7 +596,7 @@ func (r *Runner) runOnce(ctx context.Context, b config.Benchmark, st *sideState,
 	spec.CollectUsage = wantCPU || wantMemory
 	spec.MeasureMemory = wantMemory
 
-	stderr, closeIO, f := r.openIO(&spec, c, st)
+	stderr, closeIO, f := r.openIO(&spec, c, st, b.Terminal)
 	defer closeIO()
 	if f != nil {
 		return f
@@ -598,6 +604,9 @@ func (r *Runner) runOnce(ctx context.Context, b config.Benchmark, st *sideState,
 	spec.Timeout = c.Timeout
 
 	res, err := r.exec(ctx, spec)
+	// Everything the command wrote is in its files once they are closed, which
+	// on a terminal means once its output has been read to the end.
+	closeIO()
 	if res.Canceled {
 		return &Failure{Kind: FailInterrupted, Message: "stopped before the benchmark completed"}
 	}
@@ -702,13 +711,21 @@ func (r *Runner) work(b config.Benchmark, st *sideState) (float64, *Failure) {
 
 // openIO connects the stdin fixture and the stdout and stderr files of one
 // run to spec. It returns the stderr file, whose tail a failure shows, and a
-// function that closes everything opened, to be called in every case.
-func (r *Runner) openIO(spec *proc.Spec, c config.Command, st *sideState) (*os.File, func(), *Failure) {
+// function that closes everything opened, to be called in every case and
+// safe to call again.
+func (r *Runner) openIO(spec *proc.Spec, c config.Command, st *sideState, terminal bool) (*os.File, func(), *Failure) {
 	var closers []io.Closer
+	var once sync.Once
 	closeAll := func() {
-		for _, c := range closers {
-			_ = c.Close()
-		}
+		once.Do(func() {
+			for _, c := range closers {
+				_ = c.Close()
+			}
+		})
+	}
+	if terminal {
+		out, f := r.openTerminal(spec, c, st, &closers)
+		return out, closeAll, f
 	}
 	if st.stdin != "" {
 		in, err := os.Open(st.stdin)
@@ -741,6 +758,40 @@ func (r *Runner) openIO(spec *proc.Spec, c config.Command, st *sideState) (*os.F
 	closers = append(closers, stderr)
 	spec.Stderr = stderr
 	return stderr, closeAll, nil
+}
+
+// openTerminal gives the command a new pseudo-terminal as its standard input,
+// output and error. The stdin fixture is typed into it, and what the command
+// writes goes to its stdout setting, or to a private file whose tail a failure
+// shows. The terminal is closed first, so its output is complete before the
+// files it copies from and to are closed.
+func (r *Runner) openTerminal(spec *proc.Spec, c config.Command, st *sideState, closers *[]io.Closer) (*os.File, *Failure) {
+	var in io.Reader
+	if st.stdin != "" {
+		f, err := os.Open(st.stdin)
+		if err != nil {
+			return nil, &Failure{Kind: FailSetup, Message: fmt.Sprintf("open stdin fixture: %v", redactErr(r.Redactor, err))}
+		}
+		*closers = append(*closers, f)
+		in = f
+	}
+	outPath, err := r.outputPath(c.Stdout, st, c.Name+".terminal", true)
+	if err != nil {
+		return nil, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
+	}
+	out, err := openOutput(outPath)
+	if err != nil {
+		return nil, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
+	}
+	*closers = append(*closers, out)
+	term, err := proc.OpenTerminal(in, out)
+	if err != nil {
+		return out, &Failure{Kind: FailStart, Message: err.Error()}
+	}
+	*closers = append([]io.Closer{term}, *closers...)
+	spec.Stdin, spec.Stdout, spec.Stderr = term.File(), term.File(), term.File()
+	spec.Terminal = true
+	return out, nil
 }
 
 // outputPath decides where a command's stdout or stderr goes for one run.

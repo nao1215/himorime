@@ -64,6 +64,7 @@ type RawBenchmark struct {
 	Stderr      *string              `yaml:"stderr"`
 	ExitCodes   []int                `yaml:"exit_codes"`
 	Stdin       *StdinSpec           `yaml:"stdin"`
+	Terminal    bool                 `yaml:"terminal"`
 	Setup       []RawExec            `yaml:"setup"`
 	PrepareEach []RawExec            `yaml:"prepare_each"`
 	Cleanup     []RawExec            `yaml:"cleanup"`

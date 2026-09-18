@@ -13,8 +13,14 @@ import (
 
 // configure places the child in a new process group so that the whole tree
 // can be signaled at once. The child joins the group between fork and exec,
-// before the command runs, so no descendant can start outside it.
-func configure(cmd *exec.Cmd) {
+// before the command runs, so no descendant can start outside it. On a
+// terminal the child starts a new session instead, which is also a new
+// process group, and takes its standard input as the controlling terminal.
+func configure(cmd *exec.Cmd, terminal bool) {
+	if terminal {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+		return
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 

@@ -192,6 +192,27 @@ func TestLoadStdinForms(t *testing.T) {
 	}
 }
 
+func TestLoadTerminal(t *testing.T) {
+	t.Parallel()
+	for src, want := range map[string]bool{
+		"":                                false,
+		"terminal: false":                 false,
+		"terminal: true":                  true,
+		"terminal: true\nstdout: out.txt": true,
+		"terminal: true\nstderr: discard": true,
+	} {
+		s := mustParse(t, minimal(src))
+		if got := s.Benchmarks[0].Terminal; got != want {
+			t.Errorf("%q => Terminal %v, want %v", src, got, want)
+		}
+	}
+	// A benchmark that discards stderr itself is not affected by defaults.stderr.
+	src := strings.Replace(minimal("terminal: true\nstderr: discard"), "benchmarks:", "defaults: {stderr: err.txt}\nbenchmarks:", 1)
+	if s := mustParse(t, src); !s.Benchmarks[0].Terminal {
+		t.Error("Terminal = false")
+	}
+}
+
 func TestLoadRejects(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -248,6 +269,10 @@ benchmarks:
 		{"low confidence", minimal("regression: {confidence: 0.3}"), "must be at least 0.5, got 0.3", "benchmarks[0].regression.confidence"},
 		{"bad env name", minimal("env: {\"1X\": y}"), "invalid environment variable name", "benchmarks[0].env.1X"},
 		{"bad report format", "version: \"1\"\nsuite: {name: x}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\nreport: {outputs: [{format: table, path: x.txt}]}\n", "must be one of", "report.outputs[0].format"},
+		{"stderr on a terminal benchmark", minimal("terminal: true\nstderr: err.txt"), "stderr cannot be set with terminal: true", "benchmarks[0].stderr"},
+		{"stderr on a terminal command", minimal("") + "        stderr: err.txt\n    terminal: true\n", "stderr cannot be set with terminal: true", "benchmarks[0].commands.tool.stderr"},
+		{"defaults stderr on a terminal benchmark", strings.Replace(minimal("terminal: true"), "benchmarks:", "defaults: {stderr: err.txt}\nbenchmarks:", 1), "stderr cannot be set with terminal: true", "benchmarks[0].terminal"},
+		{"terminal is a boolean", minimal("terminal: \"on\""), "expected true or false", "benchmarks[0].terminal"},
 		{"yaml syntax", "version: \"1\"\nsuite: {name: x\n", "", ""},
 	}
 	for _, tt := range tests {

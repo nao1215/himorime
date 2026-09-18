@@ -123,11 +123,15 @@ type Benchmark struct {
 	Tags        []string
 	Warmup      int
 	// Runs is the fixed number of measured runs, or 0 for adaptive runs.
-	Runs        int
-	MinRuns     int
-	MaxRuns     int
-	MinTime     time.Duration
-	Stdin       Stdin
+	Runs    int
+	MinRuns int
+	MaxRuns int
+	MinTime time.Duration
+	Stdin   Stdin
+	// Terminal runs every command on a pseudo-terminal: its standard input,
+	// output and error are the terminal, stdin is typed into it, and what it
+	// writes goes to its stdout setting.
+	Terminal    bool
 	Setup       []Exec
 	PrepareEach []Exec
 	Cleanup     []Exec
