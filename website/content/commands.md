@@ -6,7 +6,7 @@ toc: true
 
 Flags may appear before or after paths: `himorime run bench.yaml --format json` and `himorime run --format json bench.yaml` are the same. `--` ends flag parsing. Errors go to standard error; reports go to standard output or to the file named by `--output`.
 
-`--filter`, `--tag` and `--skip-tag` are shared by `list`, `run`, `compare` and `ci`. `--tag` keeps benchmarks with any of the given tags; `--skip-tag` drops benchmarks with any of them and wins over `--tag`; `--filter` is a regular expression on the benchmark name. A selection that matches nothing exits 3.
+`--filter`, `--tag` and `--skip-tag` are shared by `list`, `run`, `compare` and `ci`. `--tag` keeps benchmarks with any of the given tags; `--skip-tag` drops benchmarks with any of them and wins over `--tag`; `--filter` is a regular expression on the benchmark name, matched anywhere in it: `--filter 'run 10'` also selects `run 1000`, and `--filter '^run 10$'` selects that one benchmark. A selection that matches nothing exits 3.
 
 <!-- BEGIN GENERATED: commands -->
 ### init

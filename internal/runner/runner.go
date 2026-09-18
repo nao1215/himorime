@@ -554,6 +554,9 @@ func (r *Runner) runProcess(ctx context.Context, e config.Exec, vars config.Vars
 		return &Failure{Kind: FailInterrupted, Message: label + ": interrupted"}
 	}
 	if err != nil {
+		if msg := missingWorkingDirectory(dir, e.Cwd, isBenchmarkHook(label)); msg != "" {
+			return &Failure{Kind: kind, Message: fmt.Sprintf("%s: %s: %s", label, r.Redactor.String(e.Display()), msg)}
+		}
 		return &Failure{Kind: kind, Message: fmt.Sprintf("%s: %s: %v", label, r.Redactor.String(e.Display()), redactErr(r.Redactor, err))}
 	}
 	switch {
@@ -616,6 +619,9 @@ func (r *Runner) runOnce(ctx context.Context, b config.Benchmark, st *sideState,
 			kind = FailStart
 		}
 		_, statErr := os.Stat(dir)
+		if msg := missingWorkingDirectory(dir, c.Cwd, false); msg != "" {
+			return &Failure{Kind: kind, Message: fmt.Sprintf("%s: %s%s", r.Redactor.String(c.Display()), msg, sharedHint(st.side, "the working directory", statErr))}
+		}
 		return &Failure{Kind: kind, Message: fmt.Sprintf("%s: %v%s", r.Redactor.String(c.Display()), redactErr(r.Redactor, err), sharedHint(st.side, "the working directory", statErr))}
 	}
 	if res.TimedOut {
@@ -924,6 +930,35 @@ func (r *Runner) tail(path string) string {
 // sharedHint explains a path missing from the base revision: relative paths
 // are relative to ${root} of the revision being measured, so a file added in
 // the working tree does not exist there. It returns "" in every other case.
+// missingWorkingDirectory explains a process that could not start because
+// its working directory does not exist, which the operating system reports as
+// the program not being found. cwd is the setting as written; an empty one
+// means ${root}. It returns "" when the directory exists.
+func missingWorkingDirectory(dir, cwd string, hook bool) string {
+	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+		return ""
+	}
+	if cwd == "" {
+		cwd = "${root}"
+	}
+	msg := fmt.Sprintf("the working directory %s (cwd %s) does not exist, so the program was not started", dir, cwd)
+	if hook {
+		msg += "; a hook runs in the benchmark's cwd unless it sets its own, so a setup step that creates that directory needs cwd: ${workdir}"
+	}
+	return msg
+}
+
+// isBenchmarkHook reports whether label names a setup, prepare_each or
+// cleanup step, which run in the benchmark's cwd, rather than the build.
+func isBenchmarkHook(label string) bool {
+	for _, p := range []string{"setup[", "prepare_each[", "cleanup["} {
+		if strings.HasPrefix(label, p) {
+			return true
+		}
+	}
+	return false
+}
+
 func sharedHint(side Side, what string, err error) string {
 	if side.Name != SideBase || !errors.Is(err, fs.ErrNotExist) {
 		return ""

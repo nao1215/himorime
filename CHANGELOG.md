@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Fixed
 
+- A command or hook whose working directory did not exist failed with `fork/exec /usr/bin/mkdir: no such file or directory`, which named a program that was there. The failure now names the missing directory and the `cwd` it came from, and for a hook says that it runs in the benchmark's `cwd` unless it sets its own, so a setup step that creates that directory needs `cwd: ${workdir}`.
 - A benchmark whose `${workdir}` held a directory without write permission, as a Go module cache in `${workdir}` does, failed at cleanup with `permission denied` after measuring, and the temporary directory stayed on disk. himorime now gives the owner write permission inside its own temporary directories before removing them, without following symbolic links.
 
 ## [0.1.3] - 2026-09-18
