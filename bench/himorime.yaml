@@ -13,13 +13,25 @@ build:
   command: [go, build, -trimpath, -o, "${artifact}", .]
   cwd: ..
 
+# The same defaults and tolerances as the suites of the other nao1215 CLIs
+# (jsonize, sqly, gup, ...), so a regression means the same thing everywhere.
 defaults:
   warmup: 2
-  runs: 15
+  runs: 20
+  metrics:
+    cpu: true
+    memory: true
   regression:
     confidence: 0.95
     latency:
+      max_percent: 10
+      min_difference: 1ms
+    cpu:
       max_percent: 15
+      min_difference: 2ms
+    memory:
+      max_percent: 15
+      min_difference: 2MiB
 
 benchmarks:
   - name: version
