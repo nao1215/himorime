@@ -211,6 +211,36 @@ func TestJudgeCompareSkipsUncomparedCommands(t *testing.T) {
 	}
 }
 
+func TestGeometricMeanNoteDoesNotDependOnBenchmarkOrder(t *testing.T) {
+	t.Parallel()
+	pair := func(name string) runner.BenchmarkResult {
+		return runResult(name, "a", map[string][]time.Duration{"a": samples(time.Millisecond, 10, 0), "b": samples(2*time.Millisecond, 10, 0)}, "a", "b")
+	}
+	single := func(name, command string) runner.BenchmarkResult {
+		return runResult(name, "", map[string][]time.Duration{command: samples(time.Millisecond, 10, 0)}, command)
+	}
+	// A comparison missing a command in one case is explained in either order.
+	for _, order := range [][]runner.BenchmarkResult{
+		{pair("small"), single("partial", "a")},
+		{single("partial", "a"), pair("small")},
+	} {
+		if note := GeometricMeanNote(judge(ModeRun, false, order...).Suites[0]); note != `command "b" is missing from benchmark "partial"` {
+			t.Errorf("order %s, %s: note = %q", order[0].Benchmark.Name, order[1].Benchmark.Name, note)
+		}
+	}
+	// A suite whose benchmarks share no command is not a comparison: no note,
+	// whichever benchmark comes first.
+	for _, order := range [][]runner.BenchmarkResult{
+		{single("version", "tool"), pair("inspect")},
+		{pair("inspect"), single("version", "tool")},
+	} {
+		r := judge(ModeRun, false, order...)
+		if r.Suites[0].GeometricMean != nil || GeometricMeanNote(r.Suites[0]) != "" {
+			t.Errorf("order %s, %s: geometric mean %+v, note %q", order[0].Benchmark.Name, order[1].Benchmark.Name, r.Suites[0].GeometricMean, GeometricMeanNote(r.Suites[0]))
+		}
+	}
+}
+
 func TestGeometricMeanRun(t *testing.T) {
 	t.Parallel()
 	mk := func(name string, a, b time.Duration) runner.BenchmarkResult {

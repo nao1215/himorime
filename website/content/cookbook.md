@@ -1488,6 +1488,7 @@ $ himorime run examples/missing-case
 Per-case rows, then `no geometric mean: command "readall" is missing from benchmark "large"`. With every command in every case, as in [Compare small, medium and large inputs](#compare-small-medium-and-large-inputs), the geometric mean is printed.
 
 - The geometric mean is computed only when every command completed every case; a failure or timeout suppresses it rather than being left out.
+- A suite whose benchmarks share no command name, such as a regression suite with a one-command start-up benchmark, is not a comparison: it gets neither a geometric mean nor a note, whatever order its benchmarks are in.
 - himorime never averages ratios arithmetically.
 
 Example: [`examples/missing-case`](https://github.com/nao1215/himorime/tree/main/examples/missing-case)

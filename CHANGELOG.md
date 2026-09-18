@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Fixed
 
+- Whether a plain run printed `no geometric mean: command ... is missing from benchmark ...` depended on the first benchmark, and so on the order of the suite and on `--filter`: a suite starting with a one-command benchmark never printed it, and the same suite filtered to start with a benchmark of several commands always did. The note now appears when the benchmarks share at least one command name and one of them lacks another, in any order; a suite whose benchmarks share none, such as a regression suite with a start-up benchmark, gets no note.
 - A benchmark whose `${workdir}` held a directory without write permission, as a Go module cache in `${workdir}` does, failed at cleanup with `permission denied` after measuring, and the temporary directory stayed on disk. himorime now gives the owner write permission inside its own temporary directories before removing them, without following symbolic links.
 
 ## [0.1.3] - 2026-09-18
