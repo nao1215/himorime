@@ -185,9 +185,11 @@ func hasDotDot(s string) bool {
 }
 
 // checkPathTemplate validates the variables of a path: only ${root},
-// ${head_root} or ${workdir} may appear, only at the start, and no ".." may
-// follow them. The runner re-checks the final path after symlinks are
-// resolved.
+// ${head_root} or ${workdir} may appear, only at the start. A ".." after
+// ${root} or ${head_root} must stay inside the project, as in a relative
+// path, since both are the suite's directory in their tree; none may follow
+// ${workdir}, which is himorime's own temporary directory. The runner
+// re-checks the final path after symlinks are resolved.
 func (v *validator) checkPathTemplate(p path, s string, allowWorkdir bool) {
 	refs, err := References(s)
 	if err != nil {
@@ -210,11 +212,18 @@ func (v *validator) checkPathTemplate(p path, s string, allowWorkdir bool) {
 			return
 		}
 	}
-	if len(refs) > 0 && hasDotDot(s) {
-		v.add(p, "remove .. from the path", "path %q must not contain ..", s)
+	if !hasDotDot(s) {
 		return
 	}
-	if len(refs) == 0 && hasDotDot(s) && v.leavesProject(s) {
+	rel := s
+	if len(refs) > 0 {
+		if refs[0].Name == VarWorkdir {
+			v.add(p, "${workdir} is a fresh directory for the benchmark; write the path inside it", "path %q must not contain .. after ${workdir}", s)
+			return
+		}
+		rel = strings.TrimLeft(strings.TrimPrefix(s, "${"+refs[0].Name+"}"), `/\`)
+	}
+	if v.leavesProject(rel) {
 		v.add(p, "paths must stay inside the repository holding the suite, or inside the suite's directory when it is not in a repository",
 			"path %q leaves the project", s)
 	}

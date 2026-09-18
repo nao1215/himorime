@@ -314,8 +314,8 @@ func TestLoadSemanticRules(t *testing.T) {
 		{"unknown variable", "cwd: \"${home}/x\"", "unknown variable ${home}"},
 		{"variable not at start", "cwd: \"x/${root}\"", "${root} may only start a path"},
 		{"head_root not at start", "stdin: \"x/${head_root}/in.txt\"", "${head_root} may only start a path"},
-		{"dotdot after head_root", "stdin: \"${head_root}/../x\"", "must not contain .."},
-		{"dotdot after variable", "stdin: \"${workdir}/../x\"", "must not contain .."},
+		{"dotdot after head_root leaving the project", "stdin: \"${head_root}/../x\"", "leaves the project"},
+		{"dotdot after workdir", "stdin: \"${workdir}/../x\"", "must not contain .. after ${workdir}"},
 		{"env var in path", "cwd: \"${env:HOME}\"", "${env:HOME} is not allowed in a path"},
 		{"control character", "description: ok\nname: \"a\\u0001b\"", "must not contain control characters"},
 		{"too long duration", "timeout: 25h", "exceeds the maximum of 24h"},
@@ -735,6 +735,16 @@ func TestLoadRejectsARelativePathThatLeavesTheProject(t *testing.T) {
 		}
 		if _, err := write(t, filepath.Join(top, "bench2"), suite("../..")); err == nil {
 			t.Error("a .. that leaves the repository must be rejected")
+		}
+		for _, cwd := range []string{`"${head_root}/.."`, `"${root}/../testdata"`} {
+			if _, err := write(t, filepath.Join(top, "bench3"), suite(cwd)); err != nil {
+				t.Errorf("%s stays in the repository and must be accepted: %v", cwd, err)
+			}
+		}
+		for _, cwd := range []string{`"${head_root}/../.."`, `"${root}/../../x"`} {
+			if _, err := write(t, filepath.Join(top, "bench4"), suite(cwd)); err == nil || !strings.Contains(err.Error(), "leaves the project") {
+				t.Errorf("%s leaves the repository and must be rejected, got %v", cwd, err)
+			}
 		}
 	})
 
