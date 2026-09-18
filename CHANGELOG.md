@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Fixed
 
+- Progress lines on standard error say `1 measurement unit`, `1 run` and `1 round` instead of `1 measurement units`, `1 runs` and `1 rounds`.
 - A comparison of throughput over different amounts of work is inconclusive instead of a regression or an improvement, and its reason names both amounts. A file named by `metrics.throughput.work.file_size` whose size differs between the revisions moved throughput without the command running any faster or slower, and `compare` and `ci` called that a regression at full confidence and exited 1.
 - A relative path whose `..` leaves the repository holding the suite, or the suite's own directory when it is not in a repository, is rejected when the suite is loaded, so `validate`, `run`, `compare` and `ci` exit 2. Such a path validated ok and then failed the run with exit 4, after the build, on the first run. A `..` that stays inside is unchanged.
 - `unit: KB` with a byte-rate budget and tolerance reported three errors, two of which asked for the unit the first error had rejected; it now reports one. A rejected work unit is no longer used in the hints of the errors after it.

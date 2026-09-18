@@ -69,6 +69,9 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "pass"}
               - {path: "$.summary.exit_code", equals: 0}
       - assert:
+          stderr:
+            contains: ['benchmark "sleep": 1 measurement unit, 0 warmup, 4 runs']
+      - assert:
           stdout:
             not_contains: ["hostname", "HOSTNAME", "PATH"]
 

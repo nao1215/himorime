@@ -102,6 +102,13 @@ func (r *Runner) UnsupportedMetrics(benchmarks []config.Benchmark) []MetricProbl
 	return out
 }
 
+func plural(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
+}
+
 func (r *Runner) logf(format string, args ...any) {
 	if r.Log == nil {
 		return
@@ -233,11 +240,11 @@ func (r *Runner) Measure(ctx context.Context, b config.Benchmark, sides []Side) 
 		}
 	}
 	minRuns := minRunsFor(b, len(sides))
-	mode := fmt.Sprintf("%d runs", runs)
+	mode := plural(runs, "run")
 	if runs == 0 {
 		mode = fmt.Sprintf("adaptive runs (min %d, max %d, min time %s)", minRuns, b.MaxRuns, b.MinTime)
 	}
-	r.logf("benchmark %q: %d measurement units, %d warmup, %s", b.Name, len(units), warmup, mode)
+	r.logf("benchmark %q: %s, %d warmup, %s", b.Name, plural(len(units), "measurement unit"), warmup, mode)
 
 	l := &loop{
 		r: r, ctx: ctx, b: b, states: states, units: units,
@@ -260,7 +267,7 @@ func (r *Runner) Measure(ctx context.Context, b config.Benchmark, sides []Side) 
 		}
 		res.Rounds = round + 1
 	}
-	r.logf("benchmark %q: finished after %d rounds", b.Name, res.Rounds)
+	r.logf("benchmark %q: finished after %s", b.Name, plural(res.Rounds, "round"))
 	return res
 }
 
