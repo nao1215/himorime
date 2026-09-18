@@ -576,6 +576,9 @@ func TestRemoveTempRefusesOutsidePaths(t *testing.T) {
 
 func TestRemoveTempRemovesReadOnlyDirectoriesWithoutLeavingIt(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("on Windows a directory without write permission does not stop removing what it holds")
+	}
 	base := t.TempDir()
 	outside := t.TempDir()
 	if err := os.Chmod(outside, 0o500); err != nil {
@@ -613,6 +616,9 @@ func TestRemoveTempRemovesReadOnlyDirectoriesWithoutLeavingIt(t *testing.T) {
 
 func TestMeasureRemovesAWorkdirHoldingReadOnlyDirectories(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("on Windows a directory without write permission does not stop removing what it holds")
+	}
 	f := newFixture(t)
 	b := bench("readonly", 2, f.command("ok", "ok"))
 	b.Setup = []config.Exec{f.helper("readonly", "${workdir}")}
