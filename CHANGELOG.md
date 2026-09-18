@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-18
+
 ### Changed
 
 - The `gate-cpu-memory` recipe gives its command 150ms of work and 32MiB to hold, so that the metrics it gates on are measurable everywhere. Its CPU `min_difference` is 32ms, two Windows scheduler ticks. Measured on a GitHub-hosted `windows-latest` runner, the recipe's old command spent so little time on a CPU that its median was `0ns` and the comparison was inconclusive on every run.
