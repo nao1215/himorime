@@ -203,7 +203,7 @@ Commands, `cwd`, `env` values, `stdin` and hooks may use these variables:
 <!-- BEGIN GENERATED: variables -->
 | Variable | Expands to |
 |---|---|
-| `${artifact}` | The file the build step writes. In a comparison each revision has its own. Only available when the suite has a build section. On Windows it ends in .exe. |
+| `${artifact}` | The file the build step writes. In a comparison each revision has its own. Only available when the suite has a build section. Its name is artifact (artifact.exe on Windows): a program that acts on the name it was started as, such as a multi-call binary, needs a link under its own name, made in setup. |
 | `${root}` | The directory holding the suite file, inside the tree being measured: the working tree, or the temporary worktree of the base revision. Relative paths are relative to it, so each revision runs its own scripts and reads its own files. |
 | `${head_root}` | The directory holding the suite file inside the working tree, the same for every revision. Use it for a fixture or tool both revisions must share. Equal to ${root} in a plain run. |
 | `${workdir}` | A fresh, empty directory created for each benchmark (and each revision in a comparison) and removed after cleanup. Not available in build. |
@@ -220,7 +220,7 @@ Every relative path of a suite is relative to `${root}`, the directory holding t
 
 | Setting | Relative to | Default |
 |---|---|---|
-| `cwd` of commands, `setup`, `prepare_each`, `cleanup` | `${root}` of the revision measured | `${root}` |
+| `cwd` of commands, `setup`, `prepare_each`, `cleanup` | `${root}` of the revision measured | the benchmark's `cwd`, else `${root}` |
 | `cwd` of `build` | `${root}` of the revision built | `${root}` |
 | `stdin` file | `${root}` of the revision measured | |
 | `metrics.throughput.work.file_size` | `${root}` of the revision measured | |
@@ -248,7 +248,7 @@ A relative path that exists only in the working tree fails the base revision, wi
 
 ## Environment
 
-Commands inherit himorime's environment, with `env` from `defaults`, the benchmark and the command layered on top, in that order. Reports never contain the environment, and command lines are shown as written, before `${env:NAME}` is substituted.
+Commands and hooks (`setup`, `prepare_each`, `cleanup`) inherit himorime's environment, with `env` from `defaults`, the benchmark and the command or hook layered on top, in that order. A hook gets the benchmark's `env` too: pointing `HOME` or `GOPATH` into `${workdir}` also moves where a `go run` in a hook keeps its module cache. Reports never contain the environment, and command lines are shown as written, before `${env:NAME}` is substituted.
 
 ## Defaults
 

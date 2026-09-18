@@ -166,7 +166,7 @@ func duration(d time.Duration) string {
 
 func variables() string {
 	rows := [][2]string{
-		{"${artifact}", "The file the build step writes. In a comparison each revision has its own. Only available when the suite has a build section. On Windows it ends in .exe."},
+		{"${artifact}", "The file the build step writes. In a comparison each revision has its own. Only available when the suite has a build section. Its name is artifact (artifact.exe on Windows): a program that acts on the name it was started as, such as a multi-call binary, needs a link under its own name, made in setup."},
 		{"${root}", "The directory holding the suite file, inside the tree being measured: the working tree, or the temporary worktree of the base revision. Relative paths are relative to it, so each revision runs its own scripts and reads its own files."},
 		{"${head_root}", "The directory holding the suite file inside the working tree, the same for every revision. Use it for a fixture or tool both revisions must share. Equal to ${root} in a plain run."},
 		{"${workdir}", "A fresh, empty directory created for each benchmark (and each revision in a comparison) and removed after cleanup. Not available in build."},
