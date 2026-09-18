@@ -570,7 +570,7 @@ scenarios:
                 commands:
                   app: {command: [e2ehelper, args-from, "$${artifact}"]}
                 regression:
-                  throughput: {max_percent: 20}
+                  latency: {max_percent: 20}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
@@ -658,12 +658,12 @@ scenarios:
           # A header, 11 statistics of each of 7 metrics, the floor and the
           # runs at the floor of peak RSS, the smallest and largest measured
           # work of throughput, the relative speed and the budget.
-          stdout: {equals: "rows=84 columns=29\n"}
+          stdout: {equals: "rows=84 columns=30\n"}
       - assert:
           file:
             path: out/report.csv
             contains:
-              - "suite,benchmark,command,result,record,side,metric,unit,scope,source,process_aggregation,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,gate,reason,error_kind,error_message\n"
+              - "suite,benchmark,command,result,record,side,metric,unit,scope,source,process_aggregation,status,statistic,value,operator,limit,base,head,difference,change_percent,ci_low_percent,ci_high_percent,probability_regression,max_percent,verdict,gate,reason,error_kind,error_message,derived_from\n"
               - "reports,all metrics,app,pass,stat,head,peak_rss,bytes,process_tree,"
               - "reports,all metrics,app,pass,stat,head,throughput,records/s,wall_clock,declared_work,none,measured,median,"
               - "reports,all metrics,app,pass,stat,head,throughput,records/s,wall_clock,declared_work,none,measured,measured_work_min,"

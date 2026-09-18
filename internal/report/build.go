@@ -498,7 +498,7 @@ func compareMetrics(c *Command, br runner.BenchmarkResult, cfg config.Benchmark,
 	}
 	c.Comparisons = map[string]*MetricComparison{}
 	for _, def := range metric.Defs() {
-		if !def.Comparable || !cfg.Metrics.Collects(def.Group) {
+		if !def.Comparable || def.Name == metric.Throughput || !cfg.Metrics.Collects(def.Group) {
 			continue
 		}
 		mc := compareMetric(c, def, cfg, comparisonSeed(br.Benchmark.Name, c.Name, def.Name, seed))
@@ -516,7 +516,54 @@ func compareMetrics(c *Command, br runner.BenchmarkResult, cfg config.Benchmark,
 		case stats.VerdictPass:
 		}
 	}
+	if cfg.Metrics.Throughput != nil {
+		c.Comparisons[string(metric.Throughput)] = deriveThroughput(c, cfg)
+	}
 	c.Result = result
+}
+
+// deriveThroughput expresses the latency comparison in work per second. It
+// does not resample or classify the same executions a second time. The rate
+// is work / the selected latency statistic, not a statistic of per-run rates.
+func deriveThroughput(c *Command, cfg config.Benchmark) *MetricComparison {
+	lat := c.Comparisons[string(metric.Latency)]
+	mc := *lat
+	mc.Metric, mc.DerivedFrom, mc.Better = string(metric.Throughput), string(metric.Latency), string(metric.HigherIsBetter)
+	mc.Unit, mc.Gate = metric.MustLookup(metric.Throughput).Unit(cfg.Metrics.WorkUnit()), false
+	mc.Base, mc.Head, mc.Difference = nil, nil, nil
+	mc.MinDifference = 0 // The absolute threshold is applied in latency units.
+	mc.MaxPercent = -reciprocalChange(lat.MaxPercent)
+	mc.ChangePercent = reciprocalChange(lat.ChangePercent)
+	mc.CILowPercent, mc.CIHighPercent = reciprocalChange(lat.CIHighPercent), reciprocalChange(lat.CILowPercent)
+	base, head := c.Base.Metrics[mc.Metric], c.Head.Metrics[mc.Metric]
+	if base.Status != StatusMeasured || head.Status != StatusMeasured {
+		mc.Verdict, mc.Reason = VerdictSkipped, "throughput was not measured on both revisions"
+		clearDerivedEstimate(&mc)
+		return &mc
+	}
+	if !base.Work.sameWork(head.Work) {
+		mc.Verdict, mc.Reason = VerdictSkipped, reasonWorkDiffers(base.Work, head.Work)
+		clearDerivedEstimate(&mc)
+		return &mc
+	}
+	if lat.Base == nil || lat.Head == nil || *lat.Base <= 0 || *lat.Head <= 0 || lat.CILowPercent <= -100 {
+		mc.Verdict, mc.Reason = VerdictSkipped, "throughput needs positive latency statistics and interval bounds"
+		clearDerivedEstimate(&mc)
+		return &mc
+	}
+	b, h := *base.Work.MeasuredMin/(*lat.Base/1e9), *head.Work.MeasuredMin/(*lat.Head/1e9)
+	d := h - b
+	mc.Base, mc.Head, mc.Difference = &b, &h, &d
+	return &mc
+}
+
+func clearDerivedEstimate(mc *MetricComparison) {
+	mc.ChangePercent, mc.CILowPercent, mc.CIHighPercent = 0, 0, 0
+	mc.ProbRegression, mc.ProbImprovement = 0, 0
+}
+
+func reciprocalChange(percent float64) float64 {
+	return finite(-100 * percent / (100 + percent))
 }
 
 func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64) *MetricComparison {
@@ -549,6 +596,10 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 		statistic = stats.Mean
 	}
 	baseAtFloor, headAtFloor := base.atFloor(statOf(base, statistic)), head.atFloor(statOf(head, statistic))
+	if baseAtFloor && headAtFloor {
+		mc.Verdict, mc.Reason = VerdictSkipped, ReasonAtFloor
+		return mc
+	}
 	res := stats.Compare(raiseToFloor(base, baseAtFloor), raiseToFloor(head, headAtFloor), stats.CompareOptions{
 		Metric:         statistic,
 		HigherIsBetter: def.Better == metric.HigherIsBetter,
@@ -582,26 +633,21 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 			mc.Verdict, mc.Reason = string(stats.VerdictInconclusive), ReasonAtFloor
 		}
 	}
-	if def.Name == metric.Throughput && !base.Work.sameWork(head.Work) {
-		// Throughput is work divided by latency, so a revision that declares
-		// a different amount of work changes it without the command running
-		// any faster or slower. Comparing the two would report the change of
-		// input as a change of the program.
-		mc.Verdict = string(stats.VerdictInconclusive)
-		mc.Reason = reasonWorkDiffers(base.Work, head.Work)
-	}
 	return mc
 }
 
 // reasonWorkDiffers explains a throughput comparison whose sides did
 // different amounts of work.
 func reasonWorkDiffers(base, head *Work) string {
-	return "the work differs between the revisions: " + workAmount(base) + " in the base, " + workAmount(head) + " in the head"
+	return "throughput needs constant, equal work: " + workAmount(base) + " in the base, " + workAmount(head) + " in the head"
 }
 
 // workAmount renders the work of one side, as a range when it varied between
 // that side's runs.
 func workAmount(w *Work) string {
+	if w == nil || w.MeasuredMin == nil || w.MeasuredMax == nil {
+		return "unavailable work"
+	}
 	unit := " " + w.Unit
 	if *w.MeasuredMin == *w.MeasuredMax {
 		return trimFloat(*w.MeasuredMin) + unit
@@ -906,8 +952,8 @@ func summarize(r *Report) {
 }
 
 // countChecks counts the comparisons that are not gated, by verdict, and the
-// budgets and comparisons skipped because their metric is unsupported or a
-// peak RSS at the floor cannot decide them.
+// budgets and comparisons skipped because their metric is unsupported or
+// peak RSS could not be observed beyond the measurement floor.
 func countChecks(r *Report) {
 	sum := &r.Summary
 	for _, s := range r.Suites {
@@ -922,6 +968,7 @@ func countChecks(r *Report) {
 					switch {
 					case mc.Verdict == VerdictSkipped:
 						sum.Skipped++
+					case mc.DerivedFrom != "":
 					case mc.Gate:
 					case mc.Verdict == string(stats.VerdictRegression):
 						sum.NotGated.Regression++

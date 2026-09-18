@@ -2,6 +2,8 @@
 
 The suite under `test/e2e/atago` runs a built `himorime` as a real process, the way users and CI run it, with [atago](https://github.com/nao1215/atago). It pins the command-line contract: exit codes, where output goes, table structure, JSON and CSV report shapes, Git worktree handling, the GitHub Actions adapter, and every Cookbook recipe.
 
+The `stability` suite covers separated noisy revisions, reciprocal throughput verdicts, rejected legacy settings and RSS floors. `e2ehelper capture-report NAME COMMAND ...` preserves stdout and exit status while writing the full report to `HIMORIME_E2E_REPORT_DIR/NAME.json`. The runner prints that directory (a persistent temporary directory by default); CI uploads it for every OS, including failures. The CPU-regression cookbook scenario uses this wrapper so the next intermittent failure retains its reason, all samples, seed and environment. Keep the regression assertion strict; the original CI failure has not been reproduced or diagnosed.
+
 ```shell
 go install github.com/nao1215/atago@v0.22.0
 go run ./test/e2e/run                                      # every spec

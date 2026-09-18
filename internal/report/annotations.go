@@ -63,7 +63,7 @@ func benchmarkAnnotations(sb *strings.Builder, file string, b Benchmark, c Comma
 	}
 	for _, def := range metric.Defs() {
 		mc := c.Comparisons[string(def.Name)]
-		if mc == nil {
+		if mc == nil || mc.DerivedFrom != "" {
 			continue
 		}
 		row := comparisonView(mc)

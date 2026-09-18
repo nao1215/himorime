@@ -262,11 +262,10 @@ type Regression struct {
 	MinSamples int
 	MaxCV      float64
 	// Commands limits the comparison to these commands; all when empty.
-	Commands   []string
-	Latency    MetricRegression
-	Throughput MetricRegression
-	CPU        MetricRegression
-	Memory     MetricRegression
+	Commands []string
+	Latency  MetricRegression
+	CPU      MetricRegression
+	Memory   MetricRegression
 }
 
 // MetricRegression is the tolerance of one metric in a comparison.
@@ -279,25 +278,19 @@ type MetricRegression struct {
 	// the exit status. A metric with Gate false is still compared and
 	// reported, but only for information.
 	Gate bool
-	// unit and unitPath remember the work unit a throughput min_difference
-	// was written in, so a benchmark can check it against its work.
-	unit     string
-	unitPath path
 }
 
-// For returns the tolerance of a comparable metric: latency, throughput,
+// For returns the tolerance of an independently compared metric: latency,
 // cpu_total or peak_rss.
 func (r Regression) For(n metric.Name) (MetricRegression, bool) {
 	switch n {
 	case metric.Latency:
 		return r.Latency, true
-	case metric.Throughput:
-		return r.Throughput, true
 	case metric.CPUTotal:
 		return r.CPU, true
 	case metric.PeakRSS:
 		return r.Memory, true
-	case metric.CPUUser, metric.CPUSystem, metric.CPUUtilization:
+	case metric.Throughput, metric.CPUUser, metric.CPUSystem, metric.CPUUtilization:
 	}
 	return MetricRegression{}, false
 }

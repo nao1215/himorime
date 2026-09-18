@@ -454,7 +454,7 @@ scenarios:
           stdout:
             contains: ["(NOT GATED) marks a metric with gate: false", "not gated: 1 regressed"]
 
-  - name: a fixture of a different size makes the throughput comparison inconclusive
+  - name: a fixture of a different size skips the derived throughput comparison
     steps:
       - fixture: {file: repo/input.txt, content: "0123456789012345678901234567890123456789\n"}
       - fixture:
@@ -484,8 +484,8 @@ scenarios:
           exit_code: 0
           stdout:
             json:
-              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.verdict", equals: "inconclusive"}
-              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.reason", matches: "^the work differs between the revisions"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.verdict", equals: "skipped"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.reason", matches: "^throughput needs constant, equal work"}
               - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.throughput.work.measured_min", equals: 41}
               - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.throughput.work.measured_max", equals: 41}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.throughput.work.measured_min", equals: 11}
@@ -497,4 +497,4 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            contains: "the work differs between the revisions: 41 bytes in the base, 11 bytes in the head"
+            contains: "throughput needs constant, equal work: 41 bytes in the base, 11 bytes in the head"

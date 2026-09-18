@@ -108,7 +108,8 @@ func lineWith(t *testing.T, text, word string) string {
 // TestComparePeakRSSAtTheFloor: a side at its floor is compared as if it
 // used the whole floor. Only the verdict that assumption cannot overstate
 // stands: a regression away from a base at its floor, an improvement down to
-// a head at its floor. Anything else is inconclusive.
+// a head at its floor. Other one-sided cases are inconclusive; two sides
+// below their floors are skipped.
 func TestComparePeakRSSAtTheFloor(t *testing.T) {
 	t.Parallel()
 	floor := repeat(5<<20, 20)
@@ -121,7 +122,7 @@ func TestComparePeakRSSAtTheFloor(t *testing.T) {
 		{"from far above to the floor", floorResult("x", 64<<20, floor...), floorResult("x", 5<<20, floor...), "improved"},
 		{"from the floor to just above", floorResult("x", 3<<20, floor...), floorResult("x", 5200<<10, floor...), "inconclusive"},
 		{"from just above to the floor", floorResult("x", 5200<<10, floor...), floorResult("x", 4<<20, floor...), "inconclusive"},
-		{"both at the floor", floorResult("x", 3<<20, floor...), floorResult("x", 4<<20, floor...), "inconclusive"},
+		{"both at the floor", floorResult("x", 3<<20, floor...), floorResult("x", 4<<20, floor...), "skipped"},
 		{"both above", floorResult("x", 32<<20, floor...), floorResult("x", 64<<20, floor...), "regression"},
 		{"no floor", floorResult("x", 3<<20, repeat(0, 20)...), floorResult("x", 6<<20, repeat(0, 20)...), "regression"},
 	}
@@ -146,6 +147,9 @@ func TestComparePeakRSSAtTheFloor(t *testing.T) {
 				if !strings.Contains(out.String(), "peak rss inconclusive: the peak RSS is at or below the measurement floor") {
 					t.Errorf("terminal does not say why:\n%s", out.String())
 				}
+			}
+			if tt.verdict == VerdictSkipped && (mc.Reason != ReasonAtFloor || c.Result != ResultPass || r.Summary.Skipped != 1) {
+				t.Fatalf("both-floor comparison = %+v, command result %s, summary %+v", mc, c.Result, r.Summary)
 			}
 		})
 	}

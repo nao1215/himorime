@@ -72,7 +72,7 @@ df large   14.20ms  16.41ms   +2.21ms  +15.6%       98.1%       +10%  REGRESSION
 
 throughput
 BENCHMARK        BASE        HEAD         DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
-df large   72.10MiB/s  62.40MiB/s  -9.70MiB/s  -13.5%       97.2%        -8%  REGRESSION
+df large   72.10MiB/s  62.40MiB/s  -9.70MiB/s  -13.5%       98.1%     -9.09%  REGRESSION (FROM LATENCY)
 ```
 
 - `BASE` and `HEAD` are the compared statistic (median unless configured).
@@ -80,6 +80,8 @@ df large   72.10MiB/s  62.40MiB/s  -9.70MiB/s  -13.5%       97.2%        -8%  RE
 - `TOLERANCE` is `max_percent` in the metric's worse direction: `+` for latency, CPU time and peak RSS, `-` for throughput.
 - `CONFIDENCE` is the bootstrap probability behind `RESULT`: that the change stays within the tolerance for `PASS` (`1 - probability_regression`), that it exceeds the tolerance for `REGRESSION` and `IMPROVED`, and the highest of these, below `confidence`, for a change too close to call. It is `-` when something else decided the result: `min_difference`, too few samples, `max_cv`, the peak RSS floor or different throughput work.
 - `RESULT` is `PASS`, `IMPROVED`, `REGRESSION`, `INCONCLUSIVE`, `SKIPPED`, `OVER BUDGET` or an error. A metric with `gate: false` adds `(NOT GATED)`, such as `REGRESSION (NOT GATED)`: the verdict is shown but did not decide the result, and the summary line counts it as `not gated: 1 regressed`. See [What fails the run](/regression-detection/#what-fails-the-run).
+
+Throughput comparison rows add `(FROM LATENCY)`: values are work divided by the selected latency statistic, and the change and interval are reciprocal transforms of latency. Verdicts and probabilities come from latency. JSON identifies these with `derived_from: "latency"` and `gate: false`; CSV appends a `derived_from` column. These rows are excluded from `summary.not_gated` and do not emit duplicate CI annotations. If the work varies across runs or differs between revisions, the derived row is skipped. Per-run throughput statistics and absolute throughput budgets still use each run's measured rate.
 
 Values are rounded for reading: durations in ns, µs, ms or s, sizes in B, KiB, MiB or GiB, rates with a k, M or G prefix, all with two decimals. Colors are used only on an interactive terminal and never by `himorime ci`; `--no-color` and `NO_COLOR` turn them off.
 
@@ -99,7 +101,7 @@ It is supplementary. The per-case rows are the result. An arithmetic mean of rat
 - `budgets` lists every budget with `metric`, `aggregation`, `operator`, `limit`, `actual`, `unit`, `status` (`pass`, `fail`, `skipped`, `no_data`) and `reason`. A budget on a peak RSS at the floor has the reason `the peak RSS is at or below the measurement floor`.
 - `comparisons` holds each compared metric with `statistic`, `base`, `head`, `difference`, `change_percent`, the bootstrap interval, both tail probabilities, `max_percent`, `min_difference`, the verdict, its reason, and `gate`: `false` when the metric has `gate: false` and its verdict did not decide the result. `comparisons` is `null` outside a comparison.
 - `environment` records the operating system, architecture, CPU model, logical CPU count, Go version and CI provider, and `tools` the versions of the tools named in `report.versions`, as `name` and `version` in the order the suites list them (`[]` when none are named). `himorime_version`, `seed` and `git` (head and base commits, and whether the working tree was dirty) complete what is needed to reproduce a run. Host names, user names and environment variables are never recorded.
-- `summary` counts command results, `metric_error` among them, and `exit_code` is the exit status of the run. `not_gated` counts the comparisons with `gate: false` by verdict, and `skipped` the budgets and comparisons skipped because their metric is unsupported, and the budgets a peak RSS at the floor cannot decide; neither changes a result.
+- `summary` counts command results, `metric_error` among them, and `exit_code` is the exit status of the run. `not_gated` counts independent comparisons with `gate: false` by verdict. `skipped` counts budgets and comparisons excluded because their metric is unsupported, peak RSS was not observable above the measurement floor, or throughput work was not constant and equal; neither changes a result.
 - In a comparison, a suite whose directory does not exist in the base revision has `new_in_head: true` and is counted in `summary.new_suites`. It was measured in the working tree only, as in a plain run: its commands have `base` and `comparisons` null, and its budgets and failures decide its result.
 
 ```console

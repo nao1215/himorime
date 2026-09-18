@@ -75,7 +75,20 @@ func run(args []string) (int, error) {
 	cmd.Dir = root
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	reports := os.Getenv("HIMORIME_E2E_REPORT_DIR")
+	if reports == "" {
+		reports, err = os.MkdirTemp("", "himorime-e2e-reports-")
+		if err != nil {
+			return 1, err
+		}
+	}
+	reports, err = filepath.Abs(reports)
+	if err != nil {
+		return 1, err
+	}
+	fmt.Fprintln(os.Stderr, "E2E diagnostic reports:", reports)
 	cmd.Env = append(os.Environ(),
+		"HIMORIME_E2E_REPORT_DIR="+reports,
 		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"HIMORIME_REPO="+root,
 		"NO_COLOR=1",

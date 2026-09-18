@@ -25,7 +25,6 @@ defaults:
     confidence: 0.99
     min_samples: 10
     max_cv: 0.25
-    throughput: {metric: median, max_percent: 8}
     cpu: {metric: mean, max_percent: "12%", min_difference: 2ms}
     memory: {metric: median, max_percent: 5, min_difference: 1MiB}
 build:
@@ -101,7 +100,6 @@ benchmarks:
           peak_rss: {max: "<= 64MiB", median: "< 60000KB"}
     regression:
       latency: {metric: median, max_percent: 10, min_difference: 500us, gate: false}
-      throughput: {max_percent: 10, min_difference: "10 records/s", gate: true}
       cpu: {max_percent: 15}
       memory: {min_difference: 256KiB}
       confidence: 0.95

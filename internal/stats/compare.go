@@ -48,7 +48,9 @@ type CompareOptions struct {
 	Confidence float64
 	// MinSamples is the smallest sample count on either side that can be judged.
 	MinSamples int
-	// MaxCV marks a side whose dispersion exceeds it as inconclusive. The
+	// MaxCV marks overlapping distributions whose dispersion exceeds it as
+	// inconclusive. Fully separated samples beyond the tolerance can still
+	// be classified, subject to all the other evidence checks. The
 	// dispersion follows Metric: Summary.RobustCV for an order statistic,
 	// Summary.CV for the mean. 0 disables the check.
 	MaxCV float64
@@ -98,8 +100,8 @@ type Comparison struct {
 //   - regression: P(degradation > +MaxPercent) >= Confidence
 //   - improved:   P(degradation < -MaxPercent) >= Confidence
 //   - pass:       P(degradation <= +MaxPercent) >= Confidence
-//   - inconclusive: none of the above, or too few samples, or a side whose
-//     dispersion exceeds MaxCV. The dispersion follows the compared statistic:
+//   - inconclusive: none of the above, or too few samples, or overlapping
+//     ranges with a side whose dispersion exceeds MaxCV. The dispersion follows the compared statistic:
 //     the classic coefficient of variation for the mean, the robust one for
 //     the median and the other order statistics.
 //
@@ -157,7 +159,7 @@ func Compare(base, head []float64, o CompareOptions) Comparison {
 	case c.Base.Count < o.MinSamples || c.Head.Count < o.MinSamples:
 		c.Verdict = VerdictInconclusive
 		c.Reason = ReasonFewSamples
-	case o.MaxCV > 0 && (c.Base.Dispersion(o.Metric) > o.MaxCV || c.Head.Dispersion(o.Metric) > o.MaxCV):
+	case o.MaxCV > 0 && (c.Base.Dispersion(o.Metric) > o.MaxCV || c.Head.Dispersion(o.Metric) > o.MaxCV) && !separated(c.Base, c.Head):
 		c.Verdict = VerdictInconclusive
 		c.Reason = ReasonNoisy
 	case o.MinDifference > 0 && math.Abs(c.Difference) < o.MinDifference:
@@ -174,6 +176,17 @@ func Compare(base, head []float64, o CompareOptions) Comparison {
 		c.Reason = ReasonTooClose
 	}
 	return c
+}
+
+// separated bounds every possible resampled statistic by the observed
+// extrema. Complete separation establishes an ordering despite within-side
+// dispersion. It never bypasses min_samples, min_difference, the effect-size
+// tolerance or bootstrap confidence; those still decide the verdict.
+func separated(base, head Summary) bool {
+	if base.Min <= 0 || head.Min <= 0 {
+		return false
+	}
+	return head.Min > base.Max || head.Max < base.Min
 }
 
 func bootstrapChanges(base, head []float64, m Metric, resamples int, seed uint64) []float64 {

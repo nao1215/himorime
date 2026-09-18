@@ -247,9 +247,11 @@ type Work struct {
 // throughput describes the same job.
 func (w *Work) sameWork(other *Work) bool {
 	if w == nil || other == nil || w.MeasuredMin == nil || other.MeasuredMin == nil {
-		return true
+		return false
 	}
-	return *w.MeasuredMin == *other.MeasuredMin && *w.MeasuredMax == *other.MeasuredMax
+	return w.MeasuredMax != nil && other.MeasuredMax != nil &&
+		*w.MeasuredMin > 0 && *w.MeasuredMin == *w.MeasuredMax &&
+		*w.MeasuredMin == *other.MeasuredMin && *other.MeasuredMin == *other.MeasuredMax
 }
 
 // Relative compares medians within one benchmark of a plain run.
@@ -263,6 +265,9 @@ type Relative struct {
 // MetricComparison is the base/head judgement of one metric of one command.
 type MetricComparison struct {
 	Metric string `json:"metric"`
+	// DerivedFrom names the independent comparison supplying this verdict.
+	// Derived comparisons are informational and are not counted again.
+	DerivedFrom string `json:"derived_from,omitempty"`
 	// Statistic is the compared statistic: median or mean.
 	Statistic string `json:"statistic"`
 	Unit      string `json:"unit"`
@@ -348,12 +353,12 @@ type Summary struct {
 	Error              int  `json:"error"`
 	FailOnInconclusive bool `json:"fail_on_inconclusive"`
 	ExitCode           int  `json:"exit_code"`
-	// NotGated counts the metric comparisons with gate: false by verdict.
-	// They never change a command's result, so they are counted apart.
+	// NotGated counts independent metric comparisons with gate: false by
+	// verdict. Derived throughput never counts the same inference again.
 	NotGated VerdictCounts `json:"not_gated"`
 	// Skipped counts the budgets and comparisons skipped because their
-	// metric is unsupported on this platform (metrics.unsupported: skip), and
-	// the budgets a peak RSS at the measurement floor cannot decide.
+	// metric is unsupported on this platform (metrics.unsupported: skip), or
+	// peak RSS could not be observed beyond the measurement floor.
 	Skipped int `json:"skipped"`
 	// NewSuites counts the suites with new_in_head: suites the base revision
 	// does not have, so nothing of them was compared.

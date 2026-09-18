@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Changed
+
+- Throughput comparisons derive their verdict and confidence from latency, with reciprocal values and intervals, instead of classifying the same executions twice. `regression.throughput` is no longer accepted: use `regression.latency` for relative changes and throughput budgets for absolute rate limits. Reports identify the derived comparison with `derived_from: latency` (also a CSV column), `gate: false` and `(FROM LATENCY)` in tables; it is not counted again in `summary.not_gated`. Per-run throughput samples, statistics and budgets are unchanged. A comparison requires constant, equal work on both revisions; otherwise the derived row is skipped.
+- The `max_cv` noise gate permits completely separated sample ranges to proceed to the existing tolerance and bootstrap confidence checks. It still rejects overlapping noisy distributions, and sample-count and absolute-difference checks still apply.
+
+### Fixed
+
+- Memory comparisons with both statistics at or below their RSS floors are skipped without computing a change or confidence. They do not count as inconclusive or fail `--fail-on-inconclusive`.
+- E2E runs preserve the complete CPU-regression JSON report, including reasons and samples, outside the disposable scenario directory. CI uploads these diagnostics on success or failure; the original intermittent runner failure remains unconfirmed.
+- Documented that revision comparisons belong to the suite repository and other tools are installed commands. Service-dependent commands remain outside the v0.x scope.
+
 ## [0.2.0] - 2026-09-18
 
 ### Added

@@ -282,8 +282,11 @@ func leafIssue(e *jsonschema.ValidationError, p path, emit func(path, string, st
 	switch k := e.ErrorKind.(type) {
 	case *kind.AdditionalProperties:
 		for _, name := range k.Properties {
-			emit(p.key(name), fmt.Sprintf("unknown key %q", name),
-				"check the spelling against https://nao1215.github.io/himorime/configuration/; unknown keys are rejected so a typo cannot silently change a benchmark")
+			hint := "check the spelling against https://nao1215.github.io/himorime/configuration/; unknown keys are rejected so a typo cannot silently change a benchmark"
+			if name == "throughput" && len(p) > 0 && p[len(p)-1] == "regression" {
+				hint = "throughput derives its verdict from latency; use regression.latency for relative changes or budget.<command>.throughput for an absolute rate limit"
+			}
+			emit(p.key(name), fmt.Sprintf("unknown key %q", name), hint)
 		}
 	case *kind.Required:
 		for _, name := range k.Missing {

@@ -255,7 +255,7 @@ func TestJudgeCompareDirections(t *testing.T) {
 	}
 	var out bytes.Buffer
 	_ = WriteTerminal(&out, r, TerminalOptions{})
-	for _, want := range []string{"latency\nBENCHMARK", "\npeak rss\nBENCHMARK", "32.00MiB  48.00MiB  +16.00MiB  +50.0%", "REGRESSION", "\nthroughput\n", "-10%"} {
+	for _, want := range []string{"latency\nBENCHMARK", "\npeak rss\nBENCHMARK", "32.00MiB  48.00MiB  +16.00MiB  +50.0%", "REGRESSION", "\nthroughput\n", "(FROM LATENCY)"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("terminal lacks %q:\n%s", want, out.String())
 		}
@@ -503,7 +503,7 @@ func TestSkippedChecksAreCounted(t *testing.T) {
 	}
 	var out bytes.Buffer
 	_ = WriteTerminal(&out, r, TerminalOptions{})
-	if !strings.Contains(out.String(), "2 checks skipped (unsupported metric)") || !strings.Contains(out.String(), "SKIPPED") {
+	if !strings.Contains(out.String(), "2 checks skipped") || !strings.Contains(out.String(), "SKIPPED") {
 		t.Errorf("terminal:\n%s", out.String())
 	}
 }

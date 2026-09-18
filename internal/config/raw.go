@@ -146,14 +146,13 @@ type RawMemoryBudget struct {
 
 // RawRegression configures how a base revision and the working tree are
 // compared. confidence, min_samples, max_cv and commands apply to every
-// metric; latency, throughput, cpu and memory carry each metric's tolerance.
+// independent metric; throughput derives its verdict from latency.
 type RawRegression struct {
 	Confidence *float64             `yaml:"confidence"`
 	MinSamples *int                 `yaml:"min_samples"`
 	MaxCV      *float64             `yaml:"max_cv"`
 	Commands   []string             `yaml:"commands"`
 	Latency    *RawMetricRegression `yaml:"latency"`
-	Throughput *RawMetricRegression `yaml:"throughput"`
 	CPU        *RawMetricRegression `yaml:"cpu"`
 	Memory     *RawMetricRegression `yaml:"memory"`
 }

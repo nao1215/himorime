@@ -52,8 +52,6 @@ benchmarks:
           peak_rss:
             max: "<= 256MiB"
     regression:
-      throughput:
-        max_percent: 15
       cpu:
         max_percent: 20
         min_difference: 5ms

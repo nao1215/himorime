@@ -70,7 +70,7 @@ scenarios:
           cwd: repo
       - assert: {exit_code: 0}
       - run:
-          command: himorime compare --against main --quiet --format json examples/cpu-regression
+          command: e2ehelper capture-report cpu-regression himorime compare --against main --quiet --format json examples/cpu-regression
           cwd: repo
           timeout: 600s
       - assert:
@@ -161,7 +161,7 @@ scenarios:
             contains: ["latency\nBENCHMARK", "throughput\nBENCHMARK", "cpu total\nBENCHMARK", "peak rss\nBENCHMARK", "MiB/s"]
       - assert:
           stdout:
-            matches: "(?m)^count 50k lines +[0-9.]+MiB/s +[0-9.]+MiB/s +\\S+ +[+-][0-9.]+% +\\S+ +-10% +(PASS|INCONCLUSIVE|IMPROVED)$"
+            matches: "(?m)^count 50k lines +[0-9.]+MiB/s +[0-9.]+MiB/s +\\S+ +[+-][0-9.]+% +\\S+ +-9.09% +(PASS|INCONCLUSIVE|IMPROVED) \\(FROM LATENCY\\)$"
       - assert:
           stderr: {contains: "including uncommitted changes"}
       - run: {command: git status --porcelain, cwd: repo}
@@ -355,7 +355,7 @@ scenarios:
           command: e2ehelper csv-shape ${workdir}/result.csv
       - assert:
           exit_code: 0
-          stdout: {matches: "^rows=[0-9]+ columns=29\n$"}
+          stdout: {matches: "^rows=[0-9]+ columns=30\n$"}
       - assert:
           file:
             path: result.csv

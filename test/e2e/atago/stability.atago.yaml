@@ -1,0 +1,115 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/atago/main/schema/atago.schema.json
+version: "1"
+suite: {name: comparison stability}
+defaults:
+  scenario:
+    env:
+      GIT_AUTHOR_NAME: himorime-e2e
+      GIT_AUTHOR_EMAIL: e2e@example.com
+      GIT_COMMITTER_NAME: himorime-e2e
+      GIT_COMMITTER_EMAIL: e2e@example.com
+      GIT_CONFIG_NOSYSTEM: "1"
+scenarios:
+  - name: separated noisy revisions share one latency and throughput verdict and retain samples
+    steps:
+      - fixture: {file: repo/program.txt, content: "alternate state 10ms 120ms"}
+      - fixture:
+          file: repo/himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: separated}
+            build: {command: [e2ehelper, copy, program.txt, "$${artifact}"]}
+            defaults: {warmup: 0, runs: 10, regression: {max_cv: 0.05}}
+            benchmarks:
+              - name: bimodal
+                cwd: "$${workdir}"
+                metrics: {throughput: {work: {value: 1000, unit: records}}}
+                commands:
+                  tool: {command: [e2ehelper, args-from, "$${artifact}"]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - fixture: {file: repo/program.txt, content: "alternate state 400ms 800ms"}
+      - run:
+          command: e2ehelper capture-report separated himorime compare --against main --quiet --format json --seed 42
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 1
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.stats.robust_cv", gt: 0.05}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.stats.robust_cv", gt: 0.05}
+              - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.samples", length: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.samples", length: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.reason", equals: ""}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.derived_from", equals: "latency"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.gate", equals: false}
+              - {path: "$.summary.regression", equals: 1}
+              - {path: "$.summary.not_gated.regression", equals: 0}
+      # The wrapper preserved exit 1 and wrote a complete schema-valid report
+      # outside the disposable scenario, including the reason and all samples.
+      - run:
+          command: e2ehelper json-schema ${env:HIMORIME_REPO}/schema/report.schema.json ${env:HIMORIME_E2E_REPORT_DIR}/separated.json
+      - assert: {exit_code: 0, stdout: {contains: valid}}
+      - run: {command: git -c commit.gpgsign=false commit -q -am slower, cwd: repo}
+      - fixture: {file: repo/program.txt, content: "alternate state 10ms 120ms"}
+      - run:
+          command: himorime compare --against main --quiet --format json --seed 42
+          cwd: repo
+          timeout: 120s
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "improved"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.throughput.verdict", equals: "improved"}
+              - {path: "$.summary.improved", equals: 1}
+
+  - name: legacy independent throughput settings fail validation
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: legacy}
+            benchmarks:
+              - name: tool
+                metrics: {throughput: {work: {value: 1000}}}
+                commands: {tool: {command: [e2ehelper, sleep, 10ms]}}
+                regression: {throughput: {max_percent: 10}}
+      - run: {command: himorime validate}
+      - assert:
+          exit_code: 2
+          stderr: {contains: 'unknown key "throughput"'}
+
+  - name: both RSS floors are skipped even when inconclusive results fail
+    only: {os: linux}
+    steps:
+      - fixture:
+          file: repo/himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: floor}
+            defaults: {warmup: 1, runs: 10, regression: {latency: {gate: false}}}
+            benchmarks:
+              - name: tiny
+                metrics: {memory: true}
+                commands: {tool: {command: ["true"]}}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: himorime compare --against main --quiet --format json --fail-on-inconclusive
+          cwd: repo
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.peak_rss.verdict", equals: "skipped"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.peak_rss.reason", equals: "the peak RSS is at or below the measurement floor"}
+              - {path: "$.summary.inconclusive", equals: 0}
+              - {path: "$.summary.skipped", equals: 1}
+              - {path: "$.summary.exit_code", equals: 0}
