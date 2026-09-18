@@ -679,3 +679,26 @@ scenarios:
           exit_code: 2
           stderr:
             contains: ["benchmarks[0].stderr", "stderr cannot be set with terminal: true"]
+
+  - name: a workdir holding read-only directories, as a Go module cache does, is removed after the benchmark
+    skip: {os: windows}
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: readonly}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: read-only dir
+                setup:
+                  - command: 'mkdir -p $${workdir}/ro/sub && touch $${workdir}/ro/sub/f && chmod 555 $${workdir}/ro/sub $${workdir}/ro'
+                    shell: true
+                commands:
+                  helper: {command: [e2ehelper, sleep, 1ms]}
+      - run:
+          command: himorime run
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: ["permission denied", "remove temporary directory"]

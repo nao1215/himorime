@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - On the pull request that adds a suite, `compare` and `ci` build and run the suite in the working tree and judge it as `himorime run` does, instead of skipping it. A broken build or command exits 4 and an exceeded budget exits 1 on that pull request, where they used to pass and fail the next pull request instead. The suite is still reported as new in this revision (`new_in_head`, `summary.new_suites`, the notice annotation); in JSON its commands have a null `base` and null `comparisons`, and CSV has its plain-run rows after the `new_in_head` row.
 - The `CONFIDENCE` column of comparison tables in the terminal, Markdown and job summaries shows the probability that decided `RESULT`: that the change stays within the tolerance for `PASS`, as before for `REGRESSION` and `IMPROVED`, and the highest of these for a change too close to call. A pass used to show `low`, which read as an unsure pass, and a comparison made inconclusive by noise or too few samples could show `99.0%`; a result the probabilities did not decide now shows `-`. JSON and CSV are unchanged.
 
+### Fixed
+
+- A benchmark whose `${workdir}` held a directory without write permission, as a Go module cache in `${workdir}` does, failed at cleanup with `permission denied` after measuring, and the temporary directory stayed on disk. himorime now gives the owner write permission inside its own temporary directories before removing them, without following symbolic links.
+
 ## [0.1.3] - 2026-09-18
 
 ### Changed
