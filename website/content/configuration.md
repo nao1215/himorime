@@ -189,8 +189,10 @@ A program that only does its work on a terminal, such as an interactive shell, a
       command: ["${artifact}", "${workdir}/users.csv"]
 ```
 
-- Standard input, output and error are the terminal, and it is the command's controlling terminal. `stdin` is typed into it as the command starts, before the program may have switched it to raw mode; the program still reads every key.
-- Nothing closes a terminal's input, so the input has to end the program (`.exit`, `q`, or Ctrl-D written as `\u0004`); `timeout` stops one that keeps waiting.
+- Standard input, output and error are the terminal, and it is the command's controlling terminal.
+- `stdin` is typed the way a person types it: one key at a time (a character, or an escape sequence such as `\u001b[A` for the up arrow). The first key is typed once the command has written to the terminal or switched it out of line mode, as a person waits for the prompt, and each next key once the command has read the one before, so a program that highlights, completes or redraws on every key does that work for every key. In line mode a whole line is typed before himorime waits for it to be read.
+- Nothing closes a terminal's input, so the input has to end the program (`.exit`, `q`, or Ctrl-D written as `\u0004`); `timeout` stops one that keeps waiting. A program that reads a line without writing a prompt first is never typed to, and its failure says so.
+- Waiting for each key is part of the measured time, as typing is for a person: latency grows with the number of keys, and CPU time is what shows the work the program does per key. A program that writes before it switches the terminal out of line mode may read the keys typed in between as one.
 - What the command writes, echoed input included, goes to `stdout` when it is set. `stderr` cannot be set, because both streams are the terminal. A failure shows the tail of that output.
 - himorime types the input and reads the output outside the process tree, so neither is counted as the command's CPU time or memory.
 
@@ -370,7 +372,7 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
 | `exit_codes` |  | Exit statuses that count as success. Default [0]. |
 | `stdin` |  | Standard input of every run: a fixture path (reopened for each run), or a mapping with file or content. |
-| `terminal` |  | Run every command on a pseudo-terminal of 80 columns and 24 rows (Linux and macOS): standard input, output and error are the terminal, stdin is typed into it, and what the command writes goes to stdout. The input must end the program. stderr cannot be set. |
+| `terminal` |  | Run every command on a pseudo-terminal of 80 columns and 24 rows (Linux and macOS): standard input, output and error are the terminal, stdin is typed into it one key at a time once the command is ready and has read the key before, and what the command writes goes to stdout. The input must end the program. stderr cannot be set. |
 | `setup` |  | Processes run once per benchmark (per revision in a comparison) before any warmup. A failure fails the benchmark. |
 | `prepare_each` |  | Processes run before every warmup and measured run, outside the measured time. |
 | `cleanup` |  | Processes run after the benchmark whether it passed, failed or was interrupted. |

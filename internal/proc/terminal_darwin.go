@@ -12,6 +12,14 @@ import (
 
 const terminalSupported = true
 
+// The ioctls that read the input queue of the terminal and its mode.
+// FIONREAD is _IOR('f', 127, int), which golang.org/x/sys/unix does not
+// define for darwin.
+const (
+	ioctlInputQueue = 0x4004667f
+	ioctlGetTermios = unix.TIOCGETA
+)
+
 // openPTY opens a new pseudo-terminal pair through /dev/ptmx, granting and
 // unlocking it as posix_openpt, grantpt and unlockpt do.
 func openPTY() (master, slave *os.File, err error) {

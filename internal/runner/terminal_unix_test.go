@@ -10,20 +10,25 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 
 	"github.com/nao1215/himorime/internal/config"
 )
 
-// ttyHelper fails unless its three streams are a terminal, then reads one
-// line, prints it on standard output and a marker on standard error, and
-// exits with args[0].
+// ttyHelper fails unless its three streams are a terminal, then prompts,
+// reads one line, prints it on standard output and a marker on standard
+// error, and exits with args[0]. With args[1] set to "silent" it reads without
+// a prompt, and waits forever.
 func ttyHelper(args []string) int {
 	for fd := range 3 {
 		if _, err := unix.IoctlGetWinsize(fd, unix.TIOCGWINSZ); err != nil {
 			return 10 + fd
 		}
+	}
+	if len(args) < 2 || args[1] != "silent" {
+		fmt.Print("> ")
 	}
 	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	fmt.Printf("line:%s", line)
@@ -32,8 +37,8 @@ func ttyHelper(args []string) int {
 	return code
 }
 
-func terminalBench(f *fixture, code string) config.Benchmark {
-	b := bench("terminal", 3, f.command("tty", "tty", code))
+func terminalBench(f *fixture, args ...string) config.Benchmark {
+	b := bench("terminal", 3, f.command("tty", "tty", args...))
 	b.Terminal = true
 	b.Stdin = config.Stdin{Kind: config.StdinContent, Content: "hello\n"}
 	b.Metrics = config.Metrics{CPU: true, Memory: true}
@@ -64,5 +69,17 @@ func TestMeasureOnATerminalShowsWhatTheCommandWroteWhenItFails(t *testing.T) {
 		if !strings.Contains(m.Failure.Stderr, want) {
 			t.Errorf("failure tail = %q, want it to contain %q", m.Failure.Stderr, want)
 		}
+	}
+}
+
+func TestMeasureOnATerminalSaysWhyNothingWasTyped(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	b := terminalBench(f, "0", "silent")
+	b.Commands[0].Timeout = 300 * time.Millisecond
+	res := f.runner.Measure(context.Background(), b, []Side{f.side})
+	m := res.Commands[0].Sides[SideHead]
+	if m.Failure == nil || m.Failure.Kind != FailTimeout || !strings.Contains(m.Failure.Message, "none of stdin was typed") {
+		t.Fatalf("failure = %+v, want a timeout that says nothing was typed", m.Failure)
 	}
 }

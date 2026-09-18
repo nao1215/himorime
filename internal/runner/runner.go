@@ -596,7 +596,7 @@ func (r *Runner) runOnce(ctx context.Context, b config.Benchmark, st *sideState,
 	spec.CollectUsage = wantCPU || wantMemory
 	spec.MeasureMemory = wantMemory
 
-	stderr, closeIO, f := r.openIO(&spec, c, st, b.Terminal)
+	stderr, term, closeIO, f := r.openIO(&spec, c, st, b.Terminal)
 	defer closeIO()
 	if f != nil {
 		return f
@@ -619,7 +619,11 @@ func (r *Runner) runOnce(ctx context.Context, b config.Benchmark, st *sideState,
 		return &Failure{Kind: kind, Message: fmt.Sprintf("%s: %v%s", r.Redactor.String(c.Display()), redactErr(r.Redactor, err), sharedHint(st.side, "the working directory", statErr))}
 	}
 	if res.TimedOut {
-		return &Failure{Kind: FailTimeout, Message: fmt.Sprintf("timed out after %s and was stopped", c.Timeout), Stderr: r.tail(stderr.Name())}
+		msg := fmt.Sprintf("timed out after %s and was stopped", c.Timeout)
+		if term != nil && term.NeverReady() {
+			msg += "; none of stdin was typed, because the command never wrote to the terminal nor switched it out of line mode (a program that reads a line without a prompt waits for it forever)"
+		}
+		return &Failure{Kind: FailTimeout, Message: msg, Stderr: r.tail(stderr.Name())}
 	}
 	if !allowed(c.ExitCodes, res.ExitCode) {
 		return &Failure{
@@ -713,7 +717,7 @@ func (r *Runner) work(b config.Benchmark, st *sideState) (float64, *Failure) {
 // run to spec. It returns the stderr file, whose tail a failure shows, and a
 // function that closes everything opened, to be called in every case and
 // safe to call again.
-func (r *Runner) openIO(spec *proc.Spec, c config.Command, st *sideState, terminal bool) (*os.File, func(), *Failure) {
+func (r *Runner) openIO(spec *proc.Spec, c config.Command, st *sideState, terminal bool) (*os.File, *proc.Terminal, func(), *Failure) {
 	var closers []io.Closer
 	var once sync.Once
 	closeAll := func() {
@@ -724,40 +728,40 @@ func (r *Runner) openIO(spec *proc.Spec, c config.Command, st *sideState, termin
 		})
 	}
 	if terminal {
-		out, f := r.openTerminal(spec, c, st, &closers)
-		return out, closeAll, f
+		out, term, f := r.openTerminal(spec, c, st, &closers)
+		return out, term, closeAll, f
 	}
 	if st.stdin != "" {
 		in, err := os.Open(st.stdin)
 		if err != nil {
-			return nil, closeAll, &Failure{Kind: FailSetup, Message: fmt.Sprintf("open stdin fixture: %v", redactErr(r.Redactor, err))}
+			return nil, nil, closeAll, &Failure{Kind: FailSetup, Message: fmt.Sprintf("open stdin fixture: %v", redactErr(r.Redactor, err))}
 		}
 		closers = append(closers, in)
 		spec.Stdin = in
 	}
 	outPath, err := r.outputPath(c.Stdout, st, c.Name+".stdout", false)
 	if err != nil {
-		return nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
+		return nil, nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
 	}
 	if outPath != "" {
 		stdout, err := openOutput(outPath)
 		if err != nil {
-			return nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
+			return nil, nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
 		}
 		closers = append(closers, stdout)
 		spec.Stdout = stdout
 	}
 	errPath, err := r.outputPath(c.Stderr, st, c.Name+".stderr", true)
 	if err != nil {
-		return nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stderr: %v", err)}
+		return nil, nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stderr: %v", err)}
 	}
 	stderr, err := openOutput(errPath)
 	if err != nil {
-		return nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stderr: %v", err)}
+		return nil, nil, closeAll, &Failure{Kind: FailPath, Message: fmt.Sprintf("stderr: %v", err)}
 	}
 	closers = append(closers, stderr)
 	spec.Stderr = stderr
-	return stderr, closeAll, nil
+	return stderr, nil, closeAll, nil
 }
 
 // openTerminal gives the command a new pseudo-terminal as its standard input,
@@ -765,33 +769,33 @@ func (r *Runner) openIO(spec *proc.Spec, c config.Command, st *sideState, termin
 // writes goes to its stdout setting, or to a private file whose tail a failure
 // shows. The terminal is closed first, so its output is complete before the
 // files it copies from and to are closed.
-func (r *Runner) openTerminal(spec *proc.Spec, c config.Command, st *sideState, closers *[]io.Closer) (*os.File, *Failure) {
+func (r *Runner) openTerminal(spec *proc.Spec, c config.Command, st *sideState, closers *[]io.Closer) (*os.File, *proc.Terminal, *Failure) {
 	var in io.Reader
 	if st.stdin != "" {
 		f, err := os.Open(st.stdin)
 		if err != nil {
-			return nil, &Failure{Kind: FailSetup, Message: fmt.Sprintf("open stdin fixture: %v", redactErr(r.Redactor, err))}
+			return nil, nil, &Failure{Kind: FailSetup, Message: fmt.Sprintf("open stdin fixture: %v", redactErr(r.Redactor, err))}
 		}
 		*closers = append(*closers, f)
 		in = f
 	}
 	outPath, err := r.outputPath(c.Stdout, st, c.Name+".terminal", true)
 	if err != nil {
-		return nil, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
+		return nil, nil, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
 	}
 	out, err := openOutput(outPath)
 	if err != nil {
-		return nil, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
+		return nil, nil, &Failure{Kind: FailPath, Message: fmt.Sprintf("stdout: %v", err)}
 	}
 	*closers = append(*closers, out)
 	term, err := proc.OpenTerminal(in, out)
 	if err != nil {
-		return out, &Failure{Kind: FailStart, Message: err.Error()}
+		return out, nil, &Failure{Kind: FailStart, Message: err.Error()}
 	}
 	*closers = append([]io.Closer{term}, *closers...)
 	spec.Stdin, spec.Stdout, spec.Stderr = term.File(), term.File(), term.File()
 	spec.Terminal = true
-	return out, nil
+	return out, term, nil
 }
 
 // outputPath decides where a command's stdout or stderr goes for one run.

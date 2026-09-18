@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 
-- `terminal: true` on a benchmark runs its commands on a pseudo-terminal of 80 columns and 24 rows, on Linux and macOS, so a program that only does its work on a terminal (an interactive shell, a line editor, a TUI) can be measured. Standard input, output and error are the terminal, `stdin` is typed into it, and what the command writes goes to `stdout`; `stderr` cannot be set with it. On Windows and the BSDs such a benchmark fails with exit 4. See Standard input and output on the Configuration page.
+- `terminal: true` on a benchmark runs its commands on a pseudo-terminal of 80 columns and 24 rows, on Linux and macOS, so a program that only does its work on a terminal (an interactive shell, a line editor, a TUI) can be measured. Standard input, output and error are the terminal, `stdin` is typed into it one key at a time once the command is ready and has read the key before, as a person types, and what the command writes goes to `stdout`; `stderr` cannot be set with it. On Windows and the BSDs such a benchmark fails with exit 4. See Standard input and output on the Configuration page.
 
 ### Changed
 

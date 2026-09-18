@@ -3,6 +3,7 @@
 package proc
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -38,62 +39,107 @@ func terminalHelper() int {
 		fmt.Printf("size %+v (%v), want %dx%d\n", ws, err, TerminalColumns, TerminalRows)
 		return 22
 	}
-	time.Sleep(200 * time.Millisecond)
+	if os.Getenv("HELPER_PROMPT") != "" {
+		// A line-mode program: prompt, then read a line.
+		fmt.Print("> ")
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil {
+			return 23
+		}
+		fmt.Printf("got:%q\n", line)
+		return 0
+	}
+	// A raw-mode program that writes nothing first: typing must wait for the
+	// switch, and then every read must return exactly one key.
+	time.Sleep(100 * time.Millisecond)
 	t, err := unix.IoctlGetTermios(0, getTermios)
 	if err != nil {
-		return 23
+		return 24
 	}
 	t.Lflag &^= unix.ICANON | unix.ECHO
 	t.Cc[unix.VMIN], t.Cc[unix.VTIME] = 1, 0
 	if err := unix.IoctlSetTermios(0, setTermios, t); err != nil {
-		return 24
+		return 25
 	}
-	var got []byte
-	b := make([]byte, 1)
+	var reads []string
+	buf := make([]byte, 64)
 	for {
-		if _, err := os.Stdin.Read(b); err != nil {
-			return 25
+		n, err := os.Stdin.Read(buf)
+		if err != nil {
+			return 26
 		}
-		if b[0] == 'q' {
+		if string(buf[:n]) == "q" {
 			break
 		}
-		got = append(got, b[0])
+		reads = append(reads, string(buf[:n]))
+		// Be slower than the typist, so keys would pile up without pacing.
+		time.Sleep(2 * time.Millisecond)
 	}
-	fmt.Printf("got:%q\n", got)
+	fmt.Printf("reads:%q\n", reads)
 	return 0
 }
 
 func TestRunOnATerminalGivesTheCommandAControllingTerminal(t *testing.T) {
 	t.Parallel()
+	tests := []struct {
+		name  string
+		input string
+		env   []string
+		want  string
+	}{
+		{"raw mode reads one key at a time", "ab\u00e9\x1b[Ac\x1bxq", nil, `reads:["a" "b" "é" "\x1b[A" "c" "\x1bx"]`},
+		{"line mode reads the line after the prompt", "abc\n", []string{"HELPER_PROMPT=1"}, `got:"abc\n"`},
+	}
 	for _, path := range startPaths() {
-		t.Run(path.name, func(t *testing.T) {
-			t.Parallel()
-			runWith := path.run(t)
-			var out bytes.Buffer
-			term, err := OpenTerminal(strings.NewReader("abc\nq"), &out)
-			if err != nil {
-				t.Fatal(err)
-			}
-			s := helper(t, "terminal")
-			s.Stdin, s.Stdout, s.Stderr = term.File(), term.File(), term.File()
-			s.Terminal = true
-			s.Timeout = 30 * time.Second
-			res, err := runWith(context.Background(), s)
-			if cerr := term.Close(); cerr != nil {
-				t.Errorf("close: %v", cerr)
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if res.ExitCode != 0 || res.TimedOut {
-				t.Fatalf("result = %+v, output %q", res, out.String())
-			}
-			// Typed while the terminal was in line mode, read in raw mode: the
-			// complete line and the key after it both arrive.
-			if !strings.Contains(out.String(), `got:"abc\n"`) {
-				t.Fatalf("output = %q, want the helper to have read %q", out.String(), "abc\n")
-			}
-		})
+		for _, tt := range tests {
+			t.Run(path.name+"/"+tt.name, func(t *testing.T) {
+				t.Parallel()
+				runWith := path.run(t)
+				var out bytes.Buffer
+				term, err := OpenTerminal(strings.NewReader(tt.input), &out)
+				if err != nil {
+					t.Fatal(err)
+				}
+				s := helper(t, "terminal", tt.env...)
+				s.Stdin, s.Stdout, s.Stderr = term.File(), term.File(), term.File()
+				s.Terminal = true
+				s.Timeout = 30 * time.Second
+				res, err := runWith(context.Background(), s)
+				if cerr := term.Close(); cerr != nil {
+					t.Errorf("close: %v", cerr)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if res.ExitCode != 0 || res.TimedOut {
+					t.Fatalf("result = %+v, output %q", res, out.String())
+				}
+				if !strings.Contains(out.String(), tt.want) {
+					t.Fatalf("output = %q, want it to contain %s", out.String(), tt.want)
+				}
+			})
+		}
+	}
+}
+
+func TestKeyLengthSplitsInputIntoKeys(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]int{
+		"a":         1,
+		"\u00e9x":   2,
+		"\u65e5":    3,
+		"\x1b[A":    3,
+		"\x1b[15~x": 5,
+		"\x1bOP":    3,
+		"\x1bx":     2,
+		"\x1b\x1b":  1,
+		"\x1b":      1,
+		"\x1b[":     2,
+		"\xff":      1,
+	} {
+		if got := keyLength([]byte(in)); got != want {
+			t.Errorf("keyLength(%q) = %d, want %d", in, got, want)
+		}
 	}
 }
 

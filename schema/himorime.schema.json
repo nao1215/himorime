@@ -723,7 +723,7 @@
           ]
         },
         "terminal": {
-          "description": "Run every command on a pseudo-terminal of 80 columns and 24 rows (Linux and macOS): standard input, output and error are the terminal, stdin is typed into it, and what the command writes goes to stdout. The input must end the program. stderr cannot be set.",
+          "description": "Run every command on a pseudo-terminal of 80 columns and 24 rows (Linux and macOS): standard input, output and error are the terminal, stdin is typed into it one key at a time once the command is ready and has read the key before, and what the command writes goes to stdout. The input must end the program. stderr cannot be set.",
           "type": "boolean"
         },
         "setup": {

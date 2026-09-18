@@ -11,6 +11,12 @@ import (
 
 const terminalSupported = true
 
+// The ioctls that read the input queue of the terminal and its mode.
+const (
+	ioctlInputQueue = unix.TIOCINQ
+	ioctlGetTermios = unix.TCGETS
+)
+
 // openPTY opens a new pseudo-terminal pair through /dev/ptmx. The ioctls go
 // through SyscallConn so that the controlling side stays non-blocking and a
 // read waiting on it returns when it is closed.
