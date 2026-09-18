@@ -54,6 +54,29 @@ func TestVaryingWorkIsNotAReciprocalLatencyComparison(t *testing.T) {
 	}
 }
 
+func TestDerivedThroughputCannotTurnZeroLatencyIntoAZeroRate(t *testing.T) {
+	t.Parallel()
+	for _, durations := range [][2]time.Duration{{0, 0}, {0, time.Second}, {time.Second, 0}} {
+		b := throughputCompareResult("zero", 1000, 1000, samples(durations[0], 20, 0), samples(durations[1], 20, 0))
+		r := judge(ModeCompare, false, b)
+		tp := r.Suites[0].Benchmarks[0].Commands[0].Comparisons["throughput"]
+		if tp.Verdict != VerdictSkipped || tp.Base != nil || tp.Head != nil || tp.ProbRegression != 0 {
+			t.Fatalf("zero latency must not fabricate a finite rate: %+v", tp)
+		}
+	}
+}
+
+func TestThroughputBudgetStillGatesWithLatencyDisabled(t *testing.T) {
+	t.Parallel()
+	b := throughputCompareResult("budget", 1000, 1000, samples(time.Second, 20, 0), samples(2*time.Second, 20, 0))
+	b.Benchmark.Regression.Latency.Gate = false
+	b.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.Throughput, "median", ">= 750 operations/s")}
+	r := judge(ModeCompare, false, b)
+	if r.Summary.OverBudget != 1 || r.Summary.ExitCode != 1 {
+		t.Fatalf("rate budget did not fail: %+v", r.Summary)
+	}
+}
+
 func TestBothFloorsAreSkippedBeforeInference(t *testing.T) {
 	t.Parallel()
 	for _, gate := range []bool{false, true} {

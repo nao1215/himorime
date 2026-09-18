@@ -546,11 +546,14 @@ func deriveThroughput(c *Command, cfg config.Benchmark) *MetricComparison {
 		clearDerivedEstimate(&mc)
 		return &mc
 	}
-	if lat.Base != nil && lat.Head != nil && *lat.Base > 0 && *lat.Head > 0 {
-		b, h := *base.Work.MeasuredMin/(*lat.Base/1e9), *head.Work.MeasuredMin/(*lat.Head/1e9)
-		d := h - b
-		mc.Base, mc.Head, mc.Difference = &b, &h, &d
+	if lat.Base == nil || lat.Head == nil || *lat.Base <= 0 || *lat.Head <= 0 || lat.CILowPercent <= -100 {
+		mc.Verdict, mc.Reason = VerdictSkipped, "throughput needs positive latency statistics and interval bounds"
+		clearDerivedEstimate(&mc)
+		return &mc
 	}
+	b, h := *base.Work.MeasuredMin/(*lat.Base/1e9), *head.Work.MeasuredMin/(*lat.Head/1e9)
+	d := h - b
+	mc.Base, mc.Head, mc.Difference = &b, &h, &d
 	return &mc
 }
 

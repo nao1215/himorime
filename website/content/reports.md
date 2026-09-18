@@ -72,7 +72,7 @@ df large   14.20ms  16.41ms   +2.21ms  +15.6%       98.1%       +10%  REGRESSION
 
 throughput
 BENCHMARK        BASE        HEAD         DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
-df large   72.10MiB/s  62.40MiB/s  -9.70MiB/s  -13.5%       97.2%        -8%  REGRESSION
+df large   72.10MiB/s  62.40MiB/s  -9.70MiB/s  -13.5%       98.1%     -9.09%  REGRESSION (FROM LATENCY)
 ```
 
 - `BASE` and `HEAD` are the compared statistic (median unless configured).
