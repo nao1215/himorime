@@ -315,6 +315,7 @@ func (v *validator) resolveBenchmark(p path, rb RawBenchmark, d *RawDefaults, ba
 	}
 
 	b.Stdin = v.resolveStdin(p.key("stdin"), rb.Stdin)
+	b.Terminal = rb.Terminal
 	for i, h := range rb.Setup {
 		b.Setup = append(b.Setup, v.resolveHook(p.key("setup").index(i), h, rb, d))
 	}
@@ -328,6 +329,9 @@ func (v *validator) resolveBenchmark(p path, rb RawBenchmark, d *RawDefaults, ba
 		b.Commands = append(b.Commands, v.resolveCommand(p.key("commands").key(name), name, rb.Commands.ByKey[name], rb, d))
 	}
 	names := strings.Join(rb.Commands.Names, ", ")
+	if b.Terminal {
+		v.checkTerminalStderr(p, rb, d)
+	}
 
 	if rb.Baseline != "" {
 		if _, ok := b.Command(rb.Baseline); !ok {
@@ -532,6 +536,32 @@ func (v *validator) resolveBudget(command string, e budgetEntry, m Metrics) (Bud
 		return Budget{}, false
 	}
 	return Budget{Command: command, Metric: e.metric, Aggregation: agg, Threshold: th}, true
+}
+
+// checkTerminalStderr rejects a stderr setting on a benchmark that runs on a
+// terminal, where standard error is the same terminal as standard output.
+func (v *validator) checkTerminalStderr(p path, rb RawBenchmark, d *RawDefaults) {
+	const hint = "remove stderr, or set stderr: discard; on a terminal the output of both streams goes to stdout"
+	const msg = "stderr cannot be set with terminal: true, because standard output and standard error are the same terminal"
+	set := func(s *string) bool { return s != nil && *s != OutputDiscard }
+	for _, name := range rb.Commands.Names {
+		if rc := rb.Commands.ByKey[name]; rc.Stderr != nil {
+			if set(rc.Stderr) {
+				v.add(p.key("commands").key(name).key("stderr"), hint, msg)
+			}
+			continue
+		}
+		switch {
+		case rb.Stderr != nil:
+			if set(rb.Stderr) {
+				v.add(p.key("stderr"), hint, msg)
+			}
+			return
+		case set(d.Stderr):
+			v.add(p.key("terminal"), "set stderr: discard on this benchmark; defaults.stderr applies to it", msg)
+			return
+		}
+	}
 }
 
 func (v *validator) resolveStdin(p path, s *StdinSpec) Stdin {

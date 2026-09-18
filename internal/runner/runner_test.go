@@ -88,6 +88,8 @@ func TestMain(m *testing.M) {
 		if err := os.WriteFile(args[0], data, 0o600); err != nil {
 			os.Exit(5)
 		}
+	case "tty":
+		os.Exit(ttyHelper(args))
 	case "pwd":
 		wd, _ := os.Getwd()
 		_, _ = io.WriteString(os.Stdout, wd)

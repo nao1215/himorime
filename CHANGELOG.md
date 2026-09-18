@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+
+- `terminal: true` on a benchmark runs its commands on a pseudo-terminal of 80 columns and 24 rows, on Linux and macOS, so a program that only does its work on a terminal (an interactive shell, a line editor, a TUI) can be measured. Standard input, output and error are the terminal, `stdin` is typed into it one key at a time once the command is ready and has read the key before, as a person types, and what the command writes goes to `stdout`; `stderr` cannot be set with it. On Windows and the BSDs such a benchmark fails with exit 4. See Standard input and output on the Configuration page.
+
 ### Changed
 
 - On the pull request that adds a suite, `compare` and `ci` build and run the suite in the working tree and judge it as `himorime run` does, instead of skipping it. A broken build or command exits 4 and an exceeded budget exits 1 on that pull request, where they used to pass and fail the next pull request instead. The suite is still reported as new in this revision (`new_in_head`, `summary.new_suites`, the notice annotation); in JSON its commands have a null `base` and null `comparisons`, and CSV has its plain-run rows after the `new_in_head` row.

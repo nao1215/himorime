@@ -602,3 +602,80 @@ scenarios:
             json:
               - {path: "$.suites[0].geometric_mean", equals: null}
               - {path: "$.suites[0].geometric_mean_unavailable", equals: 'command "b" is missing from benchmark "large"'}
+
+  - name: a benchmark with terminal runs its commands on a terminal and types stdin into it
+    skip: {os: windows}
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: terminal}
+            defaults: {warmup: 1, runs: 3, metrics: {cpu: true, memory: true}}
+            benchmarks:
+              - name: on a terminal
+                terminal: true
+                stdin: {content: "hello\n"}
+                stdout: out.txt
+                cleanup:
+                  - command: [e2ehelper, copy, "$${workdir}/out.txt", seen.txt]
+                commands:
+                  interactive: {command: [e2ehelper, terminal]}
+              - name: without one
+                stdin: {content: "hello\n"}
+                commands:
+                  interactive: {command: [e2ehelper, terminal]}
+      - run:
+          command: himorime run
+      - assert:
+          exit_code: 4
+          stdout:
+            matches: "(?m)^on a terminal +interactive +\\S+ +\\S+ +\\S+ +1\\.00x +PASS$"
+      - assert:
+          stdout:
+            contains: ["without one / interactive: exit code: exited with status 2", "standard input is not a terminal"]
+      - assert:
+          file:
+            path: seen.txt
+            contains: ["read hello"]
+
+  - name: terminal is refused with a message on a system without a pseudo-terminal
+    only: {os: windows}
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: terminal}
+            defaults: {warmup: 0, runs: 1}
+            benchmarks:
+              - name: on a terminal
+                terminal: true
+                commands:
+                  interactive: {command: [e2ehelper, terminal]}
+      - run:
+          command: himorime run
+      - assert:
+          exit_code: 4
+          stdout:
+            contains: ["pseudo-terminal", "not on windows"]
+
+  - name: stderr cannot be set on a benchmark that runs on a terminal
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: terminal}
+            benchmarks:
+              - name: on a terminal
+                terminal: true
+                stderr: err.txt
+                commands:
+                  interactive: {command: [e2ehelper, terminal]}
+      - run:
+          command: himorime validate
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: ["benchmarks[0].stderr", "stderr cannot be set with terminal: true"]

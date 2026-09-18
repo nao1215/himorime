@@ -33,7 +33,7 @@ func subcommand(name string) (func([]string) error, bool) {
 		"gen": gen, "count": count, "spawn": spawn, "counter": counter, "cache": cache, "write": write,
 		"remove": remove, "require": require, "replace": replace, "consume": consume, "event": event,
 		"interrupt": interrupt, "burn": burn, "alloc": alloc, "records": records, "tree": tree,
-		"print": printOut, "getenv": getenv, "pad": pad, "args-from": argsFrom, "json-schema": jsonSchema, "csv-shape": csvShape,
+		"print": printOut, "getenv": getenv, "terminal": terminal, "pad": pad, "args-from": argsFrom, "json-schema": jsonSchema, "csv-shape": csvShape,
 	}[name]
 	return run, ok
 }

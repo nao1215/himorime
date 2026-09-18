@@ -19,7 +19,8 @@ import (
 // configure starts the child in its own process group, so that a console
 // Ctrl+C aimed at himorime is handled by himorime, which then stops the job, and
 // suspended, so that attach can put it in its Job Object before it runs.
-func configure(cmd *exec.Cmd) {
+// There is no terminal on Windows: OpenTerminal fails before a run starts.
+func configure(cmd *exec.Cmd, _ bool) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}

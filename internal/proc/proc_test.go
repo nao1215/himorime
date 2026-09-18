@@ -98,6 +98,8 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	case "owner":
 		os.Exit(ownerHelper())
+	case "terminal":
+		os.Exit(terminalHelper())
 	case "marker":
 		time.Sleep(4 * time.Second)
 		_ = os.WriteFile(os.Getenv("HELPER_MARKER"), []byte("alive"), 0o600)

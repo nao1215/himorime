@@ -302,7 +302,7 @@ func runSpawned(ctx context.Context, s Spec) (Result, bool, error) {
 		return Result{Canceled: true, ExitCode: -1}, true, nil
 	default:
 	}
-	req := spawnRequest{Path: cmd.Path, Args: cmd.Args, Dir: s.Dir, Env: s.Env, CollectUsage: s.CollectUsage}
+	req := spawnRequest{Path: cmd.Path, Args: cmd.Args, Dir: s.Dir, Env: s.Env, CollectUsage: s.CollectUsage, Terminal: s.Terminal}
 	if req.Env == nil {
 		// What os/exec gives a child without an explicit environment.
 		req.Env = os.Environ()
