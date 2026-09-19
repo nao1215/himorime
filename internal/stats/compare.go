@@ -24,12 +24,13 @@ const DefaultResamples = 2000
 
 // Reasons attached to a verdict. They are part of the JSON report.
 const (
-	ReasonNoSamples    = "no successful samples"
-	ReasonZeroBase     = "the base measurement is zero"
-	ReasonFewSamples   = "fewer samples than min_samples"
-	ReasonNoisy        = "measurements are noisier than max_cv"
-	ReasonTooClose     = "the change is too close to the tolerance to call"
-	ReasonBelowMinDiff = "the difference is smaller than min_difference"
+	ReasonNoSamples         = "no successful samples"
+	ReasonZeroBase          = "the base measurement is zero"
+	reasonZeroBootstrapBase = "a bootstrap base measurement is zero"
+	ReasonFewSamples        = "fewer samples than min_samples"
+	ReasonNoisy             = "measurements are noisier than max_cv"
+	ReasonTooClose          = "the change is too close to the tolerance to call"
+	ReasonBelowMinDiff      = "the difference is smaller than min_difference"
 )
 
 // CompareOptions configures Compare.
@@ -74,12 +75,13 @@ type Comparison struct {
 	// not whether that is better or worse.
 	Change float64
 	// Low and High bound the central Confidence interval of the change in
-	// percent, taken from the bootstrap distribution.
+	// percent, taken from the bootstrap distribution. Both are zero when
+	// inference is unavailable because a base statistic is zero.
 	Low  float64
 	High float64
 	// ProbRegression is the share of bootstrap resamples that degrade beyond
 	// MaxPercent in the metric's worse direction; ProbImprovement the share
-	// that improve beyond it.
+	// that improve beyond it. Both are zero when inference is unavailable.
 	ProbRegression  float64
 	ProbImprovement float64
 	Verdict         Verdict
@@ -136,8 +138,10 @@ func Compare(base, head []float64, o CompareOptions) Comparison {
 	}
 	changes := bootstrapChanges(base, head, o.Metric, resamples, o.Seed)
 	alpha := (1 - o.Confidence) / 2
-	c.Low = percentile(changes, alpha)
-	c.High = percentile(changes, 1-alpha)
+	if len(changes) > 0 {
+		c.Low = percentile(changes, alpha)
+		c.High = percentile(changes, 1-alpha)
+	}
 	// epsilon absorbs floating point noise: 110/100 is not exactly 1.1, and a
 	// change of exactly the tolerance must not count as beyond it.
 	const epsilon = 1e-9
@@ -151,8 +155,10 @@ func Compare(base, head []float64, o CompareOptions) Comparison {
 			better++
 		}
 	}
-	c.ProbRegression = float64(worse) / float64(len(changes))
-	c.ProbImprovement = float64(better) / float64(len(changes))
+	if len(changes) > 0 {
+		c.ProbRegression = float64(worse) / float64(len(changes))
+		c.ProbImprovement = float64(better) / float64(len(changes))
+	}
 	degradation := sign * c.Change
 
 	switch {
@@ -162,6 +168,9 @@ func Compare(base, head []float64, o CompareOptions) Comparison {
 	case o.MaxCV > 0 && (c.Base.Dispersion(o.Metric) > o.MaxCV || c.Head.Dispersion(o.Metric) > o.MaxCV) && !separated(c.Base, c.Head):
 		c.Verdict = VerdictInconclusive
 		c.Reason = ReasonNoisy
+	case len(changes) == 0:
+		c.Verdict = VerdictInconclusive
+		c.Reason = reasonZeroBootstrapBase
 	case o.MinDifference > 0 && math.Abs(c.Difference) < o.MinDifference:
 		c.Verdict = VerdictPass
 		c.Reason = ReasonBelowMinDiff
@@ -189,6 +198,7 @@ func separated(base, head Summary) bool {
 	return head.Min > base.Max || head.Max < base.Min
 }
 
+// bootstrapChanges returns nil if a draw has an undefined relative change.
 func bootstrapChanges(base, head []float64, m Metric, resamples int, seed uint64) []float64 {
 	// Two PCG streams from one seed: the base and head draws are independent
 	// yet fully determined by the seed.
@@ -206,12 +216,11 @@ func bootstrapChanges(base, head []float64, m Metric, resamples int, seed uint64
 		b := metricOf(bbuf, m)
 		h := metricOf(hbuf, m)
 		if b <= 0 {
-			continue
+			// Dropping undefined relative changes would condition the
+			// probabilities on a positive base and overstate the evidence.
+			return nil
 		}
 		out = append(out, (h/b-1)*100)
-	}
-	if len(out) == 0 {
-		out = append(out, 0)
 	}
 	slices.Sort(out)
 	return out

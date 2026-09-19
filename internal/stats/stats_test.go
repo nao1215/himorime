@@ -450,3 +450,33 @@ func TestCompareNoiseGateFollowsTheStatistic(t *testing.T) {
 		})
 	}
 }
+
+func TestCompareZeroBootstrapBase(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		metric Metric
+		base   []float64
+		head   []float64
+	}{
+		{"mean", Mean, []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 100e6}, []float64{5e6, 5e6, 5e6, 5e6, 5e6, 5e6, 5e6, 5e6, 5e6, 5e6}},
+		{"median", Median, []float64{0, 0, 0, 0, 10, 10, 10, 10, 10, 10}, []float64{5, 5, 5, 5, 5, 5, 5, 5, 5, 5}},
+		{"zero head", Mean, []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 100e6}, make([]float64, 10)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			o := defaultOptions()
+			o.Metric, o.MaxCV, o.Seed = tc.metric, 0, 1
+			c := Compare(tc.base, tc.head, o)
+			if c.Verdict != VerdictInconclusive || c.Reason != "a bootstrap base measurement is zero" {
+				t.Fatalf("undefined relative changes must be inconclusive: %+v", c)
+			}
+			if c.ProbImprovement != 0 || c.ProbRegression != 0 || c.Low != 0 || c.High != 0 {
+				t.Fatalf("undefined inference must not report confidence: %+v", c)
+			}
+			if c.BaseValue <= 0 || c.HeadValue != Summarize(tc.head).Value(tc.metric) {
+				t.Fatalf("observed statistics must be preserved: %+v", c)
+			}
+		})
+	}
+}
