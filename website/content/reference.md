@@ -1,7 +1,8 @@
 ---
-title: Commands
-description: Every himorime command and flag, generated from the command table in the source.
+title: Reference
+description: Commands, flags, environment variables and exit codes.
 toc: true
+aliases: ["/commands/", "/exit-codes/"]
 ---
 
 Flags may appear before or after paths: `himorime run bench.yaml --format json` and `himorime run --format json bench.yaml` are the same. `--` ends flag parsing. Errors go to standard error; reports go to standard output or to the file named by `--output`.
@@ -151,3 +152,19 @@ Shows the command list, or the usage and flags of one command.
 | `GITHUB_ACTIONS`, `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH` | `ci` | Find the base commit of a pull request, merge queue or push event. |
 | `GITHUB_STEP_SUMMARY` | `ci` | File the Markdown job summary is appended to. |
 | `NO_COLOR` | `run`, `compare` | Disables colors in the table, as does `--no-color`. |
+
+## Exit codes
+
+<!-- BEGIN GENERATED: exit-codes -->
+| Code | Name | Meaning |
+|---|---|---|
+| `0` | ok | Every selected benchmark completed, and every budget and regression check passed. Inconclusive comparisons also exit 0 unless --fail-on-inconclusive is given. |
+| `1` | failed | A performance budget was exceeded, a regression was confirmed on any metric, or --fail-on-inconclusive was given and a comparison was inconclusive. The measurement itself succeeded. |
+| `2` | config | A suite file is not valid YAML, does not match the schema, or fails semantic validation. Nothing was executed. |
+| `3` | usage | The command line is invalid: an unknown flag or command, a missing argument, or no benchmark matched the selection. |
+| `4` | execution | A measured command, hook or build failed or timed out, a Git operation failed, the base revision could not be resolved, or the run was interrupted. |
+| `5` | internal | himorime hit an unexpected internal error. Please report it. |
+| `6` | metric | A requested metric (throughput, cpu or memory) could not be measured: this platform does not support it and metrics.unsupported is fail, or the operating system did not report it. The commands themselves ran. |
+<!-- END GENERATED: exit-codes -->
+
+Execution failures take precedence over metric failures, which take precedence over performance failures. An inconclusive comparison exits 0 unless `--fail-on-inconclusive` is set. JSON reports record the chosen status in `summary.exit_code`.

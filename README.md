@@ -68,6 +68,8 @@ benchmarks:
 
 ## GitHub Actions
 
+The [setup-himorime action](https://github.com/nao1215/setup-himorime) installs a checksum-verified release before the benchmark runs.
+
 <!-- example: examples/github-actions/benchmark.yml -->
 ```yaml
 # Copy this file to .github/workflows/benchmark.yml.
@@ -107,7 +109,7 @@ jobs:
       - run: himorime ci
 ```
 
-Exit status 1 means performance got worse; 4 and 6 mean the measurement itself failed. Shared runners are noisy: himorime interleaves the revisions, needs statistical confidence to call a regression, and reports anything it cannot tell apart from noise as inconclusive.
+Shared runners are noisy. himorime interleaves the revisions, needs statistical confidence to call a regression, and reports anything it cannot tell apart from noise as inconclusive.
 
 ## Measuring programs you did not write
 

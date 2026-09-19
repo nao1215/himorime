@@ -2,6 +2,7 @@
 title: GitHub Actions
 description: Run himorime ci on pull requests with read-only permissions, safe for forks, with a job summary and a failing check on confirmed regressions.
 toc: true
+aliases: ["/security/"]
 ---
 
 ## A workflow
@@ -47,7 +48,7 @@ jobs:
 
 `himorime ci`:
 
-1. Finds the base commit: `--against`, else `$HIMORIME_BASE_REF`, else the event payload — `pull_request.base.sha` for `pull_request` (and pull request reviews), `merge_group.base_sha` for merge queues, `before` for `push`.
+1. Finds the base commit from `--against`, `$HIMORIME_BASE_REF` or the event payload: `pull_request.base.sha` for `pull_request` and reviews, `merge_group.base_sha` for merge queues, and `before` for `push`.
 2. Checks the base out into a temporary worktree and compares it with the checked-out head, exactly like `himorime compare`.
 3. Writes the table to the log without colors, and appends the Markdown summary to `$GITHUB_STEP_SUMMARY`.
 4. Prints an annotation for every missed budget, regression, inconclusive comparison and failure, so they show on the pull request. A regression of a metric with `gate: false` is a notice, not an error.
@@ -70,9 +71,12 @@ To keep performance advisory while still failing when the measurement breaks, ac
 
 ## Security
 
+- A suite runs its declared commands with the current user's privileges. Treat it like a script, not as a sandbox for untrusted code.
 - The workflow needs only `contents: read`. himorime never calls the GitHub API, never comments on the pull request, and needs no secret.
 - It runs on `pull_request`, so a pull request from a fork runs with a read-only token and no secrets. himorime refuses to run for `pull_request_target`, which would execute the pull request's commands with the base repository's secrets and a write token.
 - The suite executes commands. On `pull_request`, those commands come from the pull request itself, like its tests do; that is why the job must not have secrets or write access.
+
+Report vulnerabilities through the repository's [private security advisory form](https://github.com/nao1215/himorime/security/advisories/new). The [security policy](https://github.com/nao1215/himorime/blob/main/SECURITY.md) lists another contact method.
 
 ## Checkout
 

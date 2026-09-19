@@ -1,5 +1,6 @@
 ---
 description: himorime measures the latency, throughput, CPU time and peak RSS of a command-line program from a YAML suite kept in your repository, checks budgets and fails CI when a change makes it worse.
+aliases: ["/comparison/"]
 ---
 
 himorime measures how fast and how lean a command-line program is. You keep the benchmarks, budgets and tolerances in a `himorime.yaml` next to your code. The same file and the same command run on a laptop and in GitHub Actions, and the exit status tells CI whether performance got worse.
@@ -35,17 +36,17 @@ Each metric can have absolute budgets (`p95 <= 100ms`, `>= 50MiB/s`, `<= 64MiB`)
 | install it | [Installation](/install/) |
 | write a suite | [Configuration](/configuration/) |
 | understand what each metric includes | [Metrics](/metrics/) |
-| look up a command or flag | [Commands](/commands/) |
+| look up commands, flags or exit codes | [Reference](/reference/) |
 | choose an output format | [Reports](/reports/) |
 | understand PASS, REGRESSION and INCONCLUSIVE | [Regression detection](/regression-detection/) |
 | run it on pull requests | [GitHub Actions](/github-actions/) |
 | copy a working example | [Cookbook](/cookbook/) |
-| decide whether himorime fits | [Comparison](/comparison/) |
-| script around exit statuses | [Exit codes](/exit-codes/) |
 | fix a problem | [Troubleshooting](/troubleshooting/) |
 
 ## What himorime measures, and what it does not
 
 himorime runs the command exactly as you wrote it, measures the whole process from start to reaping, and reads CPU time and peak memory from the operating system when it exits. It does not profile, it does not see inside a language runtime, and it cannot remove the noise of a shared CI runner. It reduces the damage that noise does: revisions run interleaved, a regression needs statistical confidence, and a result that cannot be told apart from noise is reported as inconclusive rather than passed or failed. Its results are evidence for a decision in a pull request, not a guarantee. See [Regression detection](/regression-detection/) and [Metrics](/metrics/).
 
-himorime checks performance. To check that a CLI *behaves* correctly — exit codes, output, files — use [atago](https://github.com/nao1215/atago).
+himorime checks performance. To check that a CLI *behaves* correctly, including exit codes, output and files, use [atago](https://github.com/nao1215/atago).
+
+For one-off command measurements, [hyperfine](https://github.com/sharkdp/hyperfine) is a better fit. For stored history and dashboards, use a service such as [Bencher](https://bencher.dev/) or [CodSpeed](https://codspeed.io/). himorime keeps no server or result database; it compares two revisions in the same job.

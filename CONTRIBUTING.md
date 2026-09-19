@@ -5,7 +5,7 @@ Thank you for helping. Bug reports, fixes, tests, documentation and reviews are 
 ## Before you start
 
 - Bug: open an issue with the himorime version, your OS, the suite, the command line, and what you expected and got.
-- Feature: open an issue first, so the direction can be agreed before you write code. himorime deliberately stays small; see the non-goals in the documentation's [Comparison](https://nao1215.github.io/himorime/comparison/).
+- Feature: open an issue first, so the direction can be agreed before you write code. himorime deliberately stays small; see [what himorime does not measure](https://nao1215.github.io/himorime/metrics/#what-himorime-does-not-measure).
 - Security issue: follow [SECURITY.md](./SECURITY.md), not a public issue.
 
 ## Development
