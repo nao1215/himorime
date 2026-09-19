@@ -70,4 +70,4 @@ jobs:
       - name: misspell
         run: |
           git ls-files '*.go' '*.md' '*.yml' '*.yaml' '*.json' \
-            | xargs go run github.com/golangci/misspell/cmd/misspell@v0.8.0 -locale US -error -ignore cancelled
+            | xargs go run github.com/golangci/misspell/cmd/misspell@v0.8.0 -locale US -error -i cancelled
