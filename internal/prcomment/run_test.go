@@ -90,6 +90,74 @@ func TestMainHelpAndExitSemantics(t *testing.T) {
 	}
 }
 
+func TestMainLogsBeforePublicationAndLinksToReportingRun(t *testing.T) {
+	for _, scenario := range []string{"summary", "missing summary", "unwritable summary", "publication fails"} {
+		t.Run(scenario, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "report.json")
+			f, err := os.Create(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := report.WriteJSON(f, validReport()); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.Close(); err != nil {
+				t.Fatal(err)
+			}
+			values := map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "workflow_run", "GITHUB_EVENT_PATH": "/event.json", "GITHUB_REPOSITORY": "octo/bench", "GITHUB_API_URL": "https://api.example", "GITHUB_TOKEN": "secret", "GITHUB_SERVER_URL": "https://github.com", "GITHUB_RUN_ID": "12345"}
+			if scenario == "summary" {
+				values["GITHUB_STEP_SUMMARY"] = filepath.Join(dir, "summary.md")
+			}
+			if scenario == "unwritable summary" {
+				values["GITHUB_STEP_SUMMARY"] = dir
+			}
+			var stdout, stderr bytes.Buffer
+			var posted string
+			client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if !strings.Contains(stdout.String(), "| himorime | test |") {
+					t.Error("full report missing before publication")
+				}
+				if req.Method == http.MethodGet {
+					return response(http.StatusOK, "[]"), nil
+				}
+				data, _ := io.ReadAll(req.Body)
+				var payload struct {
+					Body string `json:"body"`
+				}
+				if err := json.Unmarshal(data, &payload); err != nil {
+					t.Fatal(err)
+				}
+				posted = payload.Body
+				if scenario == "publication fails" {
+					return response(http.StatusForbidden, "denied"), nil
+				}
+				return response(http.StatusCreated, `{"id":99}`), nil
+			})}
+			code := Main(context.Background(), []string{path}, &stdout, &stderr, Dependencies{LookupEnv: lookup(values), ReadFile: files(workflowPayload), HTTP: client})
+			want := exitcode.OK
+			if scenario == "publication fails" {
+				want = exitcode.Execution
+			}
+			if code != want {
+				t.Fatalf("code=%d stderr=%s", code, stderr.String())
+			}
+			if !strings.Contains(posted, "actions/runs/12345") || !strings.Contains(posted, "run_id=9001") {
+				t.Fatalf("identity or report link lost: %s", posted)
+			}
+			if !strings.Contains(stdout.String(), "https://github.example/octo/bench/actions/runs/9001") {
+				t.Fatal("source run lost")
+			}
+			if scenario == "summary" {
+				data, err := os.ReadFile(values["GITHUB_STEP_SUMMARY"])
+				if err != nil || !strings.Contains(string(data), "| himorime | test |") {
+					t.Fatalf("summary=%s, err=%v", data, err)
+				}
+			}
+		})
+	}
+}
+
 func validReport() *report.Report {
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	return &report.Report{

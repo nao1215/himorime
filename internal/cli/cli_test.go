@@ -18,6 +18,8 @@ import (
 
 	"github.com/nao1215/himorime/internal/config"
 	"github.com/nao1215/himorime/internal/exitcode"
+	"github.com/nao1215/himorime/internal/ghactions"
+	"github.com/nao1215/himorime/internal/report"
 )
 
 // helperPath is the portable helper program from test/e2e/helper, built once
@@ -54,6 +56,49 @@ type result struct {
 }
 
 type env map[string]string
+
+func TestActionsReportDoesNotCorruptJSONOrChangeVerdict(t *testing.T) {
+	for _, mode := range []string{"local", "no summary", "summary", "unwritable summary", "explicit summary"} {
+		t.Run(mode, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			path := filepath.Join(t.TempDir(), "summary.md")
+			gh := ghactions.Env{Actions: mode != "local"}
+			flags := &measureFlags{format: "json"}
+			if mode == "summary" || mode == "explicit summary" {
+				gh.StepSummary = path
+			}
+			if mode == "explicit summary" {
+				flags.summary = path
+			}
+			if mode == "unwritable summary" {
+				gh.StepSummary = filepath.Dir(path)
+			}
+			m := measurement{cmd: "ci", flags: flags, app: &App{Stdout: &stdout, Stderr: &stderr, LookupEnv: func(string) (string, bool) { return "", false }}}
+			r := &report.Report{HimorimeVersion: "test", Summary: report.Summary{ExitCode: exitcode.Failed}}
+			code := m.finish(context.Background(), r, nil, gh)
+			want := exitcode.Failed
+			if mode == "unwritable summary" {
+				want = exitcode.Execution
+			}
+			if code != want {
+				t.Fatalf("code=%d, stderr=%s", code, stderr.String())
+			}
+			var decoded report.Report
+			if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil || decoded.Summary.ExitCode != exitcode.Failed {
+				t.Fatalf("JSON=%s, err=%v", stdout.String(), err)
+			}
+			if strings.Contains(stderr.String(), "| himorime | test |") != gh.Actions {
+				t.Fatalf("log=%s", stderr.String())
+			}
+			if mode == "summary" || mode == "explicit summary" {
+				data, err := os.ReadFile(path)
+				if err != nil || strings.Count(string(data), "| himorime | test |") != 1 {
+					t.Fatalf("summary=%s, err=%v", data, err)
+				}
+			}
+		})
+	}
+}
 
 func run(t *testing.T, dir string, e env, args ...string) result {
 	t.Helper()
@@ -689,7 +734,7 @@ func TestCIGitHubActions(t *testing.T) {
 		t.Fatal("ci output must not be colored")
 	}
 	data, err := os.ReadFile(summary)
-	if err != nil || !regexp.MustCompile(`^previous step\n## (✅|⚠️) himorime benchmark comparison`).Match(data) || !strings.Contains(string(data), "| sleepy | app |") {
+	if err != nil || !strings.HasPrefix(string(data), "previous step\n| Benchmark |") || !strings.Contains(string(data), "| sleepy / app |") {
 		t.Fatalf("summary = %q, %v", data, err)
 	}
 	if !strings.Contains(r.stderr, "comparing base "+base[:12]) {

@@ -262,7 +262,7 @@ func TestJudgeCompareDirections(t *testing.T) {
 	}
 	out.Reset()
 	_ = WriteGitHubSummary(&out, r)
-	for _, want := range []string{"#### Peak RSS", "| m | tool | 32.00MiB | 48.00MiB | +16.00MiB | +50.0% |"} {
+	for _, want := range []string{"| m / tool | Peak RSS | 32.00MiB | 48.00MiB | +16.00MiB | +50.0% |"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("summary lacks %q:\n%s", want, out.String())
 		}
@@ -323,7 +323,7 @@ func TestJudgeMetricErrors(t *testing.T) {
 	}
 	var out bytes.Buffer
 	_ = WriteGitHubSummary(&out, judge(ModeRun, false, unsupported))
-	if !strings.HasPrefix(out.String(), "## ❌ himorime benchmarks: metrics could not be measured") {
+	if !strings.Contains(out.String(), "metric\\_unsupported") || !strings.Contains(out.String(), "| Exit code | 6 |") {
 		t.Fatalf("summary = %s", out.String())
 	}
 }
@@ -430,7 +430,7 @@ func TestJudgeCompareGate(t *testing.T) {
 	}
 	out.Reset()
 	_ = WriteGitHubSummary(&out, r)
-	if !strings.HasPrefix(out.String(), "## ⚠️ himorime benchmark comparison: no regression in gated metrics") || !strings.Contains(out.String(), "REGRESSION (NOT GATED)") {
+	if !strings.Contains(out.String(), "| Exit code | 0 |") || !strings.Contains(out.String(), "REGRESSION (NOT GATED)") {
 		t.Errorf("summary:\n%s", out.String())
 	}
 	out.Reset()

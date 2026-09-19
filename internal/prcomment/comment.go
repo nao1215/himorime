@@ -16,7 +16,6 @@ import (
 
 const (
 	maxCommentBytes     = 60 * 1024
-	maxCommentRows      = 50
 	maxCommentPages     = 100
 	maxAPIResponseBytes = 8 * 1024 * 1024
 )

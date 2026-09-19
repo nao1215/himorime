@@ -1,9 +1,9 @@
 <!-- himorime:benchmark-report:v2 run_id=9001 workflow_id=44 run_number=12 run_attempt=2 -->
-## himorime: ❌ 1 regression detected
+## himorime: ❌ 1 budget violation
 
-| Benchmark | Metric | Base → Head | Change | Limit |
-|---|---|---:|---:|---:|
-| version / himorime | Latency | 10.00ms → 15.00ms | +50.0% | +10% |
+| Benchmark | Metric | Measured | Limit |
+|---|---|---:|---:|
+| validate / himorime | CPU time p95 | 20.00ms | &lt;= 18.00ms |
 
 [View full benchmark report and logs](<https://github.com/octo/bench/actions/runs/9001>)
 

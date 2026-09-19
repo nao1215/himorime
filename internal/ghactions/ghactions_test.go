@@ -1,11 +1,88 @@
 package ghactions
 
 import (
+	"bytes"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nao1215/himorime/internal/report"
 )
+
+func TestWriteReportDestinations(t *testing.T) {
+	for _, mode := range []string{"local", "summary", "no summary", "unwritable summary"} {
+		t.Run(mode, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "summary.md")
+			values := map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "octo/bench", "GITHUB_RUN_ID": "123"}
+			if mode == "local" {
+				values["GITHUB_ACTIONS"] = "false"
+			}
+			if mode == "summary" {
+				values["GITHUB_STEP_SUMMARY"] = path
+			}
+			if mode == "unwritable summary" {
+				values["GITHUB_STEP_SUMMARY"] = filepath.Dir(path)
+			}
+			r := &report.Report{HimorimeVersion: "test", Suites: []report.Suite{{Name: "::error:: hostile", Error: &report.Error{Message: "::warning:: example\nsecond line"}}}}
+			var log bytes.Buffer
+			url, err := env(values).WriteReport(&log, r, "https://github.com/octo/bench/actions/runs/100")
+			if (err != nil) != (mode == "unwritable summary") {
+				t.Fatalf("error = %v", err)
+			}
+			if mode == "local" {
+				if url != "" || log.Len() != 0 {
+					t.Fatalf("local output = %q, URL = %q", log.String(), url)
+				}
+				return
+			}
+			if url != "https://github.com/octo/bench/actions/runs/123" {
+				t.Fatalf("URL = %q", url)
+			}
+			lines := strings.Split(strings.TrimSpace(log.String()), "\n")
+			if !strings.HasPrefix(lines[0], "::stop-commands::") {
+				t.Fatal("workflow commands not disabled")
+			}
+			token := strings.TrimPrefix(lines[0], "::stop-commands::")
+			if lines[len(lines)-1] != "::"+token+"::" {
+				t.Fatal("workflow commands not restored")
+			}
+			body := strings.Join(lines[1:len(lines)-1], "\n") + "\n"
+			for _, line := range strings.Split(body, "\n") {
+				if line != "" && (!strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|")) {
+					t.Fatalf("not a table: %s", line)
+				}
+			}
+			if !strings.Contains(body, "Source run") || !strings.Contains(body, "second line") {
+				t.Fatal(body)
+			}
+			if mode == "summary" {
+				data, err := os.ReadFile(path)
+				if err != nil || strings.TrimSpace(string(data)) != strings.TrimSpace(body) {
+					t.Fatalf("summary = %q, err = %v", data, err)
+				}
+			}
+		})
+	}
+}
+
+func TestReportingURLRejectsInvalidEnvironment(t *testing.T) {
+	for _, tt := range []struct{ server, repo, run string }{
+		{"", "octo/bench", "1"}, {"javascript:alert(1)", "octo/bench", "1"},
+		{"https://user@github.com", "octo/bench", "1"}, {"https://github.com?x=y", "octo/bench", "1"},
+		{"https://github.com", "../bench", "1"}, {"https://github.com", "octo/bench/extra", "1"},
+		{"https://github.com", "octo/[link]", "1"}, {"https://github.com", "octo/bench", "0"},
+		{"https://github.com", "octo/bench", "abc"},
+	} {
+		e := env(map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_SERVER_URL": tt.server, "GITHUB_REPOSITORY": tt.repo, "GITHUB_RUN_ID": tt.run})
+		var log bytes.Buffer
+		url, err := e.WriteReport(&log, &report.Report{}, "")
+		if err != nil || url != "" || strings.Contains(log.String(), "Reporting run") {
+			t.Fatalf("environment=%+v url=%s err=%v", tt, url, err)
+		}
+	}
+}
 
 const (
 	baseSHA   = "1111111111111111111111111111111111111111"
