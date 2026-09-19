@@ -70,6 +70,8 @@ Markdown contains the same result tables as the terminal report and is suitable 
 
 `himorime ci` writes Markdown to `$GITHUB_STEP_SUMMARY` automatically and emits annotations for exceeded budgets, regressions, inconclusive comparisons and execution failures. A metric with `gate: false` produces a notice rather than an error.
 
+`himorime comment REPORT.json` posts a JSON report from a completed GitHub Actions `workflow_run` to its pull request. Use the two-workflow pattern in [GitHub Actions](/github-actions/#a-pull-request-comment), so the benchmark job stays read-only.
+
 ## Update part of a page
 
 Markdown output can replace a named section while preserving the surrounding file:

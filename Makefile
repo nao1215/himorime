@@ -85,8 +85,8 @@ vuln: ## Run govulncheck
 	govulncheck $(PKGS)
 
 .PHONY: actionlint
-actionlint: ## Lint the GitHub Actions workflows and the example workflow
-	actionlint .github/workflows/*.yml examples/github-actions/benchmark.yml
+actionlint: ## Lint the GitHub Actions workflows and example workflows
+	actionlint .github/workflows/*.yml examples/github-actions/benchmark.yml examples/github-actions/comment.yml
 
 .PHONY: release-check
 release-check: ## Validate .goreleaser.yml

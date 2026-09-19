@@ -20,6 +20,9 @@ type Env struct {
 	StepSummary string
 	RunnerOS    string
 	RunnerArch  string
+	Repository  string
+	APIURL      string
+	Token       string
 }
 
 // FromLookup reads the environment through lookup (os.LookupEnv in production).
@@ -35,6 +38,9 @@ func FromLookup(lookup func(string) (string, bool)) Env {
 		StepSummary: get("GITHUB_STEP_SUMMARY"),
 		RunnerOS:    get("RUNNER_OS"),
 		RunnerArch:  get("RUNNER_ARCH"),
+		Repository:  get("GITHUB_REPOSITORY"),
+		APIURL:      get("GITHUB_API_URL"),
+		Token:       get("GITHUB_TOKEN"),
 	}
 }
 

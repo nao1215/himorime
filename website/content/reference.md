@@ -118,6 +118,18 @@ Like compare, with CI defaults: no colors, and a Markdown summary appended to $G
 | `--tag TAG` | select benchmarks with this tag (repeatable, or comma-separated) |
 | `--warmup N` | run n warmup runs per command, overriding the suite |
 
+### comment
+
+```text
+himorime comment [--hide-footer] REPORT.json
+```
+
+Reads a JSON report produced by himorime and creates or updates one pull request comment. This command only accepts GitHub Actions workflow_run events, so the report cannot choose its repository or pull request. It exits 0 for a valid report even when that report found a regression.
+
+| Flag | Description |
+|---|---|
+| `--hide-footer` | omit the himorime attribution footer from the pull request comment |
+
 ### version
 
 ```text
