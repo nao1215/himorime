@@ -36,6 +36,8 @@ defaults:
 benchmarks:
   - name: version
     tags: [smoke]
+    metrics:
+      memory: false
     commands:
       himorime:
         command: ["${artifact}", version]

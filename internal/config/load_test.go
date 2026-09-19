@@ -37,6 +37,37 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestDogfoodSuiteKeepsMemoryForNonVersionBenchmarks(t *testing.T) {
+	t.Parallel()
+	suitePath := filepath.Join("..", "..", "bench", "himorime.yaml")
+	s, err := Load(suitePath)
+	if err != nil {
+		t.Fatalf("Load(%q) failed: %v", suitePath, err)
+	}
+	wantMemory := map[string]bool{
+		"version":                false,
+		"validate every example": true,
+		"list with a filter":     true,
+		"run a tiny suite":       true,
+		"collector overhead":     true,
+	}
+	if len(s.Benchmarks) != len(wantMemory) {
+		t.Fatalf("benchmark count = %d, want %d", len(s.Benchmarks), len(wantMemory))
+	}
+	for _, benchmark := range s.Benchmarks {
+		want, ok := wantMemory[benchmark.Name]
+		if !ok {
+			t.Fatalf("unexpected benchmark %q", benchmark.Name)
+		}
+		if benchmark.Metrics.Memory != want {
+			t.Errorf("%q memory = %t, want %t", benchmark.Name, benchmark.Metrics.Memory, want)
+		}
+		if !benchmark.Metrics.CPU {
+			t.Errorf("%q CPU collection is disabled", benchmark.Name)
+		}
+	}
+}
+
 func TestLoadInheritanceOrder(t *testing.T) {
 	t.Parallel()
 	src := `version: "1"
