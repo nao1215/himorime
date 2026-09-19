@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/diag"
 	"github.com/nao1215/himorime/internal/exitcode"
 	"github.com/nao1215/himorime/internal/runner"
 )
@@ -75,7 +76,7 @@ func suitePaths(args []string) ([]string, error) {
 func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 	paths, err := suitePaths(args)
 	if err != nil {
-		fmt.Fprintf(stderr, "himorime: %v\n", err)
+		diagnosticf(stderr, diag.Code{Number: 2001}, "himorime: %v", err)
 		return nil, exitcode.Config
 	}
 	var suites []loadedSuite
@@ -91,7 +92,7 @@ func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 				status = exitcode.Config
 				continue
 			}
-			fmt.Fprintf(stderr, "himorime: %v\n", err)
+			diagnosticf(stderr, diag.Code{Number: 4001}, "himorime: %v", err)
 			if status == 0 {
 				status = exitcode.Execution
 			}
@@ -100,7 +101,7 @@ func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 		suites = append(suites, loadedSuite{display: filepath.ToSlash(p), suite: s})
 	}
 	if status == exitcode.Config {
-		fmt.Fprintln(stderr, "himorime: the suite is invalid; nothing was run")
+		diagnosticf(stderr, diag.Code{Number: 2001}, "himorime: the suite is invalid; nothing was run")
 	}
 	return suites, status
 }

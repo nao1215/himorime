@@ -70,6 +70,11 @@ name = "Reference"
 pageRef = "/reference"
 weight = 55
 
+[[menus.main]]
+name = "Error codes"
+pageRef = "/errors"
+weight = 56
+
 [module]
 [[module.mounts]]
 source = "content"

@@ -132,7 +132,7 @@ func TestHelpVersionAndUsageErrors(t *testing.T) {
 	if r := run(t, dir, nil, "frobnicate"); r.code != exitcode.Usage || !strings.Contains(r.stderr, `unknown command "frobnicate"`) {
 		t.Fatalf("unknown command: %+v", r)
 	}
-	if r := run(t, dir, nil, "--help"); r.code != 0 || !strings.Contains(r.stdout, "compare") {
+	if r := run(t, dir, nil, "--help"); r.code != 0 || !strings.Contains(r.stdout, "compare") || !strings.Contains(r.stdout, "GitHub Sponsors: https://github.com/sponsors/nao1215") {
 		t.Fatalf("--help: %+v", r)
 	}
 	if r := run(t, dir, nil, "help", "run"); r.code != 0 || !strings.Contains(r.stdout, "--filter") {

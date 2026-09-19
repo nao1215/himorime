@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nao1215/himorime/internal/diag"
 	"github.com/nao1215/himorime/internal/exitcode"
 )
 
@@ -93,12 +94,13 @@ func isTerminal(w io.Writer) bool {
 func (a *App) Run(ctx context.Context, args []string) (code int) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(a.Stderr, "himorime: internal error: %v\nplease report this at https://github.com/nao1215/himorime/issues\n", r)
+			diagnosticf(a.Stderr, diag.Code{Number: 5001}, "himorime: internal error: %v\nplease report this at https://github.com/nao1215/himorime/issues", r)
 			code = exitcode.Internal
 		}
 	}()
 	if len(args) == 0 {
-		fmt.Fprint(a.Stderr, "himorime: no command given\n\n")
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime: no command given")
+		fmt.Fprint(a.Stderr, "\n")
 		usage(a.Stderr)
 		return exitcode.Usage
 	}
@@ -114,7 +116,8 @@ func (a *App) Run(ctx context.Context, args []string) (code int) {
 			return c.run(ctx, a, rest)
 		}
 	}
-	fmt.Fprintf(a.Stderr, "himorime: unknown command %q\n\n", name)
+	diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime: unknown command %q", name)
+	fmt.Fprint(a.Stderr, "\n")
 	usage(a.Stderr)
 	return exitcode.Usage
 }
@@ -128,6 +131,7 @@ func usage(w io.Writer) {
 	}
 	sb.WriteString("\nRun \"himorime <command> --help\" for the flags of a command.\n")
 	sb.WriteString("Documentation: https://nao1215.github.io/himorime/\n")
+	sb.WriteString("GitHub Sponsors: https://github.com/sponsors/nao1215\n")
 	fmt.Fprint(w, sb.String())
 }
 
@@ -150,7 +154,7 @@ func parseFlags(fs *flag.FlagSet, args []string, stdout, stderr io.Writer) ([]st
 			if msg == "" {
 				msg = err.Error()
 			}
-			fmt.Fprintf(stderr, "himorime %s: %s\nrun \"himorime %s --help\" for usage\n", fs.Name(), msg, fs.Name())
+			diagnosticf(stderr, diag.Code{Number: 3001}, "himorime %s: %s\nrun \"himorime %s --help\" for usage", fs.Name(), msg, fs.Name())
 			return nil, exitcode.Usage, false
 		}
 		rest = fs.Args()

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/diag"
 	"github.com/nao1215/himorime/internal/envinfo"
 	"github.com/nao1215/himorime/internal/exitcode"
 	"github.com/nao1215/himorime/internal/ghactions"
@@ -101,7 +102,7 @@ func runMeasure(ctx context.Context, a *App, cmd string, args []string) int {
 	}
 	suites = selected
 	if len(suites) == 0 {
-		fmt.Fprintf(a.Stderr, "himorime %s: no benchmark matches the selection (--filter, --tag, --skip-tag); run \"himorime list\" to see the benchmarks\n", cmd)
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime %s: no benchmark matches the selection (--filter, --tag, --skip-tag); run \"himorime list\" to see the benchmarks", cmd)
 		return exitcode.Usage
 	}
 
@@ -122,20 +123,20 @@ func (f *measureFlags) check(a *App, cmd string) int {
 	}
 	switch {
 	case !valid:
-		fmt.Fprintf(a.Stderr, "himorime %s: unknown --format %q; use one of %s\n", cmd, f.format, formatNames())
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime %s: unknown --format %q; use one of %s", cmd, f.format, formatNames())
 		return exitcode.Usage
 	case cmd == "compare" && f.against == "":
-		fmt.Fprintf(a.Stderr, "himorime compare: --against is required, for example: himorime compare --against main\n")
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime compare: --against is required, for example: himorime compare --against main")
 		return exitcode.Usage
 	case f.section == "":
 	case !report.ValidSectionName(f.section):
-		fmt.Fprintf(a.Stderr, "himorime %s: invalid --section %q: use lowercase letters, digits and '-', starting with a letter or digit\n", cmd, f.section)
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime %s: invalid --section %q: use lowercase letters, digits and '-', starting with a letter or digit", cmd, f.section)
 		return exitcode.Usage
 	case f.output == "":
-		fmt.Fprintf(a.Stderr, "himorime %s: --section needs --output FILE: it replaces a section of an existing Markdown file, for example: himorime %s --format markdown --output README.md --section %s\n", cmd, cmd, f.section)
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime %s: --section needs --output FILE: it replaces a section of an existing Markdown file, for example: himorime %s --format markdown --output README.md --section %s", cmd, cmd, f.section)
 		return exitcode.Usage
 	case f.format != string(config.FormatMarkdown):
-		fmt.Fprintf(a.Stderr, "himorime %s: --section needs --format markdown, not %q\n", cmd, f.format)
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime %s: --section needs --format markdown, not %q", cmd, f.format)
 		return exitcode.Usage
 	}
 	return 0
@@ -172,13 +173,13 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 
 	tempDir, err := os.MkdirTemp("", "himorime-")
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "himorime: create temporary directory: %v\n", err)
+		diagnosticf(a.Stderr, diag.Code{Number: 4001}, "himorime: create temporary directory: %v", err)
 		return exitcode.Execution
 	}
 	m.tempDir = tempDir
 	defer func() {
 		if err := runner.RemoveAll(tempDir); err != nil {
-			fmt.Fprintf(a.Stderr, "himorime: remove temporary directory %s: %v\n", tempDir, err)
+			diagnosticf(a.Stderr, diag.Code{Number: 4001}, "himorime: remove temporary directory %s: %v", tempDir, err)
 			code = cleanupFailed(code)
 		}
 	}()
@@ -194,7 +195,7 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 		}
 		defer func() {
 			if err := git.worktree.Remove(ctx); err != nil {
-				fmt.Fprintf(a.Stderr, "himorime: remove the temporary worktree: %v\n", err)
+				diagnosticf(a.Stderr, diag.Code{Number: 4001}, "himorime: remove the temporary worktree: %v", err)
 				code = cleanupFailed(code)
 			}
 		}()
@@ -234,15 +235,20 @@ func (m *measurement) finish(ctx context.Context, rep *report.Report, suites []l
 	}
 	if gh.Actions {
 		if err := report.WriteAnnotations(a.Stderr, rep); err != nil {
-			fmt.Fprintf(a.Stderr, "himorime: write annotations: %v\n", err)
+			diagnosticf(a.Stderr, diag.Code{Number: 4001}, "himorime: write annotations: %v", err)
 		}
 	}
 	if ctx.Err() != nil {
-		fmt.Fprintln(a.Stderr, "himorime: interrupted; cleanup has run")
+		diagnosticf(a.Stderr, diag.Code{Number: 4001}, "himorime: interrupted; cleanup has run")
 		return exitcode.Execution
 	}
 	if outcome := exitcode.Outcome(rep.Summary.ExitCode); outcome != "" {
-		fmt.Fprintf(a.Stderr, "himorime: exit %d: %s\n", rep.Summary.ExitCode, outcome)
+		if c, ok := diag.ForExit(rep.Summary.ExitCode); ok {
+			diagnosticf(a.Stderr, c, "himorime: exit %d: %s", rep.Summary.ExitCode, outcome)
+		} else {
+			// Exit 1 is a measurement result, deliberately without an HMR code.
+			fmt.Fprintf(a.Stderr, "himorime: exit %d: %s\n", rep.Summary.ExitCode, outcome)
+		}
 	}
 	return rep.Summary.ExitCode
 }
@@ -265,7 +271,9 @@ func (m *measurement) checkMetrics(suites []loadedSuite) int {
 		}
 	}
 	if code != 0 {
-		fmt.Fprintf(m.app.Stderr, "himorime: exit %d: %s\n", code, exitcode.Outcome(code))
+		if c, ok := diag.ForExit(code); ok {
+			diagnosticf(m.app.Stderr, c, "himorime: exit %d: %s", code, exitcode.Outcome(code))
+		}
 	}
 	return code
 }
@@ -302,7 +310,7 @@ func (m *measurement) baseRef(gh ghactions.Env) (string, string, int) {
 	}
 	base, err := gh.ResolveBase(a.ReadFile)
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "himorime ci: %v\n", err)
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime ci: %v", err)
 		return "", "", exitcode.Usage
 	}
 	return base.SHA, base.Source, 0
@@ -353,7 +361,7 @@ func (m *measurement) openGit(ctx context.Context, suites []loadedSuite, compare
 	repo, err := gitwt.Open(ctx, suites[0].suite.Dir)
 	if err != nil {
 		if compare {
-			fmt.Fprintf(a.Stderr, "himorime %s: %v; compare needs the suite to live in a Git repository\n", m.cmd, err)
+			diagnosticf(a.Stderr, diag.Code{Number: 4001}, "himorime %s: %v; compare needs the suite to live in a Git repository", m.cmd, err)
 			return nil, exitcode.Execution
 		}
 		return &gitState{}, 0
@@ -362,7 +370,7 @@ func (m *measurement) openGit(ctx context.Context, suites []loadedSuite, compare
 		for _, ls := range suites[1:] {
 			other, err := gitwt.Open(ctx, ls.suite.Dir)
 			if err != nil || other.Top != repo.Top {
-				fmt.Fprintf(a.Stderr, "himorime %s: %s is not in the same Git repository as %s\n", m.cmd, ls.display, suites[0].display)
+				diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime %s: %s is not in the same Git repository as %s", m.cmd, ls.display, suites[0].display)
 				return nil, exitcode.Usage
 			}
 		}
@@ -379,14 +387,14 @@ func (g *gitState) checkout(ctx context.Context, m *measurement, ref, source str
 	a := m.app
 	sha, err := g.repo.ResolveCommit(ctx, ref)
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "himorime %s: %v\n", m.cmd, m.redact.String(err.Error()))
+		diagnosticf(a.Stderr, diag.Code{Number: 4001}, "himorime %s: %v", m.cmd, m.redact.String(err.Error()))
 		return exitcode.Execution
 	}
 	rep.Git.BaseRef, rep.Git.BaseSHA, rep.Git.BaseSource = ref, sha, source
 	m.logf("comparing base %s (%s) with the working tree%s", shortRef(sha), ref, dirtyNote(rep.Git.Dirty))
 	wt, err := g.repo.AddWorktree(ctx, filepath.Join(m.tempDir, "git"), sha)
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "himorime %s: %v\n", m.cmd, m.redact.String(err.Error()))
+		diagnosticf(a.Stderr, diag.Code{Number: 4001}, "himorime %s: %v", m.cmd, m.redact.String(err.Error()))
 		return exitcode.Execution
 	}
 	g.worktree = wt
@@ -420,14 +428,14 @@ func checkComparable(ls loadedSuite, runsOverride int, stderr io.Writer) int {
 		}
 		if runsOverride > 0 {
 			if runsOverride < b.Regression.MinSamples {
-				fmt.Fprintf(stderr, "%s: benchmark %q: --runs %d is lower than regression.min_samples (%d), so the comparison could never be conclusive\n    hint: raise --runs or lower regression.min_samples\n",
+				diagnosticf(stderr, diag.Code{Number: 3001}, "%s: benchmark %q: --runs %d is lower than regression.min_samples (%d), so the comparison could never be conclusive\n    hint: raise --runs or lower regression.min_samples",
 					ls.display, b.Name, runsOverride, b.Regression.MinSamples)
 				return exitcode.Usage
 			}
 			continue
 		}
 		if limit < b.Regression.MinSamples {
-			fmt.Fprintf(stderr, "%s: benchmark %q: %s (%d) is lower than regression.min_samples (%d), so the comparison could never be conclusive\n    hint: raise %s or lower regression.min_samples\n",
+			diagnosticf(stderr, diag.Code{Number: 2001}, "%s: benchmark %q: %s (%d) is lower than regression.min_samples (%d), so the comparison could never be conclusive\n    hint: raise %s or lower regression.min_samples",
 				ls.display, b.Name, what, limit, b.Regression.MinSamples, what)
 			return exitcode.Config
 		}
@@ -614,7 +622,7 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh 
 	}
 
 	if err := errors.Join(errs...); err != nil {
-		fmt.Fprintf(a.Stderr, "himorime: %v\n", err)
+		diagnosticf(a.Stderr, diag.Code{Number: 4001}, "himorime: %v", err)
 		return exitcode.Execution
 	}
 	return 0

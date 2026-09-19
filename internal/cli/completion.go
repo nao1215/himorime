@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/nao1215/himorime/internal/diag"
+
 	"github.com/nao1215/himorime/internal/config"
 	"github.com/nao1215/himorime/internal/exitcode"
 )
@@ -21,11 +23,11 @@ func runCompletion(_ context.Context, a *App, args []string) int {
 		return status
 	}
 	if len(operands) != 1 {
-		fmt.Fprintf(a.Stderr, "himorime completion: name one shell: %s\n", strings.Join(Shells(), ", "))
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime completion: name one shell: %s", strings.Join(Shells(), ", "))
 		return exitcode.Usage
 	}
 	if err := WriteCompletion(a.Stdout, operands[0]); err != nil {
-		fmt.Fprintf(a.Stderr, "himorime completion: %v\n", err)
+		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime completion: %v", err)
 		return exitcode.Usage
 	}
 	return exitcode.OK
