@@ -325,10 +325,7 @@ scenarios:
             benchmarks:
               - name: tiny
                 metrics: {memory: true}
-                commands:
-                  "true":
-                    command: ["true"]
-                    budget: {peak_rss: {max: "<= 1KiB"}}
+                commands: {"true": {command: ["true"]}}
       - run:
           command: himorime run --quiet --format json
       - assert:
@@ -355,7 +352,9 @@ scenarios:
               - name: tiny
                 metrics: {memory: true}
                 commands:
-                  "true": {command: ["true"]}
+                  "true":
+                    command: ["true"]
+                    budget: {peak_rss: {max: "<= 1KiB"}}
       - run:
           command: himorime run --quiet --format json
       - assert:
@@ -768,16 +767,16 @@ scenarios:
           exit_code: 2
           stderr:
             contains:
-              - "units.himorime.yaml:12:34: benchmarks[0].budget.app.memory.peak_rss.max: invalid budget"
-              - 'benchmarks[0].budget.app.latency.p100: unknown aggregation "p100"'
-              - "benchmarks[0].budget.app.latency.median: invalid budget"
+              - "units.himorime.yaml:13:27: benchmarks[0].commands.app.budget.peak_rss.max: invalid budget"
+              - 'units.himorime.yaml:14:27: benchmarks[0].commands.app.budget.latency.p100: unknown aggregation "p100"'
+              - "units.himorime.yaml:14:43: benchmarks[0].commands.app.budget.latency.median: invalid budget"
               - "himorime: the suite is invalid; nothing was run"
       - run:
           command: himorime validate rate.himorime.yaml
       - assert:
           exit_code: 2
           stderr:
-            contains: "benchmarks[0].budget.app.throughput.median: the budget is in bytes/s but the declared work unit is records"
+            contains: "benchmarks[0].commands.app.budget.throughput.median: the budget is in bytes/s but the declared work unit is records"
       - run:
           command: himorime run work.himorime.yaml
       - assert:

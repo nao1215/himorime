@@ -97,10 +97,7 @@ scenarios:
             benchmarks:
               - name: tiny
                 metrics: {memory: true}
-                commands:
-                  tool:
-                    command: ["true"]
-                    budget: {peak_rss: {max: "<= 1KiB"}}
+                commands: {tool: {command: ["true"]}}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
@@ -129,7 +126,10 @@ scenarios:
             benchmarks:
               - name: tiny
                 metrics: {memory: true}
-                commands: {tool: {command: ["true"]}}
+                commands:
+                  tool:
+                    command: ["true"]
+                    budget: {peak_rss: {max: "<= 1KiB"}}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
