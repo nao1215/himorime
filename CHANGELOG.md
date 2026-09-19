@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `bench/thirdparty/compression` measures gzip, bzip2 and xz over the same generated input, verifying decompressed output before measuring.
+
 ## [0.2.1] - 2026-09-19
 
 ### Changed
