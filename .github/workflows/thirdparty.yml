@@ -41,11 +41,13 @@ jobs:
           go-version-file: go.mod
       - uses: nao1215/setup-himorime@b2896dee554ef31ea979f0388d9be22779ce73a2 # v0.1.1
         with:
-          version: v0.2.0
+          version: v0.2.1
 
-      # Every tool is pinned: a go install leg pins a module version, whose
-      # integrity comes from the Go checksum database, and a downloaded
-      # binary pins a version and a SHA256 checked before it is installed.
+      # The JSON tools are pinned: a go install leg pins a module version,
+      # whose integrity comes from the Go checksum database, and downloaded
+      # binaries pin a version and a SHA256 checked before installation. The
+      # compression utilities come from the explicitly pinned Ubuntu image and
+      # their versions are recorded in the report.
       - name: Install the JSON processors
         env:
           JQ_VERSION: "1.8.1"
@@ -73,6 +75,16 @@ jobs:
         run: >
           himorime run bench/thirdparty/json
           --format json --output "$RUNNER_TEMP/json.json"
+          --summary "$GITHUB_STEP_SUMMARY"
+      - name: Check the compression tools
+        run: |
+          gzip --version
+          bzip2 --version
+          xz --version
+      - name: Measure the compression tools
+        run: >
+          himorime run bench/thirdparty/compression
+          --format json --output "$RUNNER_TEMP/compression.json"
           --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

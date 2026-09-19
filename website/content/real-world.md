@@ -19,6 +19,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | Suite | Programs | What it shows |
 |---|---|---|
 | [json](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/json) | jq, gojq, jaq | Several implementations of one job in a single benchmark, input generated from a fixed seed, throughput declared from that input file, and a setup hook that proves the outputs match before anything is measured |
+| [compression](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/compression) | gzip, bzip2, xz | Binary output commands writing to different formats, with decompression and byte comparison in setup before latency, throughput, CPU time and peak RSS are measured |
 
 ## JSON processors
 
@@ -33,3 +34,15 @@ The baseline is jq, the oldest and most widely used of the three, so `RELATIVE` 
 The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed, so no sample data from anyone else's project is committed here and every run measures the same bytes. Every tool is installed at a pinned version whose digest is checked.
 
 Suite: [bench/thirdparty/json](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/json)
+
+## Compression tools
+
+Same job: compress the same generated JSON Lines file with gzip, bzip2 and xz, using each format's native output and one worker where the tool supports it. The suite measures a small input where startup matters and a larger input where sustained compression matters.
+
+Made equal: the input bytes, compression level intent, single-worker setting, and source file. Setup decompresses each output and compares the result with the source. The compressed bytes are not compared because the formats are different.
+
+Not equal: gzip, bzip2 and xz use different compression formats and algorithms, so output sizes and CPU behavior are properties of each format rather than a claim that one format is universally better. xz and bzip2 have different memory profiles from gzip even at comparable level names.
+
+The baseline is gzip, a widely deployed reference implementation. Versions are recorded in the report so a local run can be interpreted with the exact tool versions.
+
+Suite: [bench/thirdparty/compression](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/compression)

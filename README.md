@@ -117,6 +117,7 @@ himorime measures a command, so a third-party tool is measured like your own. Th
 | Suite | Programs |
 |---|---|
 | [json](./bench/thirdparty/json) | jq, gojq, jaq |
+| [compression](./bench/thirdparty/compression) | gzip, bzip2, xz |
 
 ## Install
 

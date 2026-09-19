@@ -1,0 +1,116 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# gzip, bzip2 and xz compressing the same generated input. The decompressed
+# bytes are compared in setup, so the different container formats do not make
+# this an unequal-work benchmark.
+version: "1"
+
+suite:
+  name: compression tools
+  description: gzip, bzip2 and xz compressing one generated JSON Lines file with deterministic single-threaded options.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  metrics:
+    cpu: true
+    memory: true
+    unsupported: skip
+
+report:
+  versions:
+    gzip: [gzip, --version]
+    bzip2: [bzip2, --version]
+    xz: [xz, --version]
+
+benchmarks:
+  - name: compress 5MiB of JSON Lines
+    description: >-
+      Each command compresses the same 5MiB generated JSON Lines file to its
+      native format with one worker and no timestamp. Setup decompresses every
+      result and compares it with the input. The formats are different, so the
+      compressed files themselves are not compared.
+    tags: [thirdparty, compression, small]
+    baseline: gzip
+    setup:
+      - command: ["${artifact}", -kind, jsonl, -size, 5MiB, -seed, "11", -o, "${workdir}/input.jsonl"]
+      - command: gzip -c -n -1 ${workdir}/input.jsonl > ${workdir}/check.gz
+        shell: true
+      - command: bzip2 -c -1 ${workdir}/input.jsonl > ${workdir}/check.bz2
+        shell: true
+      - command: xz -c -T1 -0 ${workdir}/input.jsonl > ${workdir}/check.xz
+        shell: true
+      - command: gzip -cd ${workdir}/check.gz > ${workdir}/check-gzip.jsonl
+        shell: true
+      - command: bzip2 -cd ${workdir}/check.bz2 > ${workdir}/check-bzip2.jsonl
+        shell: true
+      - command: xz -cd ${workdir}/check.xz > ${workdir}/check-xz.jsonl
+        shell: true
+      - command: cmp ${workdir}/input.jsonl ${workdir}/check-gzip.jsonl
+        shell: true
+      - command: cmp ${workdir}/input.jsonl ${workdir}/check-bzip2.jsonl
+        shell: true
+      - command: cmp ${workdir}/input.jsonl ${workdir}/check-xz.jsonl
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.jsonl"
+    commands:
+      gzip:
+        command: [gzip, -c, -n, "-1", "${workdir}/input.jsonl"]
+        stdout: "out-gzip.gz"
+      bzip2:
+        command: [bzip2, -c, "-1", "${workdir}/input.jsonl"]
+        stdout: "out-bzip2.bz2"
+      xz:
+        command: [xz, -c, -T1, "-0", "${workdir}/input.jsonl"]
+        stdout: "out-xz.xz"
+
+  - name: compress 100MiB of JSON Lines
+    description: >-
+      The same compression job over a larger generated input. Startup matters
+      less here than sustained compression and CPU time; all commands still use
+      one worker so wall-clock and CPU measurements describe the same setting.
+    tags: [thirdparty, compression, large]
+    baseline: gzip
+    setup:
+      - command: ["${artifact}", -kind, jsonl, -size, 100MiB, -seed, "12", -o, "${workdir}/input.jsonl"]
+      - command: gzip -c -n -1 ${workdir}/input.jsonl > ${workdir}/check.gz
+        shell: true
+      - command: bzip2 -c -1 ${workdir}/input.jsonl > ${workdir}/check.bz2
+        shell: true
+      - command: xz -c -T1 -0 ${workdir}/input.jsonl > ${workdir}/check.xz
+        shell: true
+      - command: gzip -cd ${workdir}/check.gz > ${workdir}/check-gzip.jsonl
+        shell: true
+      - command: bzip2 -cd ${workdir}/check.bz2 > ${workdir}/check-bzip2.jsonl
+        shell: true
+      - command: xz -cd ${workdir}/check.xz > ${workdir}/check-xz.jsonl
+        shell: true
+      - command: cmp ${workdir}/input.jsonl ${workdir}/check-gzip.jsonl
+        shell: true
+      - command: cmp ${workdir}/input.jsonl ${workdir}/check-bzip2.jsonl
+        shell: true
+      - command: cmp ${workdir}/input.jsonl ${workdir}/check-xz.jsonl
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.jsonl"
+    commands:
+      gzip:
+        command: [gzip, -c, -n, "-1", "${workdir}/input.jsonl"]
+        stdout: "out-gzip.gz"
+      bzip2:
+        command: [bzip2, -c, "-1", "${workdir}/input.jsonl"]
+        stdout: "out-bzip2.bz2"
+      xz:
+        command: [xz, -c, -T1, "-0", "${workdir}/input.jsonl"]
+        stdout: "out-xz.xz"
