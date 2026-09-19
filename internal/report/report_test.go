@@ -550,7 +550,7 @@ func TestGitHubSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := out.String()
-	for _, want := range []string{"## ❌ himorime benchmark comparison: performance regression", "| Benchmark | Command | Base | Head |", "| slow | tool |", "REGRESSION", "seed 42"} {
+	for _, want := range []string{"| Benchmark | Metric | Base | Head |", "| slow / tool |", "REGRESSION", "| Seed | 42 |"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("summary lacks %q:\n%s", want, s)
 		}
@@ -558,8 +558,27 @@ func TestGitHubSummary(t *testing.T) {
 	ok := judge(ModeRun, false, runResult("x", "", map[string][]time.Duration{"a": samples(time.Millisecond, 10, 0)}, "a"))
 	out.Reset()
 	_ = WriteGitHubSummary(&out, ok)
-	if !strings.HasPrefix(out.String(), "## ✅ himorime benchmarks: no regression") {
+	if !strings.Contains(out.String(), "| x / a | head | Latency |") {
 		t.Fatalf("summary = %s", out.String())
+	}
+}
+
+func TestGitHubReportContainsOnlyTables(t *testing.T) {
+	t.Parallel()
+	r := judge(ModeCompare, false, compareResult("slow", samples(10*time.Millisecond, 20, 0), samples(30*time.Millisecond, 20, 0)))
+	var out bytes.Buffer
+	if err := WriteGitHubSummary(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(out.String(), "\n") {
+		if line != "" && (!strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|")) {
+			t.Errorf("non-table content: %q", line)
+		}
+	}
+	for _, field := range []string{"Base", "Head", "Change", "Interval", "Tolerance", "Result", "Reason", "Minimum difference", "OS/architecture", "Seed"} {
+		if !strings.Contains(out.String(), field) {
+			t.Errorf("missing %s", field)
+		}
 	}
 }
 
@@ -793,14 +812,14 @@ func TestRenderSuiteNewInHead(t *testing.T) {
 	if err := WriteGitHubSummary(&summary, r); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(summary.String(), " · 1 suite new in this revision\n") || !strings.Contains(summary.String(), "New in this revision: bench") {
+	if !strings.Contains(summary.String(), "| New suites | 1 |") || !strings.Contains(summary.String(), "| New suite | added |") {
 		t.Errorf("job summary:\n%s", summary.String())
 	}
 	summary.Reset()
 	if err := WriteGitHubSummary(&summary, newSuiteReport(t, "<= 1ms")); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(summary.String(), "## ❌ himorime benchmark comparison: budget exceeded\n") {
+	if !strings.Contains(summary.String(), "| &lt;= 1.00ms | FAIL |") {
 		t.Errorf("job summary of a new suite over its budget:\n%s", summary.String())
 	}
 

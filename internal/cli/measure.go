@@ -231,8 +231,17 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 // with a line that says why a non-zero status was returned.
 func (m *measurement) finish(ctx context.Context, rep *report.Report, suites []loadedSuite, gh ghactions.Env) int {
 	a := m.app
-	if code := m.writeReports(rep, suites, gh); code != 0 {
+	logEnv := gh
+	if m.cmd != "ci" || gh.StepSummary == m.flags.summary {
+		logEnv.StepSummary = ""
+	}
+	_, logErr := logEnv.WriteReport(a.Stderr, rep, "")
+	if code := m.writeReports(rep, suites); code != 0 {
 		return code
+	}
+	if logErr != nil {
+		diag.Print(a.Stderr, exitcode.Execution, "himorime: %v", logErr)
+		return exitcode.Execution
 	}
 	if gh.Actions {
 		if err := report.WriteAnnotations(a.Stderr, rep); err != nil {
@@ -568,7 +577,7 @@ func dirtyNote(dirty bool) string {
 // writeReports writes the requested report to stdout or --output, the
 // suite's configured outputs, and the job summary. A report that cannot be
 // written is an error: a CI job must not pass with its evidence missing.
-func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh ghactions.Env) int {
+func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite) int {
 	a, f := m.app, m.flags
 	color := f.format == string(config.FormatTable) && f.output == "" && a.StdoutIsTerminal && !f.noColor && m.cmd != "ci"
 	if v, ok := a.LookupEnv("NO_COLOR"); ok && v != "" {
@@ -605,9 +614,6 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh 
 	summaries := []string{}
 	if f.summary != "" {
 		summaries = append(summaries, f.summary)
-	}
-	if m.cmd == "ci" && gh.StepSummary != "" && gh.StepSummary != f.summary {
-		summaries = append(summaries, gh.StepSummary)
 	}
 	for _, p := range summaries {
 		errs = append(errs, writeFile(nil, p, true, func(w io.Writer) error {

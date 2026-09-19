@@ -1,9 +1,9 @@
 <!-- himorime:benchmark-report:v2 run_id=9001 workflow_id=44 run_number=12 run_attempt=2 -->
-## himorime: ❌ 1 regression detected
+## himorime: ❌ 1 execution or measurement error
 
-| Benchmark | Metric | Base → Head | Change | Limit |
-|---|---|---:|---:|---:|
-| version / himorime | Latency | 10.00ms → 15.00ms | +50.0% | +10% |
+| Benchmark | Metric | Reason |
+|---|---|---|
+| version / himorime | CPU time (head) | failed: CPU counter unavailable |
 
 [View full benchmark report and logs](<https://github.com/octo/bench/actions/runs/9001>)
 

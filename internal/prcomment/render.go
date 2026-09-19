@@ -9,305 +9,287 @@ import (
 	"github.com/nao1215/himorime/internal/report"
 )
 
-// CommentRenderOptions controls presentation, never the recorded judgement.
-type CommentRenderOptions struct {
-	HideFooter bool
+type problem struct {
+	kind                                             int
+	benchmark, metric, reason, values, change, limit string
+	gated                                            bool
 }
 
-type commentCase struct {
-	label     string
-	command   *report.Command
-	newInHead bool
-}
+const (
+	problemError = iota
+	problemRegression
+	problemBudget
+	problemInconclusive
+	problemSkipped
+	maxNotificationProblems = 10
+)
 
-// RenderComment gives reviewers exceptions first and independently expandable
-// measurements, decision evidence and provenance. It never rejudges a report.
-func RenderComment(r *report.Report, run WorkflowRun, opts CommentRenderOptions) (string, error) {
-	cases, failures, commonCommand := commentCases(r)
-	sort.SliceStable(cases, func(i, j int) bool { return casePriority(cases[i]) < casePriority(cases[j]) })
-	for limit := min(len(cases), maxCommentRows); ; limit /= 2 {
-		body := renderComment(r, run, opts, cases, failures, commonCommand, limit)
-		if len(body) <= maxCommentBytes {
-			return body, nil
-		}
-		if limit == 0 {
-			return "", fmt.Errorf("rendered pull request comment exceeds %d bytes", maxCommentBytes)
-		}
-	}
-}
-
-func commentCases(r *report.Report) ([]commentCase, []string, string) {
-	var cases []commentCase
-	var failures []string
-	names := map[string]bool{}
-	for _, s := range r.Suites {
-		for _, b := range s.Benchmarks {
-			for _, c := range b.Commands {
-				names[c.Name] = true
-			}
-		}
-	}
-	common := ""
-	if len(names) == 1 {
-		for name := range names {
-			common = name
-		}
-	}
-	for si := range r.Suites {
-		s := &r.Suites[si]
-		if s.Error != nil {
-			failures = append(failures, safeCell(s.Name)+": "+errorText(s.Error))
-		}
-		for bi := range s.Benchmarks {
-			b := &s.Benchmarks[bi]
-			label := safeCell(b.Name)
-			if len(r.Suites) > 1 {
-				label = safeCell(s.Name) + " / " + label
-			}
-			if b.Error != nil {
-				failures = append(failures, label+": "+errorText(b.Error))
-			}
-			for ci := range b.Commands {
-				c := &b.Commands[ci]
-				name := label
-				if common == "" {
-					name += " / " + safeCell(c.Name)
-				}
-				cases = append(cases, commentCase{name, c, s.NewInHead})
-			}
-		}
-	}
-	return cases, failures, common
-}
-
-func casePriority(c commentCase) int {
-	switch c.command.Result {
-	case report.ResultError, report.ResultMetricError:
-		return 0
-	case report.ResultRegression, report.ResultOverBudget:
-		return 1
-	case report.ResultInconclusive:
-		return 2
-	case report.ResultImproved:
-		return 3
-	case report.ResultPass:
-		// Non-gating comparisons can still be worth a review.
-	}
-	for _, mc := range c.command.Comparisons {
-		if mc != nil && mc.Verdict != string(report.ResultPass) {
-			return 3
-		}
-	}
-	return 4
-}
-
-func renderComment(r *report.Report, run WorkflowRun, opts CommentRenderOptions, cases []commentCase, failures []string, common string, limit int) string {
+// renderComment reports problems only. Full measurements belong in Actions.
+func renderComment(r *report.Report, run WorkflowRun, hideFooter bool) (string, error) {
+	problems := reportProblems(r)
+	sort.SliceStable(problems, func(i, j int) bool { return problems[i].kind < problems[j].kind })
 	var out strings.Builder
 	fmt.Fprintf(&out, "<!-- himorime:benchmark-report:v2 run_id=%d workflow_id=%d run_number=%d run_attempt=%d -->\n", run.RunID, run.WorkflowID, run.RunNumber, run.RunAttempt)
-	fmt.Fprintf(&out, "## himorime: %s\n\n", commentVerdict(r))
-	counts := map[report.Result]int{}
-	for _, c := range cases {
-		counts[c.command.Result]++
+	fmt.Fprintf(&out, "## himorime: %s\n\n", notificationTitle(r, problems))
+	if r.Summary.FailOnInconclusive && r.Summary.Inconclusive > 0 {
+		out.WriteString("Inconclusive comparisons fail this check because fail-on-inconclusive is enabled.\n\n")
 	}
-	var summary []string
-	for _, result := range report.Results() {
-		if n := counts[result]; n > 0 {
-			summary = append(summary, fmt.Sprintf("%d %s", n, resultCountLabel(result)))
+	shown := problems[:min(len(problems), maxNotificationProblems)]
+	for kind := problemError; kind <= problemSkipped; kind++ {
+		var rows []problem
+		for _, p := range shown {
+			if p.kind == kind {
+				rows = append(rows, p)
+			}
+		}
+		if len(rows) == 0 {
+			continue
+		}
+		if len(rows) != len(shown) {
+			fmt.Fprintf(&out, "### %s\n\n", []string{"Errors", "Regressions", "Budget violations", "Inconclusive measurements", "Skipped checks"}[kind])
+		}
+		writeProblems(&out, kind, rows)
+	}
+	if len(shown) < len(problems) {
+		fmt.Fprintf(&out, "Showing %d of %d problems; remaining items are in the full report.\n\n", len(shown), len(problems))
+	}
+	fmt.Fprintf(&out, "[View full benchmark report and logs](<%s>)\n", run.RunURL)
+	if !hideFooter {
+		out.WriteString("\n<sub>Generated by [himorime](https://github.com/nao1215/himorime)</sub>\n")
+	}
+	body := strings.ReplaceAll(out.String(), "@", "&#64;")
+	if len(body) > maxCommentBytes {
+		return "", fmt.Errorf("rendered pull request comment exceeds %d bytes", maxCommentBytes)
+	}
+	return body, nil
+}
+
+func notificationTitle(r *report.Report, problems []problem) string {
+	counts := [5]int{}
+	notGated := 0
+	for _, p := range problems {
+		if p.kind == problemRegression && !p.gated {
+			notGated++
+			continue
+		}
+		counts[p.kind]++
+	}
+	switch {
+	case counts[problemError] > 0:
+		return "❌ " + counted(counts[problemError], "execution or measurement error")
+	case counts[problemRegression] > 0 && counts[problemBudget] > 0:
+		return "❌ " + counted(counts[problemRegression], "regression") + ", " + counted(counts[problemBudget], "budget violation")
+	case counts[problemRegression] > 0:
+		return "❌ " + counted(counts[problemRegression], "regression") + " detected"
+	case counts[problemBudget] > 0:
+		return "❌ " + counted(counts[problemBudget], "budget violation")
+	case r.Summary.ExitCode != 0:
+		return "❌ Performance checks failed"
+	case counts[problemInconclusive] > 0:
+		return "⚠️ " + counted(counts[problemInconclusive], "inconclusive metric comparison")
+	case notGated > 0:
+		return "⚠️ " + counted(notGated, "non-gating regression")
+	case counts[problemSkipped] > 0:
+		return "⚠️ " + counted(counts[problemSkipped], "skipped check")
+	case len(r.Suites) == 0:
+		return "⚠️ No measurements"
+	case r.Mode == report.ModeRun:
+		return "✅ Measurements completed"
+	default:
+		return "✅ No regressions"
+	}
+}
+
+func counted(n int, noun string) string {
+	if n != 1 {
+		noun += "s"
+	}
+	return fmt.Sprintf("%d %s", n, noun)
+}
+
+func reportProblems(r *report.Report) []problem {
+	var out []problem
+	for _, s := range r.Suites {
+		if s.Error != nil {
+			out = append(out, errorProblem(s.Name, "Suite", s.Error))
+		}
+		for _, b := range s.Benchmarks {
+			label := b.Name
+			if len(r.Suites) > 1 {
+				label = s.Name + " / " + label
+			}
+			if b.Error != nil {
+				out = append(out, errorProblem(label, "Benchmark", b.Error))
+			}
+			for _, c := range b.Commands {
+				out = append(out, commandProblems(label+" / "+c.Name, c)...)
+			}
 		}
 	}
-	fmt.Fprintf(&out, "Commands: %d", len(cases))
-	if len(summary) > 0 {
-		out.WriteString(" — " + strings.Join(summary, " · "))
-	}
-	out.WriteString(". Counts are per command, not per metric.\n\n")
-	if len(failures) > 0 {
-		fmt.Fprintf(&out, "Suite/benchmark errors: %d (separate from command counts).\n\n", len(failures))
-	}
-	if r.Summary.FailOnInconclusive && r.Summary.Inconclusive > 0 {
-		out.WriteString("Inconclusive results fail this check because fail-on-inconclusive is enabled.\n\n")
-	}
-	if s := r.Summary; s.Skipped > 0 || s.NotGated.Total() > 0 {
-		fmt.Fprintf(&out, "Metric checks: %d skipped · %d non-gating (%d regressed, %d inconclusive).\n\n", s.Skipped, s.NotGated.Total(), s.NotGated.Regression, s.NotGated.Inconclusive)
-	}
-	selected := cases[:limit]
-	var action, caveats []string
-	for _, failure := range failures {
-		action = append(action, "ERROR — "+failure)
-	}
-	for _, c := range selected {
-		a, notes := caseNotices(c)
-		action = append(action, a...)
-		caveats = append(caveats, notes...)
-	}
-	writeNotices(&out, "Needs attention", action)
-	writeNotices(&out, "Measurement caveats", caveats)
-	if limit < len(cases) {
-		fmt.Fprintf(&out, "Showing %d of %d commands, prioritizing errors and regressions. Omitted measurements and full text are in the workflow's JSON artifact.\n\n", limit, len(cases))
-	}
-	for _, name := range commentMetrics(selected) {
-		writeMetricDetails(&out, selected, name)
-	}
-	writeEvidence(&out, selected)
-	writeMetadata(&out, r, run, common)
-	fmt.Fprintf(&out, "[Full report and logs](<%s>)\n\n", run.RunURL)
-	if !opts.HideFooter {
-		out.WriteString("<sub>Generated by [himorime](https://github.com/nao1215/himorime)</sub>\n")
-	}
-	return strings.ReplaceAll(out.String(), "@", "&#64;")
+	return out
 }
 
-func commentVerdict(r *report.Report) string {
-	s := r.Summary
-	switch {
-	case s.Error > 0 || s.MetricError > 0:
-		return "❌ Measurement failed"
-	case s.Regression > 0 || s.OverBudget > 0:
-		return "❌ Performance checks failed"
-	case s.ExitCode != 0:
-		return "⚠️ Check failed"
-	case s.Inconclusive > 0 || s.Skipped > 0 || s.NotGated.Inconclusive > 0 || s.NotGated.Regression > 0:
-		return "⚠️ No failing checks; review caveats"
-	case s.Commands == 0:
-		return "No command measurements"
-	case r.Mode == report.ModeRun:
-		return "Measurements complete"
-	default:
-		return "Checks passed"
+func errorProblem(label, side string, e *report.Error) problem {
+	name := "Execution"
+	if e.Metric != "" {
+		name = metricTitle(e.Metric)
 	}
+	return problem{kind: problemError, benchmark: safeCell(label), metric: name + " (" + side + ")", reason: errorText(e), gated: true}
 }
 
-func resultCountLabel(r report.Result) string {
-	switch r {
-	case report.ResultPass:
-		return "passed"
-	case report.ResultImproved:
-		return "improved"
-	case report.ResultRegression:
-		return "regressed"
-	case report.ResultMetricError:
-		return "metric errors"
-	case report.ResultError:
-		return "errored"
-	case report.ResultInconclusive:
-		return "inconclusive"
-	case report.ResultOverBudget:
-		return "over budget"
-	}
-	return safeCell(string(r))
-}
-
-func caseNotices(c commentCase) (action, notes []string) {
+func commandProblems(label string, c report.Command) []problem {
+	var out []problem
 	for _, side := range []struct {
 		name string
 		m    *report.Measurement
-	}{{"base", c.command.Base}, {"head", c.command.Head}} {
+	}{{"base", c.Base}, {"head", c.Head}} {
 		if side.m != nil && side.m.Error != nil {
-			action = append(action, "ERROR — "+c.label+" ("+side.name+"): "+errorText(side.m.Error))
+			out = append(out, errorProblem(label, side.name, side.m.Error))
 		}
 	}
-	for _, name := range commentMetrics([]commentCase{c}) {
-		mc := c.command.Comparisons[name]
-		if mc == nil {
-			notes = append(notes, unavailableNotices(c, name)...)
+	for _, name := range problemMetrics(c) {
+		mc := c.Comparisons[name]
+		unavailable := false
+		for _, side := range []struct {
+			name string
+			m    *report.Measurement
+		}{{"base", c.Base}, {"head", c.Head}} {
+			ms := measurementMetric(side.m, name)
+			if side.m != nil && side.m.Error != nil {
+				unavailable = true
+				continue
+			}
+			if ms == nil {
+				continue
+			}
+			kind := problemSkipped
+			switch ms.Status {
+			case report.StatusFailed:
+				kind = problemError
+			case report.StatusUnsupported:
+			default:
+				continue
+			}
+			unavailable = true
+			out = append(out, problem{kind: kind, benchmark: safeCell(label), metric: metricTitle(name) + " (" + side.name + ")", reason: boundedText(ms.Status+": "+ms.Reason, 240), gated: true})
 		}
-		if mc == nil || mc.DerivedFrom != "" || mc.Verdict == string(report.ResultPass) || mc.Verdict == string(report.ResultImproved) {
-			continue
-		}
-		line := comparisonLabel(mc) + " — " + c.label + " / " + metricTitle(name)
-		if mc.Verdict == string(report.ResultRegression) {
-			line += ": " + formatValue(mc.Unit, mc.Base) + " → " + formatValue(mc.Unit, mc.Head) + " (" + report.FormatChange(mc.ChangePercent) + ")"
-		} else if mc.Reason != "" {
-			line += ": " + boundedText(mc.Reason, 240)
-		}
-		if mc.Gate && mc.Verdict == string(report.ResultRegression) {
-			action = append(action, line)
-		} else {
-			notes = append(notes, line)
+		if mc != nil && !unavailable {
+			if p, ok := comparisonProblem(label, name, c, mc); ok {
+				out = append(out, p)
+			}
 		}
 	}
-	for _, bc := range c.command.Budgets {
+	for _, bc := range c.Budgets {
 		if bc.Status == report.BudgetPass {
 			continue
 		}
-		line := "Budget " + strings.ToUpper(strings.ReplaceAll(bc.Status, "_", " ")) + " — " + c.label + " / " + metricTitle(bc.Metric) + " " + safeCell(bc.Aggregation) + ": " + formatMeasured(c.command.Head, bc.Metric, bc.Unit, bc.Actual) + "; limit " + safeCell(bc.Operator) + " " + formatValue(bc.Unit, &bc.Limit)
-		if bc.Status == report.BudgetFail || bc.Status == report.BudgetNoData {
-			action = append(action, line)
-		} else {
-			notes = append(notes, line)
+		out = append(out, budgetProblem(label, c, bc))
+	}
+	if len(out) == 0 {
+		kind := problemError
+		switch c.Result {
+		case report.ResultError, report.ResultMetricError:
+		case report.ResultRegression:
+			kind = problemRegression
+		case report.ResultOverBudget:
+			kind = problemBudget
+		case report.ResultInconclusive:
+			kind = problemInconclusive
+		case report.ResultPass, report.ResultImproved:
+			return out
+		default:
+			return out
 		}
+		out = append(out, problem{kind: kind, benchmark: safeCell(label), metric: "—", reason: safeCell(string(c.Result)), gated: true, values: "—", change: "—", limit: "—"})
 	}
-	if len(action) == 0 && (c.command.Result == report.ResultError || c.command.Result == report.ResultMetricError || c.command.Result == report.ResultOverBudget || c.command.Result == report.ResultRegression) {
-		action = append(action, strings.ToUpper(strings.ReplaceAll(string(c.command.Result), "_", " "))+" — "+c.label)
-	}
-	if c.newInHead {
-		notes = append(notes, c.label+": new in head; measured without a base comparison")
-	}
-	return action, notes
+	return out
 }
 
-func unavailableNotices(c commentCase, name string) []string {
-	var notes []string
-	for _, side := range []struct {
-		name string
-		m    *report.Measurement
-	}{{"base", c.command.Base}, {"head", c.command.Head}} {
-		if ms := measurementMetric(side.m, name); ms != nil && (ms.Status == report.StatusUnsupported || ms.Status == report.StatusFailed) {
-			notes = append(notes, strings.ToUpper(ms.Status)+" — "+c.label+" / "+metricTitle(name)+" ("+side.name+"): "+boundedText(ms.Reason, 240))
-		}
+func budgetProblem(label string, c report.Command, bc report.BudgetCheck) problem {
+	kind := problemBudget
+	switch bc.Status {
+	case report.BudgetNoData:
+		kind = problemError
+	case report.BudgetSkipped:
+		kind = problemSkipped
 	}
-	return notes
+	return problem{kind: kind, benchmark: safeCell(label), metric: metricTitle(bc.Metric) + " " + safeCell(bc.Aggregation), values: formatMeasured(c.Head, bc.Metric, bc.Unit, bc.Actual), limit: safeCell(bc.Operator) + " " + formatValue(bc.Unit, &bc.Limit), reason: boundedText("Budget "+bc.Status+": "+bc.Reason, 240), gated: true}
 }
 
-func writeNotices(out *strings.Builder, title string, lines []string) {
-	if len(lines) == 0 {
-		return
+func comparisonProblem(label, name string, c report.Command, mc *report.MetricComparison) (problem, bool) {
+	if mc.DerivedFrom != "" {
+		return problem{}, false
 	}
-	fmt.Fprintf(out, "### %s\n\n", title)
-	for _, line := range lines[:min(len(lines), 5)] {
-		fmt.Fprintf(out, "- %s\n", line)
+	kind := problemInconclusive
+	switch mc.Verdict {
+	case string(report.ResultRegression):
+		kind = problemRegression
+	case string(report.ResultInconclusive):
+	case report.VerdictSkipped:
+		kind = problemSkipped
+	default:
+		return problem{}, false
 	}
-	if len(lines) > 5 {
-		fmt.Fprintf(out, "- %d more items; see decision evidence and the full report.\n", len(lines)-5)
+	title := metricTitle(name)
+	if !mc.Gate {
+		title += " (not gated)"
 	}
-	out.WriteString("\n")
+	reason := mc.Reason
+	if reason == report.ReasonAtFloor {
+		reason = "At or below the measurement floor"
+	}
+	return problem{kind: kind, benchmark: safeCell(label), metric: title, reason: boundedText(reason, 240), gated: mc.Gate,
+		values: formatMeasured(c.Base, name, mc.Unit, mc.Base) + " → " + formatMeasured(c.Head, name, mc.Unit, mc.Head),
+		change: report.FormatChange(mc.ChangePercent), limit: report.FormatMetricTolerance(mc)}, true
 }
 
-func commentMetrics(cases []commentCase) []string {
-	seen := map[string]bool{}
-	for _, c := range cases {
-		for name, mc := range c.command.Comparisons {
-			if mc != nil {
-				seen[name] = true
-			}
-		}
-		for _, bc := range c.command.Budgets {
-			seen[bc.Metric] = true
-		}
-		for _, m := range []*report.Measurement{c.command.Base, c.command.Head} {
-			if m == nil {
-				continue
-			}
-			for name, ms := range m.Metrics {
-				if ms != nil && ms.Status != report.StatusNotRequested && (len(c.command.Comparisons) == 0 || ms.Status != report.StatusMeasured) {
-					seen[name] = true
-				}
+func problemMetrics(c report.Command) []string {
+	names := map[string]bool{}
+	for name := range c.Comparisons {
+		names[name] = true
+	}
+	for _, m := range []*report.Measurement{c.Base, c.Head} {
+		if m != nil {
+			for name := range m.Metrics {
+				names[name] = true
 			}
 		}
 	}
-	var names []string
-	for _, def := range metric.Defs() {
-		name := string(def.Name)
-		if seen[name] {
-			names = append(names, name)
-			delete(seen, name)
+	var out []string
+	for _, d := range metric.Defs() {
+		if names[string(d.Name)] {
+			out = append(out, string(d.Name))
+			delete(names, string(d.Name))
 		}
 	}
 	var extra []string
-	for name := range seen {
+	for name := range names {
 		extra = append(extra, name)
 	}
 	sort.Strings(extra)
-	return append(names, extra...)
+	return append(out, extra...)
+}
+
+func writeProblems(out *strings.Builder, kind int, rows []problem) {
+	switch kind {
+	case problemRegression:
+		out.WriteString("| Benchmark | Metric | Base → Head | Change | Limit |\n|---|---|---:|---:|---:|\n")
+	case problemBudget:
+		out.WriteString("| Benchmark | Metric | Measured | Limit |\n|---|---|---:|---:|\n")
+	default:
+		out.WriteString("| Benchmark | Metric | Reason |\n|---|---|---|\n")
+	}
+	for _, p := range rows {
+		cells := []string{p.benchmark, p.metric, p.reason}
+		if kind == problemRegression {
+			cells = []string{p.benchmark, p.metric, p.values, p.change, p.limit}
+		}
+		if kind == problemBudget {
+			cells = []string{p.benchmark, p.metric, p.values, p.limit}
+		}
+		fmt.Fprintf(out, "| %s |\n", strings.Join(cells, " | "))
+	}
+	out.WriteString("\n")
 }
 
 func metricTitle(name string) string {
@@ -329,255 +311,6 @@ func metricTitle(name string) string {
 	default:
 		return safeCell(name)
 	}
-}
-
-func metricRow(c commentCase, name string) ([]string, bool) {
-	mc := c.command.Comparisons[name]
-	if mc != nil {
-		change := "—"
-		if mc.Base != nil && mc.Head != nil && mc.Verdict != report.VerdictSkipped && mc.Reason != report.ReasonAtFloor {
-			change = report.FormatChange(mc.ChangePercent)
-		}
-		label := metricResult(c, name, comparisonLabel(mc))
-		return []string{c.label, formatMeasured(c.command.Base, name, mc.Unit, mc.Base) + " → " + formatMeasured(c.command.Head, name, mc.Unit, mc.Head), change, label}, true
-	}
-	ms := measurementMetric(c.command.Head, name)
-	if ms == nil || ms.Status == report.StatusNotRequested {
-		return nil, false
-	}
-	value, status := "—", strings.ToUpper(ms.Status)
-	if ms.Status == report.StatusMeasured && ms.Stats != nil {
-		value = formatMeasured(c.command.Head, name, ms.Unit, &ms.Stats.Median)
-		status = "MEASURED"
-	}
-	if c.command.Result == report.ResultError || c.command.Result == report.ResultMetricError {
-		status = strings.ToUpper(strings.ReplaceAll(string(c.command.Result), "_", " "))
-	}
-	return []string{c.label, value, "—", metricResult(c, name, status)}, true
-}
-
-func metricResult(c commentCase, name, label string) string {
-	for _, bc := range c.command.Budgets {
-		if bc.Metric == name && bc.Status != report.BudgetPass {
-			label += "; BUDGET " + safeCell(strings.ToUpper(bc.Status))
-		}
-	}
-	return label
-}
-
-func comparisonLabel(mc *report.MetricComparison) string {
-	label := safeCell(strings.ToUpper(mc.Verdict))
-	if mc.DerivedFrom != "" {
-		return label + " (FROM " + strings.ToUpper(safeCell(mc.DerivedFrom)) + ")"
-	}
-	if !mc.Gate {
-		label += " (NOT GATED)"
-	}
-	return label
-}
-
-func writeMetricDetails(out *strings.Builder, cases []commentCase, name string) {
-	var rows [][]string
-	quiet, compared := true, false
-	statistics := map[string]bool{}
-	for _, c := range cases {
-		row, ok := metricRow(c, name)
-		if !ok {
-			continue
-		}
-		quiet = quiet && (row[3] == "PASS" || row[3] == "MEASURED")
-		statistic := "median"
-		if mc := c.command.Comparisons[name]; mc != nil {
-			compared = true
-			statistic = mc.Statistic
-		}
-		statistics[statistic] = true
-		rows = append(rows, row)
-	}
-	if len(rows) == 0 {
-		return
-	}
-	fmt.Fprintf(out, "<details>\n<summary>%s — metric rows: %d</summary>\n\n", metricTitle(name), len(rows))
-	switch name {
-	case "latency":
-		out.WriteString("Wall-clock time; lower is better.\n\n")
-	case "cpu_total":
-		out.WriteString("Total CPU time of the process tree, not elapsed time; lower is better.\n\n")
-	case "peak_rss":
-		out.WriteString("Peak resident memory, not heap size; lower is better. When recorded, collection and process aggregation appear in decision evidence. ≤ marks a measurement floor.\n\n")
-	case "throughput":
-		out.WriteString("Work per second; higher is better. Derived comparisons reuse the latency verdict.\n\n")
-	}
-	if len(statistics) == 1 {
-		for statistic := range statistics {
-			fmt.Fprintf(out, "Statistic: %s.\n\n", safeCell(statistic))
-		}
-	} else {
-		out.WriteString("Statistics vary by case; see decision evidence.\n\n")
-	}
-	if quiet && compared {
-		out.WriteString("All shown comparisons passed.\n\n")
-	}
-	valueHeader := "Median"
-	if compared {
-		valueHeader = "Base → Head"
-	}
-	header, align := "| Case | "+valueHeader+" |", "|---|---:|"
-	if compared {
-		header += " Change |"
-		align += "---:|"
-	}
-	if !quiet {
-		header += " Result |"
-		align += "---|"
-	}
-	fmt.Fprintf(out, "%s\n%s\n", header, align)
-	for _, row := range rows {
-		cells := append([]string(nil), row[:2]...)
-		if compared {
-			cells = append(cells, row[2])
-		}
-		if !quiet {
-			cells = append(cells, row[3])
-		}
-		fmt.Fprintf(out, "| %s |\n", strings.Join(cells, " | "))
-	}
-	out.WriteString("\n</details>\n\n")
-}
-
-func comparisonEvidence(name string, mc *report.MetricComparison, commonSettings string) string {
-	line := metricTitle(name) + " (" + safeCell(mc.Statistic) + "): " + comparisonLabel(mc)
-	if mc.Difference != nil && mc.Verdict != report.VerdictSkipped {
-		diff := formatValue(mc.Unit, mc.Difference)
-		if *mc.Difference >= 0 {
-			diff = "+" + diff
-		}
-		if mc.Reason == report.ReasonAtFloor {
-			line += "; floor-limited estimates (not resolved changes)"
-		}
-		line += "; absolute difference " + diff + "; interval " + report.FormatChange(mc.CILowPercent) + " … " + report.FormatChange(mc.CIHighPercent)
-		if mc.Reason == report.ReasonAtFloor {
-			line += "; recorded change " + report.FormatChange(mc.ChangePercent)
-		}
-	}
-	if mc.DerivedFrom == "" {
-		line += fmt.Sprintf("; tolerance %s; minimum difference %s", report.FormatMetricTolerance(mc), formatValue(mc.Unit, &mc.MinDifference))
-		if commonSettings == "" {
-			line += "; " + comparisonSettings(mc)
-		}
-		if mc.ProbRegression != 0 || mc.ProbImprovement != 0 {
-			line += fmt.Sprintf("; recorded probabilities: regression %.1f%%, improvement %.1f%%", mc.ProbRegression*100, mc.ProbImprovement*100)
-		}
-	}
-	if mc.Reason != "" {
-		line += ". Reason: " + boundedText(mc.Reason, 2000)
-	}
-	return line
-}
-
-func writeEvidence(out *strings.Builder, cases []commentCase) {
-	var evidence strings.Builder
-	for _, c := range cases {
-		var lines []string
-		common := commonComparisonSettings(c)
-		if common != "" {
-			lines = append(lines, "Comparison settings: "+common)
-		}
-		for _, name := range commentMetrics([]commentCase{c}) {
-			if mc := c.command.Comparisons[name]; mc != nil {
-				lines = append(lines, comparisonEvidence(name, mc, common))
-			}
-			for _, side := range []struct {
-				name string
-				m    *report.Measurement
-			}{{"base", c.command.Base}, {"head", c.command.Head}} {
-				if line := measurementEvidence(side.m, name, side.name); line != "" {
-					lines = append(lines, line)
-				}
-			}
-		}
-		for _, bc := range c.command.Budgets {
-			line := fmt.Sprintf("Budget %s %s: %s %s; actual %s; %s", metricTitle(bc.Metric), safeCell(bc.Aggregation), safeCell(bc.Operator), formatValue(bc.Unit, &bc.Limit), formatMeasured(c.command.Head, bc.Metric, bc.Unit, bc.Actual), strings.ToUpper(bc.Status))
-			if bc.Reason != "" {
-				line += ". Reason: " + boundedText(bc.Reason, 2000)
-			}
-			lines = append(lines, line)
-		}
-		if len(lines) > 0 {
-			fmt.Fprintf(&evidence, "### %s\n\n", c.label)
-			for _, line := range lines {
-				fmt.Fprintf(&evidence, "- %s\n", line)
-			}
-			evidence.WriteString("\n")
-		}
-	}
-	if evidence.Len() > 0 {
-		out.WriteString("<details>\n<summary>Decision evidence — thresholds, intervals and reasons</summary>\n\nMetric-table values use the recorded comparison statistic; unpaired values use the median. Change is head relative to base, not a good/bad score.\n\n")
-		out.WriteString(evidence.String())
-		out.WriteString("</details>\n\n")
-	}
-}
-
-func comparisonSettings(mc *report.MetricComparison) string {
-	return fmt.Sprintf("required confidence %.1f%%; minimum samples %d; max CV %g", mc.RequiredConfidence*100, mc.MinSamples, mc.MaxCV)
-}
-
-func commonComparisonSettings(c commentCase) string {
-	common := ""
-	for _, mc := range c.command.Comparisons {
-		if mc == nil || mc.DerivedFrom != "" {
-			continue
-		}
-		settings := comparisonSettings(mc)
-		if common != "" && common != settings {
-			return ""
-		}
-		common = settings
-	}
-	return common
-}
-
-func measurementEvidence(m *report.Measurement, name, side string) string {
-	ms := measurementMetric(m, name)
-	if ms == nil {
-		return ""
-	}
-	var parts []string
-	if ms.Source != "" {
-		parts = append(parts, "source "+safeCell(ms.Source))
-	}
-	if ms.ProcessAggregation != "" {
-		parts = append(parts, "process aggregation "+safeCell(ms.ProcessAggregation))
-	}
-	if ms.Reason != "" {
-		parts = append(parts, boundedText(ms.Reason, 2000))
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return metricTitle(name) + " (" + side + ", " + safeCell(ms.Status) + "): " + strings.Join(parts, "; ")
-}
-
-func writeMetadata(out *strings.Builder, r *report.Report, run WorkflowRun, common string) {
-	out.WriteString("<details>\n<summary>Run metadata</summary>\n\n| Field | Value |\n|---|---|\n")
-	rows := [][2]string{{"himorime", r.HimorimeVersion}, {"Platform", r.Environment.OS + "/" + r.Environment.Arch}, {"CPU", fmt.Sprintf("%s (%d logical CPUs)", r.Environment.CPUModel, r.Environment.LogicalCPUs)}}
-	if len(r.Suites) == 1 {
-		rows = append(rows, [2]string{"Suite", r.Suites[0].Name})
-	}
-	if r.Git != nil {
-		rows = append(rows, [2]string{"Base", r.Git.BaseSHA}, [2]string{"Head", r.Git.HeadSHA}, [2]string{"Working tree dirty", fmt.Sprint(r.Git.Dirty)})
-	}
-	rows = append(rows, [2]string{"Seed", fmt.Sprint(r.Seed)}, [2]string{"Source", fmt.Sprintf("%s, run %d (attempt %d)", run.WorkflowName, run.RunNumber, run.RunAttempt)}, [2]string{"Source workflow conclusion", run.Conclusion}, [2]string{"Report exit code", fmt.Sprint(r.Summary.ExitCode)})
-	if common != "" {
-		rows = append(rows, [2]string{"Command (all cases)", common})
-	}
-	for _, tool := range r.Environment.Tools[:min(len(r.Environment.Tools), 5)] {
-		rows = append(rows, [2]string{"Tool " + tool.Name, tool.Version})
-	}
-	for _, row := range rows {
-		fmt.Fprintf(out, "| %s | %s |\n", safeCell(row[0]), boundedText(row[1], 512))
-	}
-	out.WriteString("\n</details>\n\n")
 }
 
 func measurementMetric(m *report.Measurement, name string) *report.MetricSummary {

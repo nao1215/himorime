@@ -205,7 +205,7 @@ scenarios:
       - assert:
           file:
             path: out/summary.md
-            contains: ["## ✅ himorime benchmarks: no regression"]
+            contains: ["| Exit code | 0 |", "| commas, pipes \\| and quotes \" / helper | head | Latency |"]
 
   - name: a Markdown section of an existing page is updated and the rest of the page is kept
     steps:

@@ -18,6 +18,7 @@ import (
 
 	"github.com/nao1215/himorime/internal/diag"
 	"github.com/nao1215/himorime/internal/exitcode"
+	"github.com/nao1215/himorime/internal/ghactions"
 	"github.com/nao1215/himorime/internal/report"
 	"github.com/nao1215/himorime/schema"
 )
@@ -69,7 +70,15 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer, deps Dep
 		diag.Print(stderr, exitcode.Config, "himorime comment: invalid report: %v", err)
 		return exitcode.Config
 	}
-	body, err := RenderComment(rep, run, CommentRenderOptions{HideFooter: *hideFooter})
+	reportURL, logErr := ghactions.FromLookup(deps.LookupEnv).WriteReport(stdout, rep, run.RunURL)
+	if logErr != nil {
+		diag.Print(stderr, exitcode.Execution, "himorime comment: %v", logErr)
+	}
+	commentRun := run
+	if reportURL != "" {
+		commentRun.RunURL = reportURL
+	}
+	body, err := renderComment(rep, commentRun, *hideFooter)
 	if err != nil {
 		diag.Print(stderr, exitcode.Execution, "himorime comment: %v", err)
 		return exitcode.Execution
@@ -81,9 +90,9 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer, deps Dep
 		return exitcode.Execution
 	}
 	if stale {
-		fmt.Fprintf(stdout, "himorime: skipped stale run %d; pull request #%d already has a newer result\n", run.RunNumber, run.PullRequest)
+		fmt.Fprintf(stdout, "| Publication | Result |\n|---|---|\n| pull request #%d | Skipped stale run %d; a newer result exists |\n", run.PullRequest, run.RunNumber)
 	} else {
-		fmt.Fprintf(stdout, "himorime: posted pull request #%d from run %d\n", run.PullRequest, run.RunNumber)
+		fmt.Fprintf(stdout, "| Publication | Result |\n|---|---|\n| pull request #%d | Posted from run %d |\n", run.PullRequest, run.RunNumber)
 	}
 	return exitcode.OK
 }

@@ -60,10 +60,9 @@ scenarios:
           file:
             path: summary.md
             contains:
-              - "output of an earlier step\n## "
-              - "himorime benchmark comparison: "
-              - "| Benchmark | Command | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result |"
-              - "| sleepy | app |"
+              - "output of an earlier step\n| Benchmark |"
+              - "| Benchmark | Metric | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result | Reason | Rule |"
+              - "| sleepy / app |"
 
   - name: a regression in a pull request exits 1 and says so in the summary
     env:
@@ -97,6 +96,9 @@ scenarios:
       - assert:
           exit_code: 1
           stdout: {empty: true}
+          stderr:
+            contains: ["| Benchmark | Metric | Base | Head |", "REGRESSION", "| Rule | Statistic |", "| Seed |"]
+            not_contains: ["Decision evidence", "<details>"]
       - assert:
           file:
             path: result.json
@@ -107,7 +109,7 @@ scenarios:
       - assert:
           file:
             path: summary.md
-            contains: ["## ❌ himorime benchmark comparison: performance regression", "REGRESSION"]
+            contains: ["| Exit code | 1 |", "REGRESSION"]
 
   # The pull request that adopts himorime: its base has no suite directory,
   # so the working tree is measured alone and its budgets decide the result.
@@ -155,8 +157,8 @@ scenarios:
           file:
             path: summary.md
             contains:
-              - "## ❌ himorime benchmark comparison: budget exceeded"
-              - "New in this revision: bench does not exist in the base revision"
+              - "| Exit code | 1 |"
+              - "| New suite | adopted |"
       - run:
           command: himorime ci --quiet --format json bench
           cwd: repo
@@ -343,4 +345,4 @@ scenarios:
       - assert:
           exit_code: 0
       - assert:
-          file: {path: local-summary.md, contains: "himorime benchmark comparison"}
+          file: {path: local-summary.md, contains: "| Benchmark | Metric | Base | Head |"}

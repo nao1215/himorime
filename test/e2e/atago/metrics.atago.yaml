@@ -687,7 +687,7 @@ scenarios:
       - assert:
           file:
             path: out/summary.md
-            contains: ["## ✅ himorime benchmarks: no regression", "#### CPU", "#### Memory", "| all metrics | app |"]
+            contains: ["| Exit code | 0 |", "| all metrics / app | head | CPU time |", "| all metrics / app | head | Peak RSS |"]
 
   - name: invalid units, directions and malformed YAML are configuration errors
     steps:

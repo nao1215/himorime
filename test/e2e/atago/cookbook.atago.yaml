@@ -308,7 +308,7 @@ scenarios:
       - assert:
           file:
             path: summary.md
-            contains: ["himorime benchmark comparison", "| count 50k lines | wordcount |", "#### Throughput", "#### Peak RSS", "#### Budgets (head)"]
+            contains: ["| count 50k lines / wordcount | Throughput |", "| count 50k lines / wordcount | Peak RSS |", "| Benchmark | Budget |"]
       # A budget the change cannot meet fails the job with exit 1 and an
       # annotation that names a performance problem, not a broken run.
       - run:
@@ -391,7 +391,7 @@ scenarios:
       - assert:
           file:
             path: summary.md
-            contains: ["## ✅ himorime benchmarks: no regression", "### reports", "#### Throughput"]
+            contains: ["| Exit code | 0 |", "| count 20k lines / scanner | head | Throughput |"]
 
   - name: Understand CPU utilization above 100%
     steps:
