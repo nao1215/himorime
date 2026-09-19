@@ -235,7 +235,7 @@ func (m *measurement) finish(ctx context.Context, rep *report.Report, suites []l
 	if m.cmd != "ci" || gh.StepSummary == m.flags.summary {
 		logEnv.StepSummary = ""
 	}
-	_, logErr := logEnv.WriteReport(a.Stderr, rep, "")
+	logErr := logEnv.WriteReport(a.Stderr, rep)
 	if code := m.writeReports(rep, suites); code != 0 {
 		return code
 	}

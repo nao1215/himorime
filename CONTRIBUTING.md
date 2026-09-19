@@ -34,7 +34,7 @@ make check     # fmt, vet, lint, test, test-race, e2e
 - Documentation sections marked `BEGIN GENERATED` and example blocks are generated. Edit the source (command table, schema, example suites) and run `make docs`.
 - In Markdown, write each paragraph and each list item on one line, without bold text. Code comments wrap as usual.
 - Every Cookbook recipe is an example under `examples/` and a scenario in `test/e2e/atago/cookbook.atago.yaml` with the same name as the heading.
-- Keep dependencies minimal and GitHub Actions pinned to commit SHAs. Workflows other than `release.yml` get read-only permissions.
+- Keep dependencies minimal and GitHub Actions pinned to commit SHAs. Workflows get read-only permissions except `release.yml` and the benchmark job's `pull-requests: write` permission for automatic comments.
 
 ## Pull requests
 

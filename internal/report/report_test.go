@@ -5,6 +5,8 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -313,17 +315,17 @@ func TestFormatHelpers(t *testing.T) {
 	if FormatRatio(15.613) != "15.61x" || FormatRatio(math.NaN()) != "-" {
 		t.Error("FormatRatio")
 	}
-	if FormatChange(2.74) != "+2.7%" || FormatChange(-12) != "-12.0%" || FormatChange(0.01) != "+0.0%" {
-		t.Error("FormatChange")
+	if formatChange(2.74) != "+2.7%" || formatChange(-12) != "-12.0%" || formatChange(0.01) != "+0.0%" {
+		t.Error("formatChange")
 	}
 	// CONFIDENCE is the probability that decided the verdict, so it never
 	// reads as a doubt next to the verdict it backs.
 	c := &MetricComparison{Better: "lower", ChangePercent: 15.6, ProbRegression: 0.981, MaxPercent: 10, Verdict: "regression"}
-	if formatMetricConfidence(c) != "98.1%" || FormatMetricTolerance(c) != "+10%" {
-		t.Errorf("confidence/tolerance = %s %s", formatMetricConfidence(c), FormatMetricTolerance(c))
+	if formatMetricConfidence(c) != "98.1%" || formatMetricTolerance(c) != "+10%" {
+		t.Errorf("confidence/tolerance = %s %s", formatMetricConfidence(c), formatMetricTolerance(c))
 	}
 	c = &MetricComparison{Better: "lower", ChangePercent: 2.7, ProbRegression: 0.01, MaxPercent: 7.5, Verdict: "pass"}
-	if formatMetricConfidence(c) != "99.0%" || FormatMetricTolerance(c) != "+7.5%" || FormatMetricTolerance(nil) != "-" {
+	if formatMetricConfidence(c) != "99.0%" || formatMetricTolerance(c) != "+7.5%" || formatMetricTolerance(nil) != "-" {
 		t.Errorf("pass confidence = %s", formatMetricConfidence(c))
 	}
 	c = &MetricComparison{Better: "lower", ChangePercent: -30, ProbImprovement: 0.99, Verdict: "improved"}
@@ -333,8 +335,8 @@ func TestFormatHelpers(t *testing.T) {
 	// Throughput degrades when it drops: the tolerance points down, and a
 	// drop is judged by the probability of a regression.
 	c = &MetricComparison{Better: "higher", ChangePercent: -20, ProbRegression: 0.97, ProbImprovement: 0, MaxPercent: 8, Verdict: "regression"}
-	if formatMetricConfidence(c) != "97.0%" || FormatMetricTolerance(c) != "-8%" {
-		t.Errorf("throughput confidence/tolerance = %s %s", formatMetricConfidence(c), FormatMetricTolerance(c))
+	if formatMetricConfidence(c) != "97.0%" || formatMetricTolerance(c) != "-8%" {
+		t.Errorf("throughput confidence/tolerance = %s %s", formatMetricConfidence(c), formatMetricTolerance(c))
 	}
 	// Too close to call: the highest of the three probabilities, which is
 	// below the required one.
@@ -972,4 +974,133 @@ func TestCompareKeepsTheVerdictWhenTheWorkIsTheSame(t *testing.T) {
 	if r.Summary.ExitCode != exitcode.Failed {
 		t.Errorf("exit code = %d, want 1", r.Summary.ExitCode)
 	}
+}
+
+func TestFullGitHubReportGolden(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"pass", "improved", "inconclusive", "regression", "budget", "metric-error", "error", "mixed"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			rep := githubFixture(name)
+			before, _ := json.Marshal(rep)
+			var out bytes.Buffer
+			if err := WriteGitHubSummary(&out, rep); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join("testdata", "report-"+name+".md")
+			want, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out.String() != string(want) {
+				t.Errorf("output differs from %s:\n%s", path, out.String())
+			}
+			after, _ := json.Marshal(rep)
+			if !bytes.Equal(before, after) {
+				t.Fatal("rendering mutated the judged report")
+			}
+		})
+	}
+}
+func TestFullReportPreservesMeasurementProvenanceAndPerMetricSettings(t *testing.T) {
+	t.Parallel()
+	r := githubFixture("pass")
+	c := &r.Suites[0].Benchmarks[0].Commands[0]
+	c.Comparisons["peak_rss"].RequiredConfidence = .99
+	c.Head = &Measurement{Metrics: map[string]*MetricSummary{
+		"peak_rss": {Status: StatusMeasured, Source: "wait4", ProcessAggregation: "max_process", Reason: "not simultaneous tree memory"},
+	}}
+	var out bytes.Buffer
+	if err := WriteGitHubSummary(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	body := out.String()
+	for _, want := range []string{"95.0%", "99.0%", "wait4", "max\\_process", "not simultaneous tree memory"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q:\n%s", want, body)
+		}
+	}
+}
+func githubFixture(kind string) *Report {
+	r := &Report{Mode: ModeCompare, HimorimeVersion: "v0.2.2", Seed: 42, Environment: Environment{OS: "linux", Arch: "amd64", CPUModel: "Example CPU", LogicalCPUs: 4}, Git: &Git{BaseSHA: strings.Repeat("a", 40), HeadSHA: strings.Repeat("b", 40)}, Summary: Summary{Commands: 2, Pass: 2}}
+	s := Suite{Name: "CLI performance"}
+	for _, name := range []string{"version", "validate"} {
+		c := Command{Name: "himorime", Result: ResultPass, Comparisons: map[string]*MetricComparison{}, Base: &Measurement{Metrics: map[string]*MetricSummary{}}, Head: &Measurement{Metrics: map[string]*MetricSummary{}}}
+		for _, m := range []struct {
+			name, unit string
+			base, head float64
+		}{{"latency", "ns", 10e6, 10.1e6}, {"cpu_total", "ns", 12e6, 12.1e6}, {"peak_rss", "bytes", 32 << 20, 33 << 20}} {
+			base, head, diff := m.base, m.head, m.head-m.base
+			for _, side := range []struct {
+				measurement *Measurement
+				value       float64
+			}{{c.Base, base}, {c.Head, head}} {
+				v := side.value
+				side.measurement.Count = 20
+				side.measurement.Metrics[m.name] = &MetricSummary{Name: m.name, Unit: m.unit, Status: StatusMeasured, Source: "example", Stats: fixtureStats(v)}
+			}
+			c.Comparisons[m.name] = &MetricComparison{Metric: m.name, Unit: m.unit, Statistic: "median", Better: "lower", Base: &base, Head: &head, Difference: &diff, ChangePercent: diff / base * 100, CILowPercent: -2, CIHighPercent: 4, MaxPercent: 10, MinDifference: 1e6, RequiredConfidence: .95, MinSamples: 10, MaxCV: .5, Verdict: "pass", Reason: "the difference is smaller than min_difference", Gate: true}
+		}
+		c.Comparisons["peak_rss"].MinDifference = 2 << 20
+		s.Benchmarks = append(s.Benchmarks, Benchmark{Name: name, Commands: []Command{c}})
+	}
+	r.Suites = []Suite{s}
+	c := &r.Suites[0].Benchmarks[0].Commands[0]
+	switch kind {
+	case "inconclusive":
+		c.Result = ResultInconclusive
+		mc := c.Comparisons["peak_rss"]
+		mc.Verdict, mc.Reason = "inconclusive", ReasonAtFloor
+		base, head, diff := float64(16<<20), float64(17<<20), float64(1<<20)
+		mc.Base, mc.Head, mc.Difference, mc.ChangePercent, mc.CILowPercent, mc.CIHighPercent = &base, &head, &diff, 6.25, 5, 7
+		c.Base.Metrics["peak_rss"].Floor, c.Head.Metrics["peak_rss"].Floor = 16<<20, 16<<20
+		c.Base.Metrics["peak_rss"].Stats, c.Head.Metrics["peak_rss"].Stats = fixtureStats(base), fixtureStats(head)
+		r.Summary.Pass, r.Summary.Inconclusive = 1, 1
+	case "regression", "budget":
+		c.Result = ResultRegression
+		mc := c.Comparisons["latency"]
+		head, diff := 15e6, 5e6
+		mc.Head, mc.Difference, mc.ChangePercent, mc.CILowPercent, mc.CIHighPercent, mc.ProbRegression, mc.Verdict, mc.Reason = &head, &diff, 50, 45, 55, .99, "regression", ""
+		c.Head.Metrics["latency"].Stats = fixtureStats(head)
+		other := &r.Suites[0].Benchmarks[1].Commands[0]
+		actual := 20e6
+		other.Result = ResultOverBudget
+		other.Budgets = []BudgetCheck{{Metric: "cpu_total", Aggregation: "p95", Unit: "ns", Operator: "<=", Limit: 18e6, Actual: &actual, Status: BudgetFail}}
+		r.Summary.Pass, r.Summary.Regression, r.Summary.OverBudget, r.Summary.ExitCode = 1, 1, 0, 1
+		if kind == "budget" {
+			*c = githubFixture("pass").Suites[0].Benchmarks[0].Commands[0]
+			r.Summary.Regression, r.Summary.OverBudget = 0, 1
+		} else {
+			other.Budgets = nil
+			other.Result = ResultPass
+		}
+	case "improved":
+		c.Result = ResultImproved
+		mc := c.Comparisons["latency"]
+		head, diff := 5e6, -5e6
+		mc.Head, mc.Difference, mc.ChangePercent, mc.CILowPercent, mc.CIHighPercent, mc.Verdict, mc.Reason = &head, &diff, -50, -55, -45, "improved", ""
+		c.Head.Metrics["latency"].Stats = fixtureStats(head)
+		r.Summary.Pass, r.Summary.Improved = 1, 1
+	case "metric-error":
+		c.Result = ResultMetricError
+		c.Head = &Measurement{Metrics: map[string]*MetricSummary{"cpu_total": {Status: StatusFailed, Reason: "CPU counter unavailable"}}}
+		c.Comparisons["cpu_total"].Verdict, c.Comparisons["cpu_total"].Reason = VerdictSkipped, "CPU counter unavailable"
+		r.Summary.Pass, r.Summary.MetricError, r.Summary.ExitCode = 1, 1, 6
+	case "mixed":
+		r = githubFixture("regression")
+		for _, name := range []string{"budget", "inconclusive", "metric-error", "error"} {
+			r.Suites[0].Benchmarks = append(r.Suites[0].Benchmarks, githubFixture(name).Suites[0].Benchmarks...)
+		}
+		r.Summary = Summary{Commands: 10, Pass: 5, Regression: 1, OverBudget: 1, Inconclusive: 1, MetricError: 1, Error: 1, ExitCode: 4}
+	case "error":
+		c.Result, c.Comparisons = ResultError, nil
+		c.Head = &Measurement{Error: &Error{Kind: "exit_code", Message: "command exited before producing samples"}}
+		r.Suites = append(r.Suites, Suite{Name: "integration", Result: ResultError, Error: &Error{Kind: "build", Message: "compiler failed"}})
+		r.Summary.Pass, r.Summary.Error, r.Summary.ExitCode = 1, 2, 4
+	}
+	return r
+}
+
+func fixtureStats(v float64) *MetricStats {
+	return &MetricStats{Count: 20, Median: v, Mean: v, Min: v, Max: v, Percentiles: map[string]float64{"p90": v, "p95": v, "p99": v}}
 }

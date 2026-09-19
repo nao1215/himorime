@@ -13,10 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Changed
 
 - PR benchmark comments show the overall status, problem rows and a full-report link. Complete results, judgement settings and metadata appear as tables in Actions logs and Job Summaries; measurement, verdict, JSON and comment replacement contracts are unchanged.
+- setup-himorime posts comments automatically for same-repository PRs from `$RUNNER_TEMP/himorime.json`; grant the benchmark job `pull-requests: write`. Fork PRs receive no comment.
+
+### Removed
+
+- Remove the local `comment` command and `himorime-comment` helper. Use the pinned setup-himorime action and remove the separate `workflow_run` reporter.
 
 ### Fixed
 
-- PR comments validate the base repository by ID, accepting GitHub's slim workflow-run payload instead of requiring its absent `full_name` field.
 - Suite report outputs cannot follow symbolic links outside the suite directory, and conflicting report destinations are rejected before measuring.
 - Failed builds and hooks include a redacted stdout tail in their error message as well as the existing stderr diagnostics.
 - Revision comparisons enforce head-side budgets even for commands excluded by `regression.commands`.

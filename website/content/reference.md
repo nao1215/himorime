@@ -118,18 +118,6 @@ Like compare, with CI defaults: no colors, and a Markdown summary appended to $G
 | `--tag TAG` | select benchmarks with this tag (repeatable, or comma-separated) |
 | `--warmup N` | run n warmup runs per command, overriding the suite |
 
-### comment
-
-```text
-himorime comment [--hide-footer] REPORT.json
-```
-
-Reads a JSON report produced by himorime, posts the latest pull request comment, and removes older himorime comments. This command only accepts GitHub Actions workflow_run events, so the report cannot choose its repository or pull request. It exits 0 for a valid report even when that report found a regression.
-
-| Flag | Description |
-|---|---|
-| `--hide-footer` | omit the himorime attribution footer from the pull request comment |
-
 ### version
 
 ```text
@@ -190,7 +178,7 @@ Tool errors printed to standard error carry an `HMR` code whose first digit iden
 |---|---|---|
 | `HMR2001` | invalid input | A suite or saved report is missing, malformed, or invalid. |
 | `HMR3001` | invalid command line | The command name, flag, or command-line argument is invalid. |
-| `HMR4001` | execution failed | A command, hook, build, Git operation, report write, comment publication, or cleanup step failed. |
+| `HMR4001` | execution failed | A command, hook, build, Git operation, report write, or cleanup step failed. |
 | `HMR5001` | internal error | himorime encountered an unexpected internal error. |
 | `HMR6001` | metric unavailable | A requested metric is unsupported or could not be collected. |
 <!-- END GENERATED: error-codes -->

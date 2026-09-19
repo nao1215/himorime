@@ -27,18 +27,18 @@ func TestWriteReportDestinations(t *testing.T) {
 			}
 			r := &report.Report{HimorimeVersion: "test", Suites: []report.Suite{{Name: "::error:: hostile", Error: &report.Error{Message: "::warning:: example\nsecond line"}}}}
 			var log bytes.Buffer
-			url, err := env(values).WriteReport(&log, r, "https://github.com/octo/bench/actions/runs/100")
+			err := env(values).WriteReport(&log, r)
 			if (err != nil) != (mode == "unwritable summary") {
 				t.Fatalf("error = %v", err)
 			}
 			if mode == "local" {
-				if url != "" || log.Len() != 0 {
-					t.Fatalf("local output = %q, URL = %q", log.String(), url)
+				if log.Len() != 0 {
+					t.Fatalf("local output = %q", log.String())
 				}
 				return
 			}
-			if url != "https://github.com/octo/bench/actions/runs/123" {
-				t.Fatalf("URL = %q", url)
+			if !strings.Contains(log.String(), "https://github.com/octo/bench/actions/runs/123") {
+				t.Fatal("missing Actions run URL")
 			}
 			lines := strings.Split(strings.TrimSpace(log.String()), "\n")
 			if !strings.HasPrefix(lines[0], "::stop-commands::") {
@@ -54,7 +54,7 @@ func TestWriteReportDestinations(t *testing.T) {
 					t.Fatalf("not a table: %s", line)
 				}
 			}
-			if !strings.Contains(body, "Source run") || !strings.Contains(body, "second line") {
+			if !strings.Contains(body, "Actions run") || !strings.Contains(body, "second line") {
 				t.Fatal(body)
 			}
 			if mode == "summary" {
@@ -77,9 +77,9 @@ func TestReportingURLRejectsInvalidEnvironment(t *testing.T) {
 	} {
 		e := env(map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_SERVER_URL": tt.server, "GITHUB_REPOSITORY": tt.repo, "GITHUB_RUN_ID": tt.run})
 		var log bytes.Buffer
-		url, err := e.WriteReport(&log, &report.Report{}, "")
-		if err != nil || url != "" || strings.Contains(log.String(), "Reporting run") {
-			t.Fatalf("environment=%+v url=%s err=%v", tt, url, err)
+		err := e.WriteReport(&log, &report.Report{})
+		if err != nil || strings.Contains(log.String(), "Actions run") {
+			t.Fatalf("environment=%+v err=%v", tt, err)
 		}
 	}
 }

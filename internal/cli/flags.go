@@ -102,12 +102,6 @@ func ciFlags(fs *flag.FlagSet) any {
 	return m
 }
 
-func registerCommentFlags(fs *flag.FlagSet) any {
-	var hideFooter bool
-	fs.BoolVar(&hideFooter, "hide-footer", false, "omit the himorime attribution footer from the pull request comment")
-	return nil
-}
-
 type listOptions struct {
 	selectFlags
 	format string

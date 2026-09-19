@@ -67,7 +67,7 @@ scenarios:
       - assert:
           exit_code: 3
           stdout: {empty: true}
-          stderr: {contains: ["HMR3001", "exactly one REPORT.json is required"]}
+          stderr: {contains: ["HMR3001", "unknown command"]}
 
   - name: init writes a runnable suite and never overwrites silently
     steps:

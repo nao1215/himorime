@@ -15,8 +15,8 @@ func FormatRatio(r float64) string {
 	return fmt.Sprintf("%.2fx", r)
 }
 
-// FormatChange renders a signed percentage such as +2.7% or -12.0%.
-func FormatChange(p float64) string {
+// formatChange renders a signed percentage such as +2.7% or -12.0%.
+func formatChange(p float64) string {
 	if math.IsNaN(p) || math.IsInf(p, 0) {
 		return "-"
 	}

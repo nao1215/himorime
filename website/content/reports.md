@@ -70,9 +70,9 @@ Markdown contains the same result tables as the terminal report and is suitable 
 
 When a measurement report is produced in GitHub Actions, its complete tables are also written to the log on standard error, including when JSON is written to standard output or a file. `himorime ci` appends the tables to `$GITHUB_STEP_SUMMARY` when available. Existing annotations and [exit statuses](/reference/#exit-codes) are unchanged.
 
-`himorime comment REPORT.json` posts a JSON report from a completed GitHub Actions `workflow_run` to its pull request. Use the two-workflow pattern in [GitHub Actions](/github-actions/#a-pull-request-comment), so the benchmark job stays read-only.
+setup-himorime automatically posts a notification from the saved JSON report on same-repository pull requests. See [GitHub Actions](/github-actions/#a-pull-request-comment) for the required path and job permissions; no local comment command or separate workflow is needed.
 
-PR comments contain only the overall status, problem rows and a full-report link; passing and improved results are omitted. Errors appear before regressions, budget violations and inconclusive measurements. Comments show at most ten problems; the link leads to the reporting job, which logs every result and appends the same tables to its Job Summary when available. The source benchmark run and its JSON artifact remain reachable from the execution table. A missing or unwritable reporter Job Summary does not prevent logging or comment publication.
+PR comments contain only the overall status, problem rows and a full-report link; passing and improved results are omitted. Errors appear before regressions, budget violations and inconclusive measurements. Comments show at most ten problems; the link leads to the benchmark run. The action's post step logs all saved results as tables, including with older himorime releases. The measurement step keeps its existing Job Summary, and raw samples remain in the JSON artifact.
 
 ## Update part of a page
 
