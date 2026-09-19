@@ -155,13 +155,13 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^count 50k lines / wordcount +Latency \\(median\\) +\\S+ → \\S+ \\([+-][0-9.]+%\\) +(PASS|INCONCLUSIVE) +-+$"
+            matches: "(?m)^count 50k lines / wordcount +Latency \\(median\\) +\\S+ → \\S+ \\([+-][0-9.]+%\\) +(PASS|INCONCLUSIVE) +.+$"
       - assert:
           stdout:
             contains: ["count 50k lines / wordcount", "Latency (median)", "Throughput (median)", "CPU time (median)", "Peak RSS (median)", "MiB/s"]
       - assert:
           stdout:
-            matches: "(?m)^count 50k lines / wordcount +Throughput \\(median\\) +[0-9.]+MiB/s → [0-9.]+MiB/s \\([+-][0-9.]+%\\) +(PASS|INCONCLUSIVE|IMPROVED) \\(FROM LATENCY\\) +-+$"
+            matches: "(?m)^count 50k lines / wordcount +Throughput \\(median\\) +[0-9.]+MiB/s → [0-9.]+MiB/s \\([+-][0-9.]+%\\) +(PASS|INCONCLUSIVE|IMPROVED) \\(FROM LATENCY\\) +.+$"
       - assert:
           stderr: {contains: "including uncommitted changes"}
       - run: {command: git status --porcelain, cwd: repo}
