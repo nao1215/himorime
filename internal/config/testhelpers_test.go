@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,11 @@ import (
 
 	"github.com/nao1215/himorime/schema"
 )
+
+func isValidation(err error) bool {
+	var v *ValidationError
+	return errors.As(err, &v)
+}
 
 func mustSchema(t *testing.T) []byte {
 	t.Helper()

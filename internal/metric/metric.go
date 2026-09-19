@@ -197,20 +197,3 @@ func (d Def) Unit(workUnit string) string {
 	}
 	return ""
 }
-
-// Degradation returns how much worse head is than base, in percent of base:
-// positive is worse, whichever direction the metric improves in. A
-// lower-is-better metric degrades when it grows, a higher-is-better metric
-// when it shrinks, so the same tolerance applies to both. A neutral metric
-// never degrades.
-func (d Def) Degradation(changePercent float64) float64 {
-	switch d.Better {
-	case LowerIsBetter:
-		return changePercent
-	case HigherIsBetter:
-		return -changePercent
-	case Neutral:
-		return 0
-	}
-	return 0
-}

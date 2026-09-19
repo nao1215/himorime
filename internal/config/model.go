@@ -224,9 +224,6 @@ func (m Metrics) Collects(g metric.Group) bool {
 	return false
 }
 
-// NeedsUsage reports whether runs must collect resource usage.
-func (m Metrics) NeedsUsage() bool { return m.CPU || m.Memory }
-
 // WorkUnit is the unit throughput is expressed in, or "".
 func (m Metrics) WorkUnit() string {
 	if m.Throughput == nil {

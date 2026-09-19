@@ -235,6 +235,3 @@ func (a Aggregation) Less(b Aggregation) bool {
 	}
 	return a < b
 }
-
-// ValidPercentileKey reports whether s matches PercentilePattern.
-func ValidPercentileKey(s string) bool { return percentileKeyRE.MatchString(s) }

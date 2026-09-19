@@ -51,18 +51,6 @@ func TestDirections(t *testing.T) {
 			t.Errorf("%s better = %s, want %s", n, got, dir)
 		}
 	}
-	if d := MustLookup(Latency).Degradation(12); d != 12 {
-		t.Errorf("latency +12%% degrades by %v", d)
-	}
-	if d := MustLookup(Throughput).Degradation(-12); d != 12 {
-		t.Errorf("throughput -12%% degrades by %v, want 12", d)
-	}
-	if d := MustLookup(Throughput).Degradation(12); d != -12 {
-		t.Errorf("throughput +12%% degrades by %v, want -12", d)
-	}
-	if d := MustLookup(CPUUtilization).Degradation(50); d != 0 {
-		t.Errorf("a neutral metric degraded by %v", d)
-	}
 }
 
 func TestUnits(t *testing.T) {
@@ -284,16 +272,16 @@ func TestAggregations(t *testing.T) {
 		}
 	}
 	for _, u := range []string{"records", "bytes", "ops_1", "x-y"} {
-		if !ValidWorkUnit(u) {
-			t.Errorf("ValidWorkUnit(%q) = false", u)
+		if _, _, err := ParseRate("1 " + u + "/s"); err != nil {
+			t.Errorf("ParseRate unit %q: %v", u, err)
 		}
 	}
 	for _, u := range []string{"", "1x", "records/s", "a b"} {
-		if ValidWorkUnit(u) {
-			t.Errorf("ValidWorkUnit(%q) = true", u)
+		if _, _, err := ParseRate("1 " + u + "/s"); err == nil {
+			t.Errorf("ParseRate accepted invalid unit %q", u)
 		}
 	}
-	if !IsByteUnit("MiB") || IsByteUnit("records") || !ValidPercentileKey("p95") {
+	if !IsByteUnit("MiB") || IsByteUnit("records") {
 		t.Error("unit helpers")
 	}
 }

@@ -95,10 +95,6 @@ func usageFromValues(raw rawUsage) Usage {
 	return u
 }
 
-func usageFromRusage(ru *syscall.Rusage) Usage {
-	return usageFromValues(rawUsage{UserCPU: ru.Utime.Nano(), SystemCPU: ru.Stime.Nano(), MaxRSS: int64(ru.Maxrss)}) //nolint:unconvert // Maxrss is int32 on some systems
-}
-
 // normalizeMaxRSS converts ru_maxrss to bytes. Its unit differs between
 // systems: kilobytes (KiB) on Linux and the BSDs, bytes on macOS. A zero or
 // negative peak cannot come from a process that ran, so it is a collection
