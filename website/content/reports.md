@@ -72,6 +72,8 @@ Markdown contains the same result tables as the terminal report and is suitable 
 
 `himorime comment REPORT.json` posts a JSON report from a completed GitHub Actions `workflow_run` to its pull request. Use the two-workflow pattern in [GitHub Actions](/github-actions/#a-pull-request-comment), so the benchmark job stays read-only.
 
+PR comments show command-level counts, failures requiring attention and measurement caveats before any tables. Expand individual metrics for base/head values and changes, decision evidence for thresholds and reasons, or run metadata for versions, commits and environment. Tables containing only passing comparisons omit the result column; unavailable or floor-limited measurements remain explicit. The workflow link leads to the complete JSON report and logs, including any text or commands omitted to fit the comment limit.
+
 ## Update part of a page
 
 Markdown output can replace a named section while preserving the surrounding file:
