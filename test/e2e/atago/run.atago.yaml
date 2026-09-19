@@ -58,7 +58,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: report output}
+            name: report output
             defaults: {warmup: 0, runs: 1}
             benchmarks:
               - name: test
