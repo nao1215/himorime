@@ -19,7 +19,7 @@ type Code struct {
 var codes = [...]Code{
 	{Number: 2001, Name: "invalid input", Meaning: "A suite or saved report is missing, malformed, or invalid."},
 	{Number: 3001, Name: "invalid command line", Meaning: "The command name, flag, or command-line argument is invalid."},
-	{Number: 4001, Name: "execution failed", Meaning: "A command, hook, build, Git operation, report write, comment publication, or cleanup step failed."},
+	{Number: 4001, Name: "execution failed", Meaning: "A command, hook, build, Git operation, report write, or cleanup step failed."},
 	{Number: 5001, Name: "internal error", Meaning: "himorime encountered an unexpected internal error."},
 	{Number: 6001, Name: "metric unavailable", Meaning: "A requested metric is unsupported or could not be collected."},
 }

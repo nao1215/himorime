@@ -295,7 +295,6 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 	t.Parallel()
 	files, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
 	files = append(files, filepath.Join(root, "examples", "github-actions", "benchmark.yml"))
-	files = append(files, filepath.Join(root, "examples", "github-actions", "comment.yml"))
 	if len(files) < 5 {
 		t.Fatalf("found only %d workflows", len(files))
 	}
@@ -314,7 +313,7 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 }
 
 // TestWorkflowPermissionsAreReadOnly reserves writes for releasing and the
-// separately validated comment reporter.
+// separately validated benchmark job's automatic comments.
 func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 	t.Parallel()
 	files, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
@@ -328,7 +327,7 @@ func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 			continue
 		}
 		for _, m := range write.FindAllStringSubmatch(text, -1) {
-			if filepath.Base(f) != "comment-benchmark.yml" || m[1] != "pull-requests" {
+			if filepath.Base(f) != "benchmark.yml" || m[1] != "pull-requests" {
 				t.Errorf("%s grants unexpected %s: write", f, m[1])
 			}
 		}
@@ -340,63 +339,62 @@ func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 
 func TestBenchmarkCommentWorkflow(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(root, ".github", "workflows", "comment-benchmark.yml")
-	text := read(t, path)
-	var wf struct {
-		On struct {
-			WorkflowRun struct {
-				Workflows []string `yaml:"workflows"`
-				Types     []string `yaml:"types"`
-			} `yaml:"workflow_run"`
-		} `yaml:"on"`
-		Permissions map[string]string `yaml:"permissions"`
-		Jobs        map[string]struct {
-			If      string `yaml:"if"`
-			Timeout int    `yaml:"timeout-minutes"` //nolint:tagliatelle // GitHub's workflow syntax uses hyphens.
-			Steps   []struct {
-				Uses string            `yaml:"uses"`
-				Run  string            `yaml:"run"`
-				With map[string]string `yaml:"with"`
-				Env  map[string]string `yaml:"env"`
-			} `yaml:"steps"`
-		} `yaml:"jobs"`
-	}
-	if err := yaml.Unmarshal([]byte(text), &wf); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(wf.On.WorkflowRun.Workflows, ",") != "Benchmark" || strings.Join(wf.On.WorkflowRun.Types, ",") != "completed" {
-		t.Fatal("reporter must consume completed Benchmark runs")
-	}
-	if len(wf.Permissions) != 3 || wf.Permissions["actions"] != "read" || wf.Permissions["contents"] != "read" || wf.Permissions["pull-requests"] != "write" {
-		t.Fatalf("reporter permissions: %v", wf.Permissions)
-	}
-	job := wf.Jobs["comment"]
-	if len(wf.Jobs) != 1 || job.If != "github.event.workflow_run.event == 'pull_request'" || job.Timeout <= 0 {
-		t.Fatal("reporter must be bounded and accept only pull-request runs")
-	}
-	var installed, downloaded, posted bool
-	for _, step := range job.Steps {
-		if strings.Contains(step.Uses, "checkout") {
-			t.Fatal("reporter must not check out pull-request code")
-		}
-		if strings.Contains(step.Run, "go install") {
-			const revision = "da696087020498e386877a358ecc0ed7413327bc"
-			installed = strings.Contains(step.Run, "github.com/nao1215/himorime@"+revision) && strings.Contains(step.Run, "github.com/nao1215/himorime/cmd/himorime-comment@"+revision)
-		}
-		if strings.HasPrefix(step.Uses, "actions/download-artifact@") {
-			downloaded = step.With["name"] == "himorime-report" && step.With["run-id"] == "${{ github.event.workflow_run.id }}" && step.With["path"] == "${{ runner.temp }}"
-		}
-		if step.Run == `himorime comment "$RUNNER_TEMP/himorime.json"` {
-			posted = installed && downloaded && step.Env["GITHUB_TOKEN"] == "${{ github.token }}"
-		} else if step.Env["GITHUB_TOKEN"] != "" {
-			t.Fatal("only the comment step may receive GITHUB_TOKEN")
+	for _, obsolete := range []string{".github/workflows/comment-benchmark.yml", "examples/github-actions/comment.yml"} {
+		if _, err := os.Stat(filepath.Join(root, obsolete)); !os.IsNotExist(err) {
+			t.Errorf("obsolete reporter still exists: %s", obsolete)
 		}
 	}
-	if !posted {
-		t.Fatal("reporter must install both binaries and post the triggering run's artifact")
-	}
-	if example := read(t, filepath.Join(root, "examples", "github-actions", "comment.yml")); !strings.HasSuffix(example, text) {
-		t.Fatal("the comment example must match the deployed workflow")
+	for _, path := range []string{".github/workflows/benchmark.yml", "examples/github-actions/benchmark.yml"} {
+		text := read(t, filepath.Join(root, path))
+		var wf struct {
+			On          map[string]any    `yaml:"on"`
+			Permissions map[string]string `yaml:"permissions"`
+			Jobs        map[string]struct {
+				Permissions map[string]string `yaml:"permissions"`
+				Steps       []struct {
+					Uses string            `yaml:"uses"`
+					Run  string            `yaml:"run"`
+					If   string            `yaml:"if"`
+					With map[string]string `yaml:"with"`
+					Env  map[string]string `yaml:"env"`
+				} `yaml:"steps"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal([]byte(text), &wf); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := wf.On["pull_request"]; !ok {
+			t.Fatal("benchmark must run on pull requests")
+		}
+		if wf.Permissions["contents"] != "read" || len(wf.Permissions) != 1 {
+			t.Fatal("top-level permissions must stay read-only")
+		}
+		for _, job := range wf.Jobs {
+			if job.Permissions["contents"] != "read" || job.Permissions["pull-requests"] != "write" || len(job.Permissions) != 2 {
+				t.Fatal("only benchmark job may publish comments")
+			}
+			var installed, measured, uploaded bool
+			for _, step := range job.Steps {
+				if strings.HasPrefix(step.Uses, "nao1215/setup-himorime@") {
+					installed = step.Uses == "nao1215/setup-himorime@30710690b8b2dc8c61df8bf289f5bb899af3fbfa"
+				}
+				if strings.Contains(step.Run, "himorime ci ") {
+					measured = installed && strings.Contains(step.Run, `--output "$RUNNER_TEMP/himorime.json"`) && strings.Contains(step.Run, "--format json")
+				}
+				if strings.HasPrefix(step.Uses, "actions/upload-artifact@") {
+					uploaded = step.If == "always()" && step.With["name"] == "himorime-report" && step.With["path"] == "${{ runner.temp }}/himorime.json"
+				}
+				if step.Env["GITHUB_TOKEN"] != "" || step.Env["GH_TOKEN"] != "" {
+					t.Fatal("measured commands must not receive the publication token")
+				}
+				if strings.Contains(step.Run, "himorime comment") {
+					t.Fatal("comment command must not be needed")
+				}
+			}
+			if !installed || !measured || !uploaded {
+				t.Fatalf("%s: setup, report and artifact contract is incomplete", path)
+			}
+		}
 	}
 }
 

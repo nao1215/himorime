@@ -314,7 +314,7 @@ func comparisonView(mc *MetricComparison) comparisonRow {
 	}
 	def := metric.MustLookup(metric.Name(mc.Metric))
 	unit := workUnitFromUnit(mc.Unit)
-	row.tolerance = FormatMetricTolerance(mc)
+	row.tolerance = formatMetricTolerance(mc)
 	if mc.Verdict == VerdictSkipped {
 		return row
 	}
@@ -326,16 +326,16 @@ func comparisonView(mc *MetricComparison) comparisonRow {
 			sign = ""
 		}
 		row.diff = sign + metric.Format(def.Kind, *mc.Difference, unit)
-		row.change = FormatChange(mc.ChangePercent)
-		row.interval = fmt.Sprintf("%s … %s", FormatChange(mc.CILowPercent), FormatChange(mc.CIHighPercent))
+		row.change = formatChange(mc.ChangePercent)
+		row.interval = fmt.Sprintf("%s … %s", formatChange(mc.CILowPercent), formatChange(mc.CIHighPercent))
 	}
 	row.confidence = formatMetricConfidence(mc)
 	return row
 }
 
-// FormatMetricTolerance renders the tolerated degradation in the direction
+// formatMetricTolerance renders the tolerated degradation in the direction
 // the metric degrades: +10% for latency, -8% for throughput.
-func FormatMetricTolerance(mc *MetricComparison) string {
+func formatMetricTolerance(mc *MetricComparison) string {
 	if mc == nil {
 		return "-"
 	}

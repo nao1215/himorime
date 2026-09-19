@@ -35,8 +35,6 @@ go.work.sum
 /dist/
 /himorime
 /himorime.exe
-/himorime-comment
-/himorime-comment.exe
 /completions/
 cover.html
 

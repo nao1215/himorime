@@ -15,24 +15,19 @@ import (
 )
 
 // WriteReport writes the complete tables to the Actions log and, if configured,
-// appends identical tables to the job summary. It returns the reporting run URL.
+// appends identical tables to the job summary.
 // Outside Actions it does nothing. Summary failures leave the log available.
-func (e Env) WriteReport(w io.Writer, r *report.Report, sourceURL string) (string, error) {
+func (e Env) WriteReport(w io.Writer, r *report.Report) error {
 	if !e.Actions {
-		return "", nil
+		return nil
 	}
 	var body bytes.Buffer
 	if err := report.WriteGitHubSummary(&body, r); err != nil {
-		return e.runURL, err
+		return err
 	}
-	if sourceURL != "" || e.runURL != "" {
+	if e.runURL != "" {
 		body.WriteString("\n| Execution | URL |\n|---|---|\n")
-		if sourceURL != "" {
-			fmt.Fprintf(&body, "| Source run | %s |\n", report.EscapeMarkdown(sourceURL))
-		}
-		if e.runURL != "" {
-			fmt.Fprintf(&body, "| Reporting run | %s |\n", report.EscapeMarkdown(e.runURL))
-		}
+		fmt.Fprintf(&body, "| Actions run | %s |\n", report.EscapeMarkdown(e.runURL))
 		body.WriteByte('\n')
 	}
 	// Reports contain untrusted command output. Disable runner command parsing
@@ -42,17 +37,17 @@ func (e Env) WriteReport(w io.Writer, r *report.Report, sourceURL string) (strin
 	_, writeErr := w.Write(body.Bytes())
 	_, endErr := fmt.Fprintf(w, "::%s::\n", token)
 	if err := errors.Join(startErr, writeErr, endErr); err != nil {
-		return e.runURL, fmt.Errorf("write Actions log: %w", err)
+		return fmt.Errorf("write Actions log: %w", err)
 	}
 	if e.StepSummary == "" {
-		return e.runURL, nil
+		return nil
 	}
 	f, err := os.OpenFile(e.StepSummary, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
-		return e.runURL, fmt.Errorf("open job summary: %w", err)
+		return fmt.Errorf("open job summary: %w", err)
 	}
 	_, err = f.Write(body.Bytes())
-	return e.runURL, errors.Join(err, f.Close())
+	return errors.Join(err, f.Close())
 }
 
 func actionsRunURL(server, repository, run string) string {

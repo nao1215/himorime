@@ -1,7 +1,6 @@
 .DEFAULT_GOAL := help
 
 APP        := himorime
-COMMENT_APP := himorime-comment
 VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS    := -s -w -X github.com/nao1215/himorime/internal/buildinfo.Version=$(VERSION)
 PKGS       := ./...
@@ -12,17 +11,16 @@ ACTIONLINT := v1.7.12
 FUZZTIME   ?= 10s
 
 .PHONY: build
-build: ## Build himorime and its pull request comment helper
+build: ## Build himorime
 	CGO_ENABLED=0 go build -trimpath -ldflags '$(LDFLAGS)' -o $(APP) .
-	CGO_ENABLED=0 go build -trimpath -ldflags '$(LDFLAGS)' -o $(COMMENT_APP) ./cmd/himorime-comment
 
 .PHONY: install
-install: ## Install himorime and its pull request comment helper
-	CGO_ENABLED=0 go install -trimpath -ldflags '$(LDFLAGS)' . ./cmd/himorime-comment
+install: ## Install himorime
+	CGO_ENABLED=0 go install -trimpath -ldflags '$(LDFLAGS)' .
 
 .PHONY: clean
 clean: ## Remove build, test and site artifacts
-	rm -rf $(APP) $(APP).exe $(COMMENT_APP) $(COMMENT_APP).exe dist completions cover.out cover.html website/public website/resources
+	rm -rf $(APP) $(APP).exe dist completions cover.out cover.html website/public website/resources
 
 .PHONY: fmt
 fmt: ## Format Go code
@@ -88,7 +86,7 @@ vuln: ## Run govulncheck
 
 .PHONY: actionlint
 actionlint: ## Lint the GitHub Actions workflows and example workflows
-	actionlint .github/workflows/*.yml examples/github-actions/benchmark.yml examples/github-actions/comment.yml
+	actionlint .github/workflows/*.yml examples/github-actions/benchmark.yml
 
 .PHONY: release-check
 release-check: ## Validate .goreleaser.yml

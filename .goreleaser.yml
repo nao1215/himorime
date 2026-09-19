@@ -22,15 +22,6 @@ builds:
     ldflags:
       - -s -w -X github.com/nao1215/himorime/internal/buildinfo.Version=v{{ .Version }}
     mod_timestamp: "{{ .CommitTimestamp }}"
-  - id: himorime-comment
-    main: ./cmd/himorime-comment
-    binary: himorime-comment
-    env:
-      - CGO_ENABLED=0
-    goos: [linux, darwin, windows]
-    goarch: [amd64, arm64]
-    flags: [-trimpath]
-    mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
   - id: default
@@ -102,7 +93,7 @@ nfpms:
 # mention Homebrew only once a release has actually been published there.
 homebrew_casks:
   - name: himorime
-    binaries: [himorime, himorime-comment]
+    binaries: [himorime]
     directory: Casks
     homepage: https://nao1215.github.io/himorime/
     description: Performance budgets and regression checks for command-line programs
