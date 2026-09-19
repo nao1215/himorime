@@ -201,7 +201,7 @@ Every value is typed; himorime never compares a formatted string.
 |---|---|---|
 | Duration | a number with a unit: `ns`, `us` (or `µs`), `ms`, `s`, `m`, `h`, such as `500ms`, `1.5s` or `1m30s` | timeouts, latency and CPU time budgets, `min_difference` of latency and CPU |
 | Byte size | a number with `B`, `KB`, `MB`, `GB`, `TB` (powers of 1000) or `KiB`, `MiB`, `GiB`, `TiB` (powers of 1024), such as `64MiB` | peak RSS budgets, `memory.min_difference` |
-| Rate | a number, the work unit and `/s`, such as `50MiB/s` or `"1000 records/s"` | throughput budgets, `throughput.min_difference` |
+| Rate | a number, the work unit and `/s`, such as `50MiB/s` or `"1000 records/s"` | throughput budgets |
 | Percentage | a number (`10`) or a string with a percent sign (`"10%"`) | `max_percent`, CPU utilization budgets |
 
 A bare number is rejected where a unit is expected, because `10` could mean ten of anything. Units are case-sensitive: `64mib` is an error. Durations may not exceed `24h`; a budget's limit and a work value must be greater than zero.

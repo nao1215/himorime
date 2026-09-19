@@ -1,11 +1,9 @@
 // Package config loads, validates and resolves himorime suite files.
 //
 // A suite file is versioned YAML (see schema/himorime.schema.json). Loading
-// happens in three stages: strict decoding into the Raw types, which rejects
-// unknown keys and wrong types; semantic validation, which collects every
-// problem it finds with its position in the file; and resolution into the
-// Suite model, where every inherited default has been applied. Nothing in
-// this package runs a command.
+// validates the schema before strict decoding into Raw types, then performs
+// semantic validation and resolves inherited defaults into the Suite model.
+// Nothing in this package runs a command.
 package config
 
 import (
@@ -22,7 +20,7 @@ const SupportedVersion = "1"
 const DefaultFileName = "himorime.yaml"
 
 // Defaults applied when a suite does not set a value. They are documented in
-// the Configuration page, which TestDocsDefaultsInSync keeps in step.
+// the generated Configuration page table.
 const (
 	DefaultWarmup        = 1
 	DefaultMinRuns       = 10

@@ -795,10 +795,34 @@ func TestBashCompletionLoads(t *testing.T) {
 func TestParseFlagsAnywhere(t *testing.T) {
 	fs, v := newFlagSet("run")
 	var stdout, stderr bytes.Buffer
-	operands, _, ok := parseFlags(fs, []string{"a.yaml", "--format", "json", "b.yaml", "--", "--weird.yaml"}, &stdout, &stderr)
+	operands, _, ok := parseFlags(fs, []string{"a.yaml", "--format", "json", "b.yaml", "--", "--weird.yaml", "--also-weird.yaml"}, &stdout, &stderr)
 	f, _ := v.(*measureFlags)
-	if !ok || f.format != "json" || strings.Join(operands, " ") != "a.yaml b.yaml --weird.yaml" {
+	if !ok || f.format != "json" || strings.Join(operands, " ") != "a.yaml b.yaml --weird.yaml --also-weird.yaml" {
 		t.Fatalf("operands = %v, format = %s, ok = %v", operands, f.format, ok)
+	}
+	fs, v = newFlagSet("run")
+	operands, _, ok = parseFlags(fs, []string{"--format", "json", "--", "--first.yaml", "--second.yaml"}, &stdout, &stderr)
+	f, _ = v.(*measureFlags)
+	if !ok || f.format != "json" || strings.Join(operands, " ") != "--first.yaml --second.yaml" {
+		t.Fatalf("operands after delimiter = %v, format = %s, ok = %v", operands, f.format, ok)
+	}
+	fs, v = newFlagSet("run")
+	operands, _, ok = parseFlags(fs, []string{"--format", "--", "a.yaml", "--format=--", "b.yaml"}, &stdout, &stderr)
+	f, _ = v.(*measureFlags)
+	if !ok || f.format != "--" || strings.Join(operands, " ") != "a.yaml b.yaml" {
+		t.Fatalf("flag value resembling delimiter = %v, format = %s, ok = %v", operands, f.format, ok)
+	}
+	fs, v = newFlagSet("run")
+	operands, _, ok = parseFlags(fs, []string{"--format=--", "a.yaml"}, &stdout, &stderr)
+	f, _ = v.(*measureFlags)
+	if !ok || f.format != "--" || strings.Join(operands, " ") != "a.yaml" {
+		t.Fatalf("equals flag value resembling delimiter = %v, format = %s, ok = %v", operands, f.format, ok)
+	}
+	fs, v = newFlagSet("run")
+	operands, _, ok = parseFlags(fs, []string{"a.yaml", "--format", "--", "b.yaml"}, &stdout, &stderr)
+	f, _ = v.(*measureFlags)
+	if !ok || f.format != "--" || strings.Join(operands, " ") != "a.yaml b.yaml" {
+		t.Fatalf("flag value after operand = %v, format = %s, ok = %v", operands, f.format, ok)
 	}
 	var tags stringList
 	if err := tags.Set("a, b"); err != nil || tags.String() != "a,b" {
@@ -806,6 +830,27 @@ func TestParseFlagsAnywhere(t *testing.T) {
 	}
 	if err := tags.Set("a,,b"); err == nil {
 		t.Fatal("an empty tag was accepted")
+	}
+}
+
+func TestOutcomeForSummary(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		sum  report.Summary
+		want string
+	}{
+		{name: "inconclusive only", sum: report.Summary{ExitCode: exitcode.Failed, Inconclusive: 1}, want: "a comparison was inconclusive"},
+		{name: "regression and inconclusive", sum: report.Summary{ExitCode: exitcode.Failed, Regression: 1, Inconclusive: 1}, want: "a budget or regression threshold was violated"},
+		{name: "budget", sum: report.Summary{ExitCode: exitcode.Failed, OverBudget: 1}, want: "a budget or regression threshold was violated"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := outcomeForSummary(tt.sum); !strings.Contains(got, tt.want) {
+				t.Fatalf("outcome = %q, want it to contain %q", got, tt.want)
+			}
+		})
 	}
 }
 

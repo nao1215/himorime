@@ -19,11 +19,14 @@ func TestAllIsCompleteAndOrdered(t *testing.T) {
 func TestOutcome(t *testing.T) {
 	t.Parallel()
 	for _, code := range []int{Failed, Execution, Metric} {
-		if Outcome(code) == "" {
+		if Outcome(code, false) == "" {
 			t.Errorf("Outcome(%d) is empty", code)
 		}
 	}
-	if Outcome(OK) != "" || Outcome(Config) != "" {
+	if Outcome(OK, false) != "" || Outcome(Config, false) != "" {
 		t.Error("statuses reported before measuring need no outcome line")
+	}
+	if got := Outcome(Failed, true); got != "performance check failed: a comparison was inconclusive (the measurement itself succeeded)" {
+		t.Errorf("inconclusive outcome = %q", got)
 	}
 }

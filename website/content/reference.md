@@ -74,7 +74,7 @@ Builds the suite's artifact when a build section exists, then measures every sel
 himorime compare --against REF [flags] [PATH...]
 ```
 
-Checks REF out into a temporary Git worktree, builds both REF and the current working tree (uncommitted changes included), and measures them interleaved on this machine. Commands run in ${root} of each revision, so each runs its own code; ${head_root} names the working tree's copy for shared fixtures. Every measured metric is compared in the direction that is worse for it; a metric with regression.<metric>.gate: false is reported but never fails. The working tree, index and branches are never modified. Exits 1 on a gated regression or an exceeded budget.
+Checks REF out into a temporary Git worktree, builds both REF and the current working tree (uncommitted changes included), and measures them interleaved on this machine. Commands run in ${root} of each revision, so each runs its own code; ${head_root} names the working tree's copy for shared fixtures. Every measured metric is compared in the direction that is worse for it; a metric with `regression.<metric>.gate: false` is reported but never fails. The working tree, index and branches are never modified. Exits 1 on a gated regression or an exceeded budget.
 
 | Flag | Description |
 |---|---|
@@ -164,7 +164,7 @@ Shows the command list, or the usage and flags of one command.
 | `3` | usage | The command line is invalid: an unknown flag or command, a missing argument, or no benchmark matched the selection. |
 | `4` | execution | A measured command, hook or build failed or timed out, a Git operation failed, the base revision could not be resolved, or the run was interrupted. |
 | `5` | internal | himorime hit an unexpected internal error. Please report it. |
-| `6` | metric | A requested metric (throughput, cpu or memory) could not be measured: this platform does not support it and metrics.unsupported is fail, or the operating system did not report it. The commands themselves ran. |
+| `6` | metric | A requested metric (throughput, cpu or memory) could not be measured: this platform does not support it and metrics.unsupported is fail, or the operating system did not report it. Depending on the cause, the commands may not have run. |
 <!-- END GENERATED: exit-codes -->
 
 Execution failures take precedence over metric failures, which take precedence over performance failures. An inconclusive comparison exits 0 unless `--fail-on-inconclusive` is set. JSON reports record the chosen status in `summary.exit_code`.

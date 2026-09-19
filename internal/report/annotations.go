@@ -31,7 +31,7 @@ func WriteAnnotations(w io.Writer, r *Report) error {
 			annotate(&sb, "error", errorTitle(s.Error), file, fmt.Sprintf("suite %s: %s", s.Name, errorLine(s.Error)))
 		}
 		if s.NewInHead {
-			// Nothing failed; the notice explains why the suite has no results.
+			// The notice explains that head was measured without a base suite.
 			annotate(&sb, "notice", TitleNewInHead, file, fmt.Sprintf("suite %s: %s", s.Name, newInHeadLine(s)))
 		}
 		for _, b := range s.Benchmarks {

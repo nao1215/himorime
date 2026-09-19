@@ -1,8 +1,8 @@
 // Package exitcode defines himorime's exit statuses, a stable public contract.
 //
-// The table returned by All is the single source for the Exit Codes
-// documentation page; TestDocsExitCodesInSync fails when the page and this
-// table disagree.
+// The table returned by All is the single source for the exit-codes
+// documentation table; the documentation sync test fails when the page and
+// this table disagree.
 package exitcode
 
 // Exit statuses.
@@ -22,7 +22,8 @@ const (
 	// Internal: a bug or an unexpected environment failure inside himorime.
 	Internal = 5
 	// Metric: a requested metric could not be measured, because the platform
-	// does not support it or reading it failed.
+	// does not support it or reading it failed. This can be detected before
+	// any command is executed.
 	Metric = 6
 )
 
@@ -42,16 +43,20 @@ func All() []Code {
 		{Usage, "usage", "The command line is invalid: an unknown flag or command, a missing argument, or no benchmark matched the selection."},
 		{Execution, "execution", "A measured command, hook or build failed or timed out, a Git operation failed, the base revision could not be resolved, or the run was interrupted."},
 		{Internal, "internal", "himorime hit an unexpected internal error. Please report it."},
-		{Metric, "metric", "A requested metric (throughput, cpu or memory) could not be measured: this platform does not support it and metrics.unsupported is fail, or the operating system did not report it. The commands themselves ran."},
+		{Metric, "metric", "A requested metric (throughput, cpu or memory) could not be measured: this platform does not support it and metrics.unsupported is fail, or the operating system did not report it. Depending on the cause, the commands may not have run."},
 	}
 }
 
-// Outcome is the one-line explanation of a non-zero status printed at the end
-// of a run, so a CI log tells a performance failure apart from a failure to
-// measure. It is "" for statuses that need no explanation.
-func Outcome(code int) string {
+// Outcome returns the one-line explanation of a non-zero status printed at
+// the end of a run, so a CI log tells a performance failure apart from a
+// failure to measure. Set inconclusiveOnly when exit 1 was caused solely by
+// --fail-on-inconclusive. It is "" for statuses that need no explanation.
+func Outcome(code int, inconclusiveOnly bool) string {
 	switch code {
 	case Failed:
+		if inconclusiveOnly {
+			return "performance check failed: a comparison was inconclusive (the measurement itself succeeded)"
+		}
 		return "performance check failed: a budget or regression threshold was violated (the measurement itself succeeded)"
 	case Execution:
 		return "the measurement did not complete: a command, hook, build or Git operation failed, or the run was interrupted"
