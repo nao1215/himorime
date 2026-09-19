@@ -1,7 +1,8 @@
 ---
 title: Metrics
-description: What himorime measures — latency, throughput, CPU time and utilization, peak RSS — in which unit, over which processes, on which platform, and what it cannot tell you.
+description: How himorime measures latency, throughput, CPU time, utilization and peak RSS across platforms.
 toc: true
+aliases: ["/platforms/"]
 ---
 
 Every benchmark measures latency. Throughput, CPU and memory are switched on per benchmark, or for all benchmarks under `defaults`:
@@ -32,6 +33,18 @@ benchmarks:
         cpu: {total: {median: "<= 70ms"}}
         memory: {peak_rss: {max: "<= 64MiB"}}
 ```
+
+## Platform support
+
+Release archives cover Linux, macOS and Windows on amd64 and arm64. FreeBSD, OpenBSD and NetBSD build but do not have release archives.
+
+| Behavior | Linux, macOS | Windows |
+|---|---|---|
+| `shell: true` | `/bin/sh -c` | `cmd.exe /d /s /c` |
+| `${artifact}` and `${exe}` | no suffix | `.exe` |
+| `terminal: true` | supported | unsupported |
+
+Compare results only within one operating system. Process creation, memory accounting and CPU resolution differ across platforms. The process-tree section below lists the collection method for each metric.
 
 ## The metrics
 

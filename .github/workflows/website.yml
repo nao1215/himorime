@@ -40,7 +40,7 @@ jobs:
           HUGO_PARAMS_BUILDCOMMIT: ${{ github.sha }}
       - name: Every page exists
         run: |
-          for page in getting-started install configuration commands reports regression-detection github-actions cookbook comparison real-world platforms exit-codes troubleshooting security; do
+          for page in getting-started install configuration metrics reports regression-detection github-actions cookbook real-world reference troubleshooting; do
             test -s "website/public/${page}/index.html" || { echo "missing page: ${page}"; exit 1; }
           done
           test -s website/public/index.html

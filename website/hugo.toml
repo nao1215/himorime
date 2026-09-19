@@ -41,11 +41,6 @@ pageRef = "/metrics"
 weight = 22
 
 [[menus.main]]
-name = "Commands"
-pageRef = "/commands"
-weight = 25
-
-[[menus.main]]
 name = "Reports"
 pageRef = "/reports"
 weight = 30
@@ -66,18 +61,13 @@ pageRef = "/cookbook"
 weight = 45
 
 [[menus.main]]
-name = "Compared"
-pageRef = "/comparison"
+name = "Real-world"
+pageRef = "/real-world"
 weight = 50
 
 [[menus.main]]
-name = "Real-world"
-pageRef = "/real-world"
-weight = 52
-
-[[menus.main]]
 name = "Reference"
-pageRef = "/exit-codes"
+pageRef = "/reference"
 weight = 55
 
 [module]
