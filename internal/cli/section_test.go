@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,86 @@ import (
 
 	"github.com/nao1215/himorime/internal/exitcode"
 )
+
+func TestSuiteReportRejectsEscapingSymlinks(t *testing.T) {
+	for _, kind := range []string{"file", "directory", "dangling", "section"} {
+		t.Run(kind, func(t *testing.T) {
+			dir, outside := t.TempDir(), t.TempDir()
+			target := filepath.Join(outside, "report.md")
+			write(t, target, sectionDoc)
+			link, destination := filepath.Join(dir, "out"), "out"
+			linkTarget := target
+			if kind == "directory" || kind == "section" {
+				linkTarget, destination = outside, "out/report.md"
+			}
+			if kind == "dangling" {
+				linkTarget = filepath.Join(outside, "missing.json")
+			}
+			if err := os.Symlink(linkTarget, link); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+			output := fmt.Sprintf("{format: json, path: %s}", destination)
+			if kind == "section" {
+				output = fmt.Sprintf("{format: markdown, path: %s, section: bench}", destination)
+			}
+			write(t, filepath.Join(dir, "himorime.yaml"), suite(t, oneBenchmark)+"report:\n  outputs: ["+output+"]\n")
+			if r := run(t, dir, nil, "run", "--quiet"); r.code != exitcode.Execution {
+				t.Errorf("escaping output accepted: %+v", r)
+			}
+			if data, _ := os.ReadFile(target); string(data) != sectionDoc {
+				t.Error("outside file was changed")
+			}
+			if _, err := os.Stat(filepath.Join(outside, "missing.json")); !os.IsNotExist(err) {
+				t.Error("dangling link target was created")
+			}
+		})
+	}
+}
+
+func TestReportDestinationsConflictBeforeMeasuring(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, oneBenchmark)+"report:\n  outputs: [{format: json, path: out.json}]\n")
+	write(t, filepath.Join(dir, "out.json"), "keep me")
+	for _, flags := range [][]string{{"--output", "./out.json"}, {"--summary", "out.json"}} {
+		args := append([]string{"run"}, flags...)
+		r := run(t, dir, nil, args...)
+		if r.code != exitcode.Usage || strings.Contains(r.stderr, "finished after") || !strings.Contains(r.stderr, "conflict") {
+			t.Errorf("%v: %+v", flags, r)
+		}
+		if data, _ := os.ReadFile(filepath.Join(dir, "out.json")); string(data) != "keep me" {
+			t.Fatal("conflicting destination was overwritten")
+		}
+	}
+}
+
+func TestReportDestinationAliasesAndSections(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "doc.md"), sectionDoc+"\n<!-- himorime:begin second -->\nold\n<!-- himorime:end second -->\n")
+	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, oneBenchmark)+"report:\n  outputs: [{format: markdown, path: doc.md, section: bench}]\n")
+	if r := run(t, dir, nil, "run", "--quiet", "--format", "markdown", "--output", "doc.md", "--section", "second"); r.code != exitcode.OK {
+		t.Fatalf("distinct sections conflict: %+v", r)
+	}
+	for _, name := range []string{"first.yaml", "second.yaml"} {
+		write(t, filepath.Join(dir, name), suite(t, oneBenchmark)+"report:\n  outputs: [{format: json, path: shared.json}]\n")
+	}
+	if r := run(t, dir, nil, "run", "first.yaml", "second.yaml"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "conflict") {
+		t.Fatalf("cross-suite conflict: %+v", r)
+	}
+	if err := os.Symlink("doc.md", filepath.Join(dir, "alias.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if r := run(t, dir, nil, "run", "--output", "alias.md"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "conflict") {
+		t.Fatalf("symlink alias conflict: %+v", r)
+	}
+	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, oneBenchmark)+"report:\n  outputs: [{format: json, path: alias.md}]\n")
+	if r := run(t, dir, nil, "run", "--quiet"); r.code != exitcode.OK {
+		t.Fatalf("in-bound symlink output: %+v", r)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "doc.md"))
+	if !json.Valid(data) {
+		t.Fatalf("in-bound symlink was not followed: %s", data)
+	}
+}
 
 const oneBenchmark = `version: "1"
 suite: {name: docs}

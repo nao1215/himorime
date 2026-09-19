@@ -150,6 +150,13 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 	}
 	compare := m.cmd != "run"
 	gh := ghactions.FromLookup(a.LookupEnv)
+	if err := checkReportDestinations(suites, f, gh, m.cmd == "ci"); err != nil {
+		fmt.Fprintf(a.Stderr, "himorime: %v\n", err)
+		if errors.Is(err, errReportConflict) {
+			return exitcode.Usage
+		}
+		return exitcode.Execution
+	}
 	ref, baseSource, code := m.baseRef(gh)
 	if code != 0 {
 		return code
@@ -571,9 +578,9 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh 
 
 	var errs []error
 	if f.section != "" {
-		errs = append(errs, report.UpdateMarkdownSection(f.output, f.section, rep))
+		errs = append(errs, writeSection(f.output, f.section, rep))
 	} else if f.output != "" {
-		errs = append(errs, writeFile(f.output, false, func(w io.Writer) error {
+		errs = append(errs, writeFile(nil, f.output, false, func(w io.Writer) error {
 			return report.Write(w, config.Format(f.format), rep, false)
 		}))
 	} else if err := report.Write(a.Stdout, config.Format(f.format), rep, color); err != nil {
@@ -583,16 +590,13 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh 
 	for _, ls := range suites {
 		for _, o := range ls.suite.Outputs {
 			p := filepath.Join(ls.suite.Dir, filepath.FromSlash(o.Path))
-			format := o.Format
-			if o.Section != "" {
-				errs = append(errs, report.UpdateMarkdownSection(p, o.Section, rep))
+			if err := writeSuiteReport(ls.suite.Dir, o, rep); err != nil {
+				errs = append(errs, fmt.Errorf("write report %s: %w", p, err))
+			} else if o.Section != "" {
 				m.logf("updated section %s of %s", o.Section, p)
-				continue
+			} else {
+				m.logf("wrote %s report to %s", o.Format, p)
 			}
-			errs = append(errs, writeFile(p, false, func(w io.Writer) error {
-				return report.Write(w, format, rep, false)
-			}))
-			m.logf("wrote %s report to %s", format, p)
 		}
 	}
 
@@ -604,7 +608,7 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh 
 		summaries = append(summaries, gh.StepSummary)
 	}
 	for _, p := range summaries {
-		errs = append(errs, writeFile(p, true, func(w io.Writer) error {
+		errs = append(errs, writeFile(nil, p, true, func(w io.Writer) error {
 			return report.WriteGitHubSummary(w, rep)
 		}))
 	}
@@ -616,9 +620,13 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite, gh 
 	return 0
 }
 
-func writeFile(path string, appendMode bool, write func(io.Writer) error) error {
+func writeFile(root *os.Root, path string, appendMode bool, write func(io.Writer) error) error {
+	mkdir, open := os.MkdirAll, os.OpenFile
+	if root != nil {
+		mkdir, open = root.MkdirAll, root.OpenFile
+	}
 	if dir := filepath.Dir(path); dir != "." {
-		if err := os.MkdirAll(dir, 0o750); err != nil {
+		if err := mkdir(dir, 0o750); err != nil {
 			return fmt.Errorf("create report directory %s: %w", dir, err)
 		}
 	}
@@ -626,7 +634,7 @@ func writeFile(path string, appendMode bool, write func(io.Writer) error) error 
 	if appendMode {
 		flags = os.O_CREATE | os.O_WRONLY | os.O_APPEND
 	}
-	file, err := os.OpenFile(path, flags, 0o644) //nolint:gosec // report paths are chosen by the user
+	file, err := open(path, flags, 0o644)
 	if err != nil {
 		return fmt.Errorf("open report file: %w", err)
 	}

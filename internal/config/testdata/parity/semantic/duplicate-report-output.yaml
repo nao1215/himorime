@@ -1,0 +1,10 @@
+# expect: conflicts with report.outputs[0]
+version: "1"
+suite: {name: outputs}
+benchmarks:
+  - name: test
+    commands: {app: {command: [app]}}
+report:
+  outputs:
+    - {format: json, path: out.json}
+    - {format: csv, path: ./out.json}

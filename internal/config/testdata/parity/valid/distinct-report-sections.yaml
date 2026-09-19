@@ -1,0 +1,9 @@
+version: "1"
+suite: {name: outputs}
+benchmarks:
+  - name: test
+    commands: {app: {command: [app]}}
+report:
+  outputs:
+    - {format: markdown, path: report.md, section: first}
+    - {format: markdown, path: report.md, section: second}

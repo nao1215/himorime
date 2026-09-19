@@ -70,6 +70,11 @@ func (v *validator) resolve(raw *RawFile) *Suite {
 	if raw.Report != nil {
 		rp := root.key("report")
 		for i, o := range raw.Report.Outputs {
+			for j, prev := range s.Outputs {
+				if filepath.Clean(filepath.FromSlash(prev.Path)) == filepath.Clean(filepath.FromSlash(o.Path)) && (prev.Section == "" || o.Section == "" || prev.Section == o.Section) {
+					v.add(rp.key("outputs").index(i).key("path"), "use different files or distinct Markdown sections", "report output conflicts with report.outputs[%d]", j)
+				}
+			}
 			if o.Section != "" && Format(o.Format) != FormatMarkdown {
 				v.add(rp.key("outputs").index(i).key("section"), "a section replaces part of a Markdown file; remove section, or set format: markdown",
 					"section is only allowed with format: markdown, not %s", o.Format)

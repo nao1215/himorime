@@ -43,6 +43,9 @@ func TestLoadRejectsReportSectionsAndVersions(t *testing.T) {
 		want   string
 		field  string
 	}{
+		{"duplicate output", "outputs: [{format: json, path: out.json}, {format: csv, path: ./out.json}]", "conflicts with report.outputs[0]", "report.outputs[1].path"},
+		{"duplicate section", "outputs: [{format: markdown, path: out.md, section: bench}, {format: markdown, path: out.md, section: bench}]", "conflicts with report.outputs[0]", "report.outputs[1].path"},
+		{"whole file and section", "outputs: [{format: markdown, path: out.md}, {format: markdown, path: out.md, section: bench}]", "conflicts with report.outputs[0]", "report.outputs[1].path"},
 		{"section with json", "outputs: [{format: json, path: x.json, section: bench}]", "section is only allowed with format: markdown", "report.outputs[0].section"},
 		{"uppercase section", "outputs: [{format: markdown, path: x.md, section: Bench}]", `invalid section name "Bench"`, "report.outputs[0].section"},
 		{"empty section", "outputs: [{format: markdown, path: x.md, section: \"\"}]", `invalid section name ""`, "report.outputs[0].section"},

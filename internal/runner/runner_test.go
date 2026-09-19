@@ -63,6 +63,14 @@ func TestMain(m *testing.M) {
 		_, _ = io.WriteString(os.Stdout, os.Getenv(args[0]))
 	case "print":
 		_, _ = io.WriteString(os.Stdout, strings.Join(args, " "))
+	case "hook-output":
+		_, _ = io.WriteString(os.Stdout, strings.Repeat("x", 4096)+os.Getenv("SUITE_TOKEN")+" stdout detail")
+		_, _ = io.WriteString(os.Stderr, "stderr detail")
+		if args[0] == "timeout" {
+			time.Sleep(time.Minute)
+		}
+		code, _ := strconv.Atoi(args[0])
+		os.Exit(code)
 	case "copy":
 		data, err := os.ReadFile(args[0])
 		if err != nil {
@@ -122,6 +130,34 @@ type fixture struct {
 	suite  *config.Suite
 	runner *Runner
 	side   Side
+}
+
+func TestHookFailureRetainsStdout(t *testing.T) {
+	t.Parallel()
+	for _, status := range []string{"3", "timeout", "0"} {
+		t.Run(status, func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t)
+			h := f.helper("hook-output", status)
+			h.Env = append(h.Env, config.EnvVar{Name: "SUITE_TOKEN", Value: "secret-output-value"})
+			if status == "timeout" {
+				h.Timeout = 100 * time.Millisecond
+			}
+			b := bench("hook diagnostics", 1, f.command("ok", "ok"))
+			b.Setup = []config.Exec{h}
+			res := f.runner.Measure(context.Background(), b, []Side{f.side})
+			if status == "0" {
+				if res.Failure != nil {
+					t.Fatalf("successful hook: %+v", res.Failure)
+				}
+				return
+			}
+			fail := res.Failure
+			if fail == nil || !strings.Contains(fail.Message, "stdout detail") || strings.Contains(fail.Message, "secret-output-value") || !strings.Contains(fail.Message, "***") || fail.Stderr != "stderr detail" || len(fail.Message) > 3000 {
+				t.Fatalf("hook diagnostics: %+v", fail)
+			}
+		})
+	}
 }
 
 func newFixture(t *testing.T) *fixture {

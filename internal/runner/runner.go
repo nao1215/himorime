@@ -474,9 +474,22 @@ func (r *Runner) runHook(ctx context.Context, e config.Exec, vars config.Vars, d
 		_ = errFile.Close()
 		_ = os.Remove(errFile.Name())
 	}()
-	// nil is the null device. A Go writer such as io.Discard would make Wait
-	// also wait for background processes that inherited the output pipe.
-	return r.runProcess(ctx, e, vars, dir, kind, label, nil, errFile)
+	outFile, err := os.CreateTemp(r.TempDir, "hook-stdout-")
+	if err != nil {
+		return &Failure{Kind: FailInternal, Message: fmt.Sprintf("capture stdout: %v", err)}
+	}
+	defer func() {
+		_ = outFile.Close()
+		_ = os.Remove(outFile.Name())
+	}()
+	// Files avoid waiting for inherited output pipes held by descendants.
+	f := r.runProcess(ctx, e, vars, dir, kind, label, outFile, errFile)
+	if f != nil {
+		if tail := r.tail(outFile.Name()); tail != "" {
+			f.Message += "\nstdout: " + tail
+		}
+	}
+	return f
 }
 
 // versionOutputBytes bounds how much of a version command's output is read.

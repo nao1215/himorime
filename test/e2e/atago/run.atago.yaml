@@ -9,6 +9,71 @@ suite:
 # a result depends on time, and the assertions check classifications, table
 # structure, report schemas and exit codes.
 scenarios:
+  - name: failed builds retain stdout diagnostics
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: build output}
+            build:
+              shell: true
+              command: echo stdout-failure-detail && exit 3
+            benchmarks:
+              - name: test
+                commands:
+                  app: {command: ["$${artifact}"]}
+      - run: {command: himorime run --quiet}
+      - assert:
+          exit_code: 4
+          stdout: {contains: "stdout: stdout-failure-detail"}
+
+  - name: conflicting report outputs fail before commands run
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: conflicting outputs}
+            benchmarks:
+              - name: test
+                commands:
+                  app: {command: [e2ehelper, write, unexpected.txt, ran]}
+            report:
+              outputs:
+                - {format: json, path: report.txt}
+                - {format: csv, path: ./report.txt}
+      - fixture: {file: report.txt, content: "keep me"}
+      - run: {command: himorime run --quiet}
+      - assert:
+          exit_code: 2
+          stderr: {contains: "conflicts with report.outputs[0]"}
+          file: {path: report.txt, equals: "keep me"}
+      - assert:
+          file: {path: unexpected.txt, exists: false}
+
+  - name: suite reports do not follow links outside the suite directory
+    skip: {os: windows}
+    steps:
+      - fixture: {file: outside.txt, content: "keep me"}
+      - fixture:
+          file: suite/himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: confined report}
+            defaults: {runs: 1, warmup: 0}
+            benchmarks:
+              - name: test
+                commands:
+                  app: {command: [e2ehelper, exit, "0"]}
+            report:
+              outputs: [{format: json, path: out.json}]
+      - run: {command: ln -s ../outside.txt suite/out.json}
+      - run: {command: himorime run --quiet suite}
+      - assert:
+          exit_code: 4
+          file: {path: outside.txt, equals: "keep me"}
+
   - name: selection does not run or write reports for excluded suites
     steps:
       - fixture:
