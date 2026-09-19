@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Fixed
 
+- Diagnostics distinguish Git failures, output failures and interruptions without changing exit statuses or JSON reports.
 - The dogfood version benchmark skips RSS collection while all other dogfood benchmarks retain CPU and memory metrics.
 - All paths after `--` are treated as operands, including multiple paths beginning with a dash.
 - Inconclusive-only comparison failures no longer claim that a performance threshold was violated.

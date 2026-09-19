@@ -52,6 +52,23 @@ scenarios:
       - assert:
           file: {path: unexpected.txt, exists: false}
 
+  - name: an unwritable report has a report-output diagnostic
+    steps:
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: report output}
+            defaults: {warmup: 0, runs: 1}
+            benchmarks:
+              - name: test
+                commands: {app: {command: [e2ehelper, exit, "0"]}}
+      - fixture: {file: report-blocker, content: "not a directory"}
+      - run: {command: himorime run --quiet --format json --output report-blocker/result.json}
+      - assert:
+          exit_code: 4
+          stderr: {contains: "HMR4003"}
+
   - name: suite reports do not follow links outside the suite directory
     skip: {os: windows}
     steps:
@@ -563,7 +580,7 @@ scenarios:
             contains: ["exit=4", "long", "ERROR"]
       - assert:
           stderr:
-            contains: ["interrupted; stopping commands and cleaning up", "interrupted; cleanup has run"]
+            contains: ["HMR4004", "interrupted; stopping commands and cleaning up", "interrupted; cleanup has run"]
       - assert:
           file: {path: cleaned, exists: true}
 

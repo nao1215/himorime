@@ -312,8 +312,8 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 	}
 }
 
-// TestWorkflowPermissionsAreReadOnly reserves writes for releasing and the
-// separately validated benchmark job's automatic comments.
+// TestWorkflowPermissionsAreReadOnly reserves writes for releasing, coverage
+// history/comments, and the separately validated benchmark comments.
 func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 	t.Parallel()
 	files, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
@@ -327,7 +327,9 @@ func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 			continue
 		}
 		for _, m := range write.FindAllStringSubmatch(text, -1) {
-			if filepath.Base(f) != "benchmark.yml" || m[1] != "pull-requests" {
+			allowed := filepath.Base(f) == "benchmark.yml" && m[1] == "pull-requests"
+			allowed = allowed || (filepath.Base(f) == "coverage.yml" && (m[1] == "actions" || m[1] == "pull-requests"))
+			if !allowed {
 				t.Errorf("%s grants unexpected %s: write", f, m[1])
 			}
 		}

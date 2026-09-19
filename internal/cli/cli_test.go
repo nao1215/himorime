@@ -450,7 +450,7 @@ benchmarks:
 		t.Fatalf("missing suite: %+v", r)
 	}
 
-	if r := run(t, dir, nil, "run", "budget.himorime.yaml", "--quiet", "--output", filepath.Join(dir, "no-such-dir", "x", "\x00bad")); r.code != exitcode.Execution {
+	if r := run(t, dir, nil, "run", "budget.himorime.yaml", "--quiet", "--output", filepath.Join(dir, "no-such-dir", "x", "\x00bad")); r.code != exitcode.Execution || !strings.Contains(r.stderr, "HMR4003") || strings.Contains(r.stderr, "HMR4001") {
 		t.Fatalf("an unwritable report must fail: %+v", r)
 	}
 }
@@ -550,7 +550,7 @@ func TestCompare(t *testing.T) {
 		t.Fatalf("a worktree was left behind:\n%s", list)
 	}
 
-	if r := run(t, dir, nil, "compare", "--against", "no-such-ref", "--quiet"); r.code != exitcode.Execution || !strings.Contains(r.stderr, "is not a commit") {
+	if r := run(t, dir, nil, "compare", "--against", "no-such-ref", "--quiet"); r.code != exitcode.Execution || !strings.Contains(r.stderr, "HMR4002") || strings.Contains(r.stderr, "HMR4001") || !strings.Contains(r.stderr, "is not a commit") {
 		t.Fatalf("unknown ref: %+v", r)
 	}
 	notRepo := t.TempDir()

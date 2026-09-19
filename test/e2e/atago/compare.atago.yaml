@@ -235,7 +235,7 @@ scenarios:
           cwd: repo
       - assert:
           exit_code: 4
-          stderr: {contains: 'revision "no-such-branch" is not a commit'}
+          stderr: {contains: ["HMR4002", 'revision "no-such-branch" is not a commit']}
       - run: {command: git worktree list --porcelain, cwd: repo}
       - assert:
           stdout: {count: 1, contains: "worktree "}
@@ -297,6 +297,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout: {contains: ["exit=4", "ERROR"]}
+          stderr: {contains: "HMR4004"}
       - run: {command: git worktree list --porcelain, cwd: repo}
       - assert:
           stdout: {count: 1, contains: "worktree "}

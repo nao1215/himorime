@@ -55,6 +55,9 @@ type measurement struct {
 	tempDir string
 	// tools are the versions of report.versions of every suite measured.
 	tools []report.Tool
+	// failureCause is set from typed runner failures before they are rendered
+	// into the report. It keeps the terminal diagnostic independent of prose.
+	failureCause diag.Code
 }
 
 // addTool records a tool version. A tool several suites name is listed once,
@@ -71,6 +74,48 @@ func (m *measurement) addTool(t report.Tool) {
 func (m *measurement) logf(format string, args ...any) {
 	if m.logw != nil {
 		fmt.Fprintf(m.logw, "himorime: "+format+"\n", args...)
+	}
+}
+
+func (m *measurement) recordFailure(f *runner.Failure) {
+	if f == nil {
+		return
+	}
+	c := failureCause(f.Kind)
+	// A command failure is more specific than a metric failure when both are
+	// present in one run. An interruption is always the final cause.
+	if c.Number == diag.Interrupted.Number {
+		m.failureCause = c
+		return
+	}
+	if m.failureCause.Number == diag.Interrupted.Number {
+		return
+	}
+	if m.failureCause.Number == 0 || m.failureCause.Number == diag.Metric.Number || c.Number == diag.Command.Number {
+		m.failureCause = c
+	}
+}
+
+func failureCause(kind runner.FailureKind) diag.Code {
+	switch kind {
+	case runner.FailBuild, runner.FailSetup, runner.FailPrepareEach, runner.FailCleanup, runner.FailExitCode, runner.FailTimeout, runner.FailStart, runner.FailPath:
+		return diag.Command
+	case runner.FailInterrupted:
+		return diag.Interrupted
+	case runner.FailInternal:
+		return diag.Internal
+	case runner.FailMetricUnsupported, runner.FailMetricCollection:
+		return diag.Metric
+	}
+	return diag.Internal
+}
+
+func (m *measurement) recordBenchmark(result runner.BenchmarkResult) {
+	m.recordFailure(result.Failure)
+	for _, command := range result.Commands {
+		for _, measurement := range command.Sides {
+			m.recordFailure(measurement.Failure)
+		}
 	}
 }
 
@@ -156,7 +201,11 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 		if errors.Is(err, errReportConflict) {
 			status = exitcode.Usage
 		}
-		diag.Print(a.Stderr, status, "himorime: %v", err)
+		if status == exitcode.Usage {
+			diag.Print(a.Stderr, status, "himorime: %v", err)
+		} else {
+			diag.PrintCode(a.Stderr, diag.Report, "himorime: %v", err)
+		}
 		return status
 	}
 	ref, baseSource, code := m.baseRef(gh)
@@ -174,13 +223,13 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 
 	tempDir, err := os.MkdirTemp("", "himorime-")
 	if err != nil {
-		diag.Print(a.Stderr, exitcode.Execution, "himorime: create temporary directory: %v", err)
+		diag.PrintCode(a.Stderr, diag.Internal, "himorime: create temporary directory: %v", err)
 		return exitcode.Execution
 	}
 	m.tempDir = tempDir
 	defer func() {
 		if err := runner.RemoveAll(tempDir); err != nil {
-			diag.Print(a.Stderr, exitcode.Execution, "himorime: remove temporary directory %s: %v", tempDir, err)
+			diag.PrintCode(a.Stderr, diag.Internal, "himorime: remove temporary directory %s: %v", tempDir, err)
 			code = cleanupFailed(code)
 		}
 	}()
@@ -196,7 +245,7 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 		}
 		defer func() {
 			if err := git.worktree.Remove(ctx); err != nil {
-				diag.Print(a.Stderr, exitcode.Execution, "himorime: remove the temporary worktree: %v", err)
+				diag.PrintCode(a.Stderr, diag.Git, "himorime: remove the temporary worktree: %v", err)
 				code = cleanupFailed(code)
 			}
 		}()
@@ -240,20 +289,24 @@ func (m *measurement) finish(ctx context.Context, rep *report.Report, suites []l
 		return code
 	}
 	if logErr != nil {
-		diag.Print(a.Stderr, exitcode.Execution, "himorime: %v", logErr)
+		diag.PrintCode(a.Stderr, diag.Report, "himorime: %v", logErr)
 		return exitcode.Execution
 	}
 	if gh.Actions {
 		if err := report.WriteAnnotations(a.Stderr, rep); err != nil {
-			diag.Print(a.Stderr, exitcode.Execution, "himorime: write annotations: %v", err)
+			diag.PrintCode(a.Stderr, diag.Report, "himorime: write annotations: %v", err)
 		}
 	}
 	if ctx.Err() != nil {
-		diag.Print(a.Stderr, exitcode.Execution, "himorime: interrupted; cleanup has run")
+		diag.PrintCode(a.Stderr, diag.Interrupted, "himorime: interrupted; cleanup has run")
 		return exitcode.Execution
 	}
 	if outcome := outcomeForSummary(rep.Summary); outcome != "" {
-		diag.Print(a.Stderr, rep.Summary.ExitCode, "himorime: exit %d: %s", rep.Summary.ExitCode, outcome)
+		if rep.Summary.ExitCode == exitcode.Execution && m.failureCause.Number != 0 {
+			diag.PrintCode(a.Stderr, m.failureCause, "himorime: exit %d: %s", rep.Summary.ExitCode, outcome)
+		} else {
+			diag.Print(a.Stderr, rep.Summary.ExitCode, "himorime: exit %d: %s", rep.Summary.ExitCode, outcome)
+		}
 	}
 	return rep.Summary.ExitCode
 }
@@ -276,13 +329,13 @@ func (m *measurement) checkMetrics(suites []loadedSuite) int {
 				m.logf("benchmark %q: metrics.%s will be reported as unsupported: %s", p.Benchmark, p.Group, p.Reason)
 				continue
 			}
-			fmt.Fprintf(m.app.Stderr, "%s: benchmark %q: metrics.%s cannot be measured on this platform: %s\n    hint: remove it, or set metrics.unsupported: skip to measure everything else and report it as unsupported\n",
+			diag.PrintCode(m.app.Stderr, diag.Metric, "%s: benchmark %q: metrics.%s cannot be measured on this platform: %s\n    hint: remove it, or set metrics.unsupported: skip to measure everything else and report it as unsupported",
 				ls.display, p.Benchmark, p.Group, p.Reason)
 			code = exitcode.Metric
 		}
 	}
 	if code != 0 {
-		diag.Print(m.app.Stderr, code, "himorime: exit %d: %s", code, exitcode.Outcome(code, false))
+		diag.PrintCode(m.app.Stderr, diag.Metric, "himorime: exit %d: %s", code, exitcode.Outcome(code, false))
 	}
 	return code
 }
@@ -370,7 +423,7 @@ func (m *measurement) openGit(ctx context.Context, suites []loadedSuite, compare
 	repo, err := gitwt.Open(ctx, suites[0].suite.Dir)
 	if err != nil {
 		if compare {
-			diag.Print(a.Stderr, exitcode.Execution, "himorime %s: %v; compare needs the suite to live in a Git repository", m.cmd, err)
+			diag.PrintCode(a.Stderr, diag.Git, "himorime %s: %v; compare needs the suite to live in a Git repository", m.cmd, err)
 			return nil, exitcode.Execution
 		}
 		return &gitState{}, 0
@@ -396,14 +449,14 @@ func (g *gitState) checkout(ctx context.Context, m *measurement, ref, source str
 	a := m.app
 	sha, err := g.repo.ResolveCommit(ctx, ref)
 	if err != nil {
-		diag.Print(a.Stderr, exitcode.Execution, "himorime %s: %v", m.cmd, m.redact.String(err.Error()))
+		diag.PrintCode(a.Stderr, diag.Git, "himorime %s: %v", m.cmd, m.redact.String(err.Error()))
 		return exitcode.Execution
 	}
 	rep.Git.BaseRef, rep.Git.BaseSHA, rep.Git.BaseSource = ref, sha, source
 	m.logf("comparing base %s (%s) with the working tree%s", shortRef(sha), ref, dirtyNote(rep.Git.Dirty))
 	wt, err := g.repo.AddWorktree(ctx, filepath.Join(m.tempDir, "git"), sha)
 	if err != nil {
-		diag.Print(a.Stderr, exitcode.Execution, "himorime %s: %v", m.cmd, m.redact.String(err.Error()))
+		diag.PrintCode(a.Stderr, diag.Git, "himorime %s: %v", m.cmd, m.redact.String(err.Error()))
 		return exitcode.Execution
 	}
 	g.worktree = wt
@@ -414,7 +467,7 @@ func (g *gitState) checkComparable(suites []loadedSuite, runs int, stderr io.Wri
 	for _, ls := range suites {
 		root, err := ls.baseRoot(g.repo, g.worktree)
 		if err != nil {
-			diag.Print(stderr, exitcode.Execution, "himorime: %v", err)
+			diag.PrintCode(stderr, diag.Git, "himorime: %v", err)
 			return exitcode.Execution
 		}
 		if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
@@ -473,6 +526,10 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		root, err := ls.baseRoot(repo, wt)
 		if err != nil {
 			in.BuildFailure = &runner.Failure{Kind: runner.FailPath, Message: err.Error()}
+			// This path is resolved while constructing the Git worktree side;
+			// classify the known Git operation directly rather than inferring it
+			// from the generic runner path kind.
+			m.failureCause = diag.Git
 			return in
 		}
 		base := runner.Side{Name: runner.SideBase, Root: root, HeadRoot: s.Dir, ProjectRoot: wt.Dir}
@@ -502,6 +559,7 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		version, f := r.Version(ctx, tool, head)
 		if f != nil {
 			in.BuildFailure = f
+			m.recordFailure(f)
 			return in
 		}
 		m.logf("%s: %s", tool.Name, version)
@@ -517,6 +575,7 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 				kind = runner.FailSetup
 			}
 			in.BuildFailure = &runner.Failure{Kind: kind, Message: fmt.Sprintf("the suite directory does not exist in the %s revision (%s)", side.Name, side.Root)}
+			m.recordFailure(in.BuildFailure)
 			return in
 		}
 		if s.Build == nil {
@@ -524,6 +583,7 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		}
 		if f := r.Build(ctx, s, side); f != nil {
 			in.BuildFailure = f
+			m.recordFailure(f)
 			return in
 		}
 	}
@@ -531,7 +591,9 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		if ctx.Err() != nil {
 			break
 		}
-		in.Benchmarks = append(in.Benchmarks, r.Measure(ctx, b, sides))
+		result := r.Measure(ctx, b, sides)
+		m.recordBenchmark(result)
+		in.Benchmarks = append(in.Benchmarks, result)
 	}
 	return in
 }
@@ -628,7 +690,7 @@ func (m *measurement) writeReports(rep *report.Report, suites []loadedSuite) int
 	}
 
 	if err := errors.Join(errs...); err != nil {
-		diag.Print(a.Stderr, exitcode.Execution, "himorime: %v", err)
+		diag.PrintCode(a.Stderr, diag.Report, "himorime: %v", err)
 		return exitcode.Execution
 	}
 	return 0
