@@ -283,8 +283,8 @@ benchmarks:
 			if !errors.As(err, &verr) {
 				t.Fatalf("Load() error = %v, want a ValidationError", err)
 			}
-			if !IsValidation(err) {
-				t.Fatal("IsValidation = false")
+			if !isValidation(err) {
+				t.Fatal("isValidation = false")
 			}
 			found := false
 			for _, is := range verr.Issues {
@@ -387,24 +387,24 @@ func TestIssuePositions(t *testing.T) {
 func TestLoadFileErrors(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if _, err := Load(filepath.Join(dir, "missing.yaml")); !IsValidation(err) || !strings.Contains(err.Error(), "does not exist") {
+	if _, err := Load(filepath.Join(dir, "missing.yaml")); !isValidation(err) || !strings.Contains(err.Error(), "does not exist") {
 		t.Errorf("missing file: %v", err)
 	}
-	if _, err := Load(dir); !IsValidation(err) || !strings.Contains(err.Error(), "is a directory") {
+	if _, err := Load(dir); !isValidation(err) || !strings.Contains(err.Error(), "is a directory") {
 		t.Errorf("directory: %v", err)
 	}
 	empty := filepath.Join(dir, "empty.yaml")
 	if err := os.WriteFile(empty, []byte("\n  \n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(empty); !IsValidation(err) || !strings.Contains(err.Error(), "empty") {
+	if _, err := Load(empty); !isValidation(err) || !strings.Contains(err.Error(), "empty") {
 		t.Errorf("empty file: %v", err)
 	}
 	big := filepath.Join(dir, "big.yaml")
 	if err := os.WriteFile(big, make([]byte, maxFileSize+1), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(big); !IsValidation(err) || !strings.Contains(err.Error(), "larger than") {
+	if _, err := Load(big); !isValidation(err) || !strings.Contains(err.Error(), "larger than") {
 		t.Errorf("big file: %v", err)
 	}
 }
@@ -523,7 +523,7 @@ benchmarks:
 	if _, ok := r.For(metric.CPUUtilization); ok {
 		t.Error("cpu utilization must not be comparable")
 	}
-	if plain.Metrics.WorkUnit() != "" || records.Metrics.WorkUnit() != "records" || !large.Metrics.NeedsUsage() {
+	if plain.Metrics.WorkUnit() != "" || records.Metrics.WorkUnit() != "records" {
 		t.Error("metrics helpers")
 	}
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	"github.com/nao1215/himorime/internal/diag"
 	"github.com/nao1215/himorime/internal/exitcode"
 	"github.com/nao1215/himorime/internal/report"
 	"github.com/nao1215/himorime/schema"
@@ -41,11 +42,11 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer, deps Dep
 			writeHelp(stdout)
 			return exitcode.OK
 		}
-		fmt.Fprintf(stderr, "himorime comment: %v\n", err)
+		diag.Print(stderr, exitcode.Usage, "himorime comment: %v", err)
 		return exitcode.Usage
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "himorime comment: exactly one REPORT.json is required")
+		diag.Print(stderr, exitcode.Usage, "himorime comment: exactly one REPORT.json is required")
 		return exitcode.Usage
 	}
 	if deps.LookupEnv == nil {
@@ -60,23 +61,23 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer, deps Dep
 	env := FromLookup(deps.LookupEnv)
 	run, err := env.ResolveWorkflowRun(deps.ReadFile)
 	if err != nil {
-		fmt.Fprintf(stderr, "himorime comment: %v\n", err)
+		diag.Print(stderr, exitcode.Usage, "himorime comment: %v", err)
 		return exitcode.Usage
 	}
 	rep, err := readJSONReport(fs.Arg(0))
 	if err != nil {
-		fmt.Fprintf(stderr, "himorime comment: invalid report: %v\n", err)
+		diag.Print(stderr, exitcode.Config, "himorime comment: invalid report: %v", err)
 		return exitcode.Config
 	}
 	body, err := RenderComment(rep, run, CommentRenderOptions{HideFooter: *hideFooter})
 	if err != nil {
-		fmt.Fprintf(stderr, "himorime comment: %v\n", err)
+		diag.Print(stderr, exitcode.Execution, "himorime comment: %v", err)
 		return exitcode.Execution
 	}
 	client := CommentClient{HTTP: deps.HTTP, APIURL: env.APIURL, Token: env.Token, Repository: env.Repository}
 	stale, err := client.Upsert(ctx, run, body)
 	if err != nil {
-		fmt.Fprintf(stderr, "himorime comment: %v\n", err)
+		diag.Print(stderr, exitcode.Execution, "himorime comment: %v", err)
 		return exitcode.Execution
 	}
 	if stale {

@@ -57,12 +57,6 @@ func (e *ValidationError) Error() string {
 	return strings.Join(lines, "\n")
 }
 
-// IsValidation reports whether err is (or wraps) a ValidationError.
-func IsValidation(err error) bool {
-	var v *ValidationError
-	return errors.As(err, &v)
-}
-
 // path is a location inside the YAML document: string keys and int indexes.
 type path []any
 

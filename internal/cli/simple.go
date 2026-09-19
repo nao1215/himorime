@@ -13,6 +13,7 @@ import (
 
 	"github.com/nao1215/himorime/internal/buildinfo"
 	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/diag"
 	"github.com/nao1215/himorime/internal/exitcode"
 )
 
@@ -30,7 +31,7 @@ func runInit(_ context.Context, a *App, args []string) int {
 		return status
 	}
 	if len(operands) > 1 {
-		fmt.Fprintln(a.Stderr, "himorime init: at most one PATH may be given")
+		diag.Print(a.Stderr, exitcode.Usage, "himorime init: at most one PATH may be given")
 		return exitcode.Usage
 	}
 	path := config.DefaultFileName
@@ -44,16 +45,16 @@ func runInit(_ context.Context, a *App, args []string) int {
 	f, err := os.OpenFile(path, flags, 0o644) //nolint:gosec // the user names the file to create
 	if err != nil {
 		if errors.Is(err, iofs.ErrExist) {
-			fmt.Fprintf(a.Stderr, "himorime init: %s already exists; it was not changed (use --force to overwrite it)\n", path)
+			diag.Print(a.Stderr, exitcode.Usage, "himorime init: %s already exists; it was not changed (use --force to overwrite it)", path)
 			return exitcode.Usage
 		}
-		fmt.Fprintf(a.Stderr, "himorime init: %v\n", err)
+		diag.Print(a.Stderr, exitcode.Execution, "himorime init: %v", err)
 		return exitcode.Execution
 	}
 	_, werr := f.WriteString(InitTemplate)
 	cerr := f.Close()
 	if err := errors.Join(werr, cerr); err != nil {
-		fmt.Fprintf(a.Stderr, "himorime init: write %s: %v\n", path, err)
+		diag.Print(a.Stderr, exitcode.Execution, "himorime init: write %s: %v", path, err)
 		return exitcode.Execution
 	}
 	fmt.Fprintf(a.Stdout, "wrote %s\nnext: himorime validate %s && himorime run %s\n", path, path, path)
@@ -105,7 +106,7 @@ func runList(_ context.Context, a *App, args []string) int {
 		return status
 	}
 	if o.format != "text" && o.format != "json" {
-		fmt.Fprintf(a.Stderr, "himorime list: unknown --format %q; use text or json\n", o.format)
+		diag.Print(a.Stderr, exitcode.Usage, "himorime list: unknown --format %q; use text or json", o.format)
 		return exitcode.Usage
 	}
 	sel, ok := o.selection(a.Stderr, "list")
@@ -138,7 +139,7 @@ func runList(_ context.Context, a *App, args []string) int {
 		enc := json.NewEncoder(a.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(entries); err != nil {
-			fmt.Fprintf(a.Stderr, "himorime list: %v\n", err)
+			diag.Print(a.Stderr, exitcode.Execution, "himorime list: %v", err)
 			return exitcode.Execution
 		}
 		return exitcode.OK

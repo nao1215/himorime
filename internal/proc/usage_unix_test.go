@@ -37,13 +37,10 @@ func TestNormalizeMaxRSS(t *testing.T) {
 	}
 }
 
-func TestUsageFromRusage(t *testing.T) {
+func TestUsageFromValues(t *testing.T) {
 	t.Parallel()
-	ru := &syscall.Rusage{}
-	ru.Utime.Sec, ru.Utime.Usec = 1, 500000
-	ru.Stime.Usec = 250000
-	ru.Maxrss = 10
-	u := usageFromRusage(ru)
+	raw := rawUsage{UserCPU: int64(1500 * time.Millisecond), SystemCPU: int64(250 * time.Millisecond), MaxRSS: 10}
+	u := usageFromValues(raw)
 	if u.CPUErr != nil || u.MemoryErr != nil {
 		t.Fatalf("errors: %v %v", u.CPUErr, u.MemoryErr)
 	}
@@ -53,8 +50,8 @@ func TestUsageFromRusage(t *testing.T) {
 	if u.PeakRSS != 10*maxRSSUnit {
 		t.Fatalf("peak rss = %d", u.PeakRSS)
 	}
-	ru.Maxrss = 0
-	if u := usageFromRusage(ru); u.MemoryErr == nil || IsUnsupported(u.MemoryErr) || u.CPUErr != nil {
+	raw.MaxRSS = 0
+	if u := usageFromValues(raw); u.MemoryErr == nil || IsUnsupported(u.MemoryErr) || u.CPUErr != nil {
 		t.Fatalf("a zero ru_maxrss must be a collection failure, not unsupported: %+v", u)
 	}
 }

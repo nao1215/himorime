@@ -196,9 +196,6 @@ func ShellQuote(s string) (string, error) {
 	return `"` + s + `"`, nil
 }
 
-// ShellName names the shell `shell: true` commands run through.
-func ShellName() string { return "cmd.exe /d /s /c" }
-
 func hasSeparator(name string) bool { return strings.ContainsAny(name, `/\:`) }
 
 func isPathVar(k string) bool { return strings.EqualFold(k, "PATH") }

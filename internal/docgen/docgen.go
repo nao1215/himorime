@@ -30,6 +30,7 @@ import (
 
 	"github.com/nao1215/himorime/internal/cli"
 	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/diag"
 	"github.com/nao1215/himorime/internal/exitcode"
 	"github.com/nao1215/himorime/schema"
 )
@@ -80,6 +81,8 @@ func Section(name string) (string, error) {
 		return commands(), nil
 	case "exit-codes":
 		return exitCodes(), nil
+	case "error-codes":
+		return errorCodes(), nil
 	case "config-reference":
 		return configReference()
 	case "defaults":
@@ -88,6 +91,15 @@ func Section(name string) (string, error) {
 		return variables(), nil
 	}
 	return "", fmt.Errorf("unknown generated section %q", name)
+}
+
+func errorCodes() string {
+	var sb strings.Builder
+	sb.WriteString("| Code | Name | Meaning |\n|---|---|---|\n")
+	for _, c := range diag.All() {
+		fmt.Fprintf(&sb, "| `%s` | %s | %s |\n", c, c.Name, escapeCell(c.Meaning))
+	}
+	return sb.String()
 }
 
 func commands() string {

@@ -14,7 +14,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            contains: [init, validate, list, run, compare, ci, version, completion]
+            contains: [init, validate, list, run, compare, ci, version, completion, "Documentation: https://nao1215.github.io/himorime/", "GitHub Sponsors: https://github.com/sponsors/nao1215"]
       - run:
           command: himorime version
       - assert:
@@ -35,17 +35,17 @@ scenarios:
       - assert:
           exit_code: 3
           stdout: {empty: true}
-          stderr: {contains: "no command given"}
+          stderr: {contains: ["HMR3001", "no command given"]}
       - run:
           command: himorime frobnicate
       - assert:
           exit_code: 3
-          stderr: {contains: 'unknown command "frobnicate"'}
+          stderr: {contains: ["HMR3001", 'unknown command "frobnicate"']}
       - run:
           command: himorime run --no-such-flag
       - assert:
           exit_code: 3
-          stderr: {contains: "flag provided but not defined"}
+          stderr: {contains: ["HMR3001", "flag provided but not defined"]}
       - run:
           command: himorime compare
       - assert:
@@ -56,6 +56,18 @@ scenarios:
       - assert:
           exit_code: 3
           stderr: {contains: "unsupported shell"}
+      - run:
+          command: himorime run --filter '('
+      - assert:
+          exit_code: 3
+          stdout: {empty: true}
+          stderr: {contains: ["HMR3001", "invalid --filter"]}
+      - run:
+          command: himorime comment
+      - assert:
+          exit_code: 3
+          stdout: {empty: true}
+          stderr: {contains: ["HMR3001", "exactly one REPORT.json is required"]}
 
   - name: init writes a runnable suite and never overwrites silently
     steps:
@@ -110,6 +122,7 @@ scenarios:
           stdout: {empty: true}
           stderr:
             contains:
+              - "HMR2001"
               - "broken.yaml:5:11: benchmarks[0].runs: expected an integer, got a string"
               - "benchmarks[0].commands.tool: a string command requires shell: true"
               - 'benchmarks[0].commands.tool.timout: unknown key "timout"'
@@ -135,6 +148,7 @@ scenarios:
           exit_code: 2
           stderr:
             contains:
+              - "HMR2001"
               - 'semantic.yaml:5:15: benchmarks[0].baseline: baseline "missing" is not a command of this benchmark'
               - "${artifact} is used but the suite has no build section"
 
@@ -175,7 +189,25 @@ scenarios:
           command: himorime run
       - assert:
           exit_code: 2
-          stderr: {contains: "himorime.yaml: suite file does not exist"}
+          stderr: {contains: ["HMR2001", "himorime.yaml: suite file does not exist"]}
+
+  - name: a measured command failure is an execution error
+    steps:
+      - fixture:
+          file: execution.yaml
+          content: |
+            version: "1"
+            suite: {name: execution}
+            defaults: {warmup: 0, runs: 1}
+            benchmarks:
+              - name: failing command
+                commands:
+                  app: {command: [e2ehelper, exit, "9"]}
+      - run:
+          command: himorime run --quiet execution.yaml
+      - assert:
+          exit_code: 4
+          stderr: {contains: ["HMR4001", "measurement did not complete"]}
 
   - name: list prints a stable table and JSON without running anything
     steps:
@@ -222,6 +254,13 @@ scenarios:
             json:
               - {path: "$", length: 2}
               - {path: "$[1].shell", equals: true}
+      - run:
+          command: himorime list --tag nonexistent
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "no benchmark matches"
+            not_contains: "HMR"
 
   - name: completion scripts name every command
     steps:

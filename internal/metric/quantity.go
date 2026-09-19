@@ -41,7 +41,6 @@ var (
 	bytesBudgetRE     = regexp.MustCompile(BytesBudgetPattern)
 	rateBudgetRE      = regexp.MustCompile(RateBudgetPattern)
 	percentBudgetRE   = regexp.MustCompile(PercentBudgetPattern)
-	workUnitRE        = regexp.MustCompile(WorkUnitPattern)
 	percentileKeyRE   = regexp.MustCompile(PercentilePattern)
 	byteMultiplierMap = map[string]float64{
 		"B": 1, "bytes": 1,
@@ -124,9 +123,6 @@ func rateValue(raw, number, unit string) (float64, string, error) {
 	}
 	return v, unit, nil
 }
-
-// ValidWorkUnit reports whether u may name a unit of work.
-func ValidWorkUnit(u string) bool { return workUnitRE.MatchString(u) }
 
 func finiteFloat(s string) (float64, error) {
 	v, err := strconv.ParseFloat(s, 64)

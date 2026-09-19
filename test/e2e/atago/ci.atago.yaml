@@ -129,7 +129,7 @@ scenarios:
           content: |
             version: "1"
             suite: {name: adopted}
-            defaults: {warmup: 0, runs: 10}
+            defaults: {warmup: 0, runs: 1}
             benchmarks:
               - name: version
                 commands:
@@ -177,7 +177,7 @@ scenarios:
           content: |
             version: "1"
             suite: {name: adopted}
-            defaults: {warmup: 0, runs: 10}
+            defaults: {warmup: 0, runs: 1}
             benchmarks:
               - name: version
                 commands:

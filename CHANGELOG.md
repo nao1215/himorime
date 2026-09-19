@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Tool errors include an `HMR` diagnostic code on stderr, documented in the reference; exit statuses and report formats are unchanged.
+
+### Fixed
+
+- Suite report outputs cannot follow symbolic links outside the suite directory, and conflicting report destinations are rejected before measuring.
+- Failed builds and hooks include a redacted stdout tail in their error message as well as the existing stderr diagnostics.
+- Revision comparisons enforce head-side budgets even for commands excluded by `regression.commands`.
+- Benchmark filters skip builds, version commands and report outputs of suites with no selected benchmarks.
+- New suites measured only in the working tree accept run counts below the comparison's `min_samples` requirement.
+
 ## [0.2.2] - 2026-09-19
 
 ### Added

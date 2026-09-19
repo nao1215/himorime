@@ -5,16 +5,7 @@ import (
 	"math"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/nao1215/himorime/internal/metric"
 )
-
-// FormatDuration renders nanoseconds for humans with two decimals in the
-// largest unit that keeps the value at or above one: 850ns, 12.34µs, 1.82ms,
-// 3.40s. JSON reports carry the unrounded integer instead.
-func FormatDuration(ns int64) string {
-	return metric.FormatDuration(float64(ns))
-}
 
 // FormatRatio renders a speed ratio such as 15.61x.
 func FormatRatio(r float64) string {

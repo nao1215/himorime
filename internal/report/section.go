@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -21,15 +22,15 @@ func ValidSectionName(name string) bool {
 }
 
 // UpdateMarkdownSection replaces the section name of the Markdown file at
-// path with the report. The file must exist and hold the section's markers;
+// path within root with the report. The file must exist and hold the section's markers;
 // everything outside them is kept byte for byte. The new content is written
 // to a temporary file in the same directory and renamed over the old one, so
 // a failure never leaves a truncated document.
-func UpdateMarkdownSection(path, name string, r *Report) error {
+func UpdateMarkdownSection(root *os.Root, path, name string, r *Report) error {
 	wrap := func(err error) error {
-		return fmt.Errorf("%s: section %q: %w", path, name, err)
+		return fmt.Errorf("section %q: %w", name, err)
 	}
-	doc, err := os.ReadFile(path) //nolint:gosec // G304: the document the user named
+	doc, err := root.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return wrap(fmt.Errorf("the file does not exist; add the lines %s and %s to an existing Markdown file: %w", beginMarker(name), endMarker(name), fs.ErrNotExist))
 	}
@@ -43,7 +44,7 @@ func UpdateMarkdownSection(path, name string, r *Report) error {
 	if bytes.Equal(out, doc) {
 		return nil
 	}
-	if err := replaceFile(path, out); err != nil {
+	if err := replaceFile(root, path, out); err != nil {
 		return wrap(err)
 	}
 	return nil
@@ -218,19 +219,20 @@ func atxLevel(text string) int {
 
 // replaceFile writes data to a temporary file next to path and renames it
 // over path, keeping the file's permissions.
-func replaceFile(path string, data []byte) (err error) {
-	info, err := os.Stat(path)
+func replaceFile(root *os.Root, path string, data []byte) (err error) {
+	info, err := root.Stat(path)
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".himorime-*")
+	name := filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+".himorime-"+rand.Text())
+	tmp, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("create a temporary file: %w", err)
 	}
 	defer func() {
 		if err != nil {
 			_ = tmp.Close()
-			_ = os.Remove(tmp.Name())
+			_ = root.Remove(name)
 		}
 	}()
 	if _, err := tmp.Write(data); err != nil {
@@ -242,7 +244,7 @@ func replaceFile(path string, data []byte) (err error) {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("write %s: %w", tmp.Name(), err)
 	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
+	if err := root.Rename(name, path); err != nil {
 		return fmt.Errorf("replace the file: %w", err)
 	}
 	return nil

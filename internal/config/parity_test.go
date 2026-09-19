@@ -96,7 +96,7 @@ func TestSchemaParitySchemaInvalid(t *testing.T) {
 		if schemaAccepts(t, s, src) {
 			t.Errorf("%s: accepted by the schema, but it is in the schema-invalid corpus", name)
 		}
-		if _, err := Parse(name, filepath.Join(t.TempDir(), "himorime.yaml"), src); !IsValidation(err) {
+		if _, err := Parse(name, filepath.Join(t.TempDir(), "himorime.yaml"), src); !isValidation(err) {
 			t.Errorf("%s: Go did not reject it with a validation error: %v", name, err)
 		}
 	}

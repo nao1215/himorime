@@ -127,11 +127,16 @@ func TestUpdateMarkdownSection(t *testing.T) {
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "doc.md")
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
 	const before = "# Compare\n\n## Speed\n\nHand-written text.\n\n<!-- himorime:begin speed -->\nstale\n<!-- himorime:end speed -->\n\n## Notes\n"
 	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := UpdateMarkdownSection(path, "speed", r); err != nil {
+	if err := UpdateMarkdownSection(root, "doc.md", "speed", r); err != nil {
 		t.Fatal(err)
 	}
 	first, err := os.ReadFile(path)
@@ -153,7 +158,7 @@ func TestUpdateMarkdownSection(t *testing.T) {
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 && runtime.GOOS != "windows" {
 		t.Errorf("file mode changed: %v %v", info.Mode(), err)
 	}
-	if err := UpdateMarkdownSection(path, "speed", r); err != nil {
+	if err := UpdateMarkdownSection(root, "doc.md", "speed", r); err != nil {
 		t.Fatal(err)
 	}
 	if second, _ := os.ReadFile(path); string(second) != text {
@@ -164,16 +169,16 @@ func TestUpdateMarkdownSection(t *testing.T) {
 		t.Fatalf("temporary files were left behind: %v", entries)
 	}
 
-	err = UpdateMarkdownSection(filepath.Join(dir, "missing.md"), "speed", r)
-	if !errors.Is(err, fs.ErrNotExist) || !strings.Contains(err.Error(), `missing.md: section "speed": the file does not exist`) {
+	err = UpdateMarkdownSection(root, "missing.md", "speed", r)
+	if !errors.Is(err, fs.ErrNotExist) || !strings.Contains(err.Error(), `section "speed": the file does not exist`) {
 		t.Fatalf("missing file: %v", err)
 	}
 	broken := filepath.Join(dir, "broken.md")
 	if err := os.WriteFile(broken, []byte("<!-- himorime:begin speed -->\nkeep me\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err = UpdateMarkdownSection(broken, "speed", r)
-	if err == nil || !strings.Contains(err.Error(), `broken.md: section "speed": no line "<!-- himorime:end speed -->"`) {
+	err = UpdateMarkdownSection(root, "broken.md", "speed", r)
+	if err == nil || !strings.Contains(err.Error(), `section "speed": no line "<!-- himorime:end speed -->"`) {
 		t.Fatalf("missing end marker: %v", err)
 	}
 	if data, _ := os.ReadFile(broken); string(data) != "<!-- himorime:begin speed -->\nkeep me\n" {
@@ -192,6 +197,11 @@ func TestUpdateMarkdownSectionLeavesTheFileOnWriteError(t *testing.T) {
 	r := judge(ModeRun, false, runResult("x", "", map[string][]time.Duration{"a": samples(time.Millisecond, 10, 0)}, "a"))
 	dir := t.TempDir()
 	path := filepath.Join(dir, "doc.md")
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
 	const doc = "<!-- himorime:begin bench -->\nold\n<!-- himorime:end bench -->\n"
 	if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
 		t.Fatal(err)
@@ -200,7 +210,7 @@ func TestUpdateMarkdownSectionLeavesTheFileOnWriteError(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
-	if err := UpdateMarkdownSection(path, "bench", r); err == nil || !strings.Contains(err.Error(), `doc.md: section "bench"`) {
+	if err := UpdateMarkdownSection(root, "doc.md", "bench", r); err == nil || !strings.Contains(err.Error(), `section "bench"`) {
 		t.Fatalf("err = %v", err)
 	}
 	if data, _ := os.ReadFile(path); string(data) != doc {

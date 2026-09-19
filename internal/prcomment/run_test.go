@@ -83,6 +83,9 @@ func TestMainHelpAndExitSemantics(t *testing.T) {
 			if code != tt.want || !strings.Contains(stdout.String()+stderr.String(), tt.text) {
 				t.Fatalf("code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 			}
+			if code == exitcode.Usage && !strings.HasPrefix(stderr.String(), "HMR3001: ") {
+				t.Fatalf("missing diagnostic code: %s", stderr.String())
+			}
 		})
 	}
 }

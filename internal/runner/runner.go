@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -194,8 +195,8 @@ type sideState struct {
 }
 
 // Measure runs one benchmark across the given sides. With more than one side
-// (a revision comparison) only the commands the benchmark's regression
-// settings compare are measured. The result is a named return so the deferred
+// (a revision comparison), excluded commands with budgets still run on the
+// head side. The result is a named return so the deferred
 // teardown can record a cleanup failure.
 func (r *Runner) Measure(ctx context.Context, b config.Benchmark, sides []Side) (res BenchmarkResult) {
 	res.Benchmark = b
@@ -283,8 +284,9 @@ func commandUnits(b config.Benchmark, sides []Side, res *BenchmarkResult) []*uni
 	var units []*unit
 	for ci, c := range b.Commands {
 		cr := CommandResult{Command: c, Sides: map[string]*Measurement{}}
+		budgeted := slices.ContainsFunc(b.Budgets, func(bud config.Budget) bool { return bud.Command == c.Name })
 		for si, side := range sides {
-			if len(sides) > 1 && !b.Regression.Compares(c.Name) {
+			if len(sides) > 1 && !b.Regression.Compares(c.Name) && (side.Name != SideHead || !budgeted) {
 				continue
 			}
 			m := &Measurement{}
@@ -472,9 +474,22 @@ func (r *Runner) runHook(ctx context.Context, e config.Exec, vars config.Vars, d
 		_ = errFile.Close()
 		_ = os.Remove(errFile.Name())
 	}()
-	// nil is the null device. A Go writer such as io.Discard would make Wait
-	// also wait for background processes that inherited the output pipe.
-	return r.runProcess(ctx, e, vars, dir, kind, label, nil, errFile)
+	outFile, err := os.CreateTemp(r.TempDir, "hook-stdout-")
+	if err != nil {
+		return &Failure{Kind: FailInternal, Message: fmt.Sprintf("capture stdout: %v", err)}
+	}
+	defer func() {
+		_ = outFile.Close()
+		_ = os.Remove(outFile.Name())
+	}()
+	// Files avoid waiting for inherited output pipes held by descendants.
+	f := r.runProcess(ctx, e, vars, dir, kind, label, outFile, errFile)
+	if f != nil {
+		if tail := r.tail(outFile.Name()); tail != "" {
+			f.Message += "\nstdout: " + tail
+		}
+	}
+	return f
 }
 
 // versionOutputBytes bounds how much of a version command's output is read.

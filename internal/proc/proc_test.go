@@ -417,9 +417,6 @@ func TestShellScript(t *testing.T) {
 			if res.ExitCode != 0 || !strings.Contains(out.String(), "shell-ok") {
 				t.Fatalf("result = %+v, stdout = %q", res, out.String())
 			}
-			if ShellName() == "" {
-				t.Fatal("ShellName is empty")
-			}
 		})
 	}
 }

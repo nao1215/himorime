@@ -44,6 +44,7 @@ scenarios:
           exit_code: 1
           stderr:
             contains: "himorime: exit 1: performance check failed: a budget or regression threshold was violated (the measurement itself succeeded)"
+            not_contains: "HMR1"
       - assert:
           file:
             path: report.json
@@ -374,7 +375,7 @@ scenarios:
       - assert:
           exit_code: 6
           stdout: {contains: ["metric unsupported", "peak rss is not supported"]}
-          stderr: {contains: "himorime: exit 6: a requested metric could not be measured"}
+          stderr: {contains: ["HMR6001", "himorime: exit 6: a requested metric could not be measured"]}
       - run:
           command: himorime run --quiet --format json skip.himorime.yaml
       - assert:

@@ -209,6 +209,22 @@ func TestJudgeCompareSkipsUncomparedCommands(t *testing.T) {
 	if n := len(r.Suites[0].Benchmarks[0].Commands); n != 1 {
 		t.Fatalf("commands = %d, want only the compared one", n)
 	}
+	b.Benchmark.Regression.Commands = []string{b.Commands[0].Command.Name}
+	b.Benchmark.Budgets = []config.Budget{latencyBudget(t, "other", metric.AggMedian, "< 1ms")}
+	b.Commands[1].Sides[runner.SideHead] = &runner.Measurement{Samples: samples(20*time.Millisecond, 10, 0)}
+	r = judge(ModeCompare, false, b)
+	if len(r.Suites[0].Benchmarks[0].Commands) != 2 || r.Summary.ExitCode != exitcode.Failed {
+		t.Fatalf("excluded command's budget disappeared: %+v", r)
+	}
+	c := r.Suites[0].Benchmarks[0].Commands[1]
+	if c.Base != nil || c.Comparisons != nil || c.Result != ResultOverBudget || len(c.Budgets) != 1 || c.Budgets[0].Status != BudgetFail {
+		t.Fatalf("head-only budget result: %+v", c)
+	}
+	b.Commands[1].Sides[runner.SideHead].Failure = &runner.Failure{Kind: runner.FailExitCode, ExitCode: 2}
+	r = judge(ModeCompare, false, b)
+	if r.Summary.ExitCode != exitcode.Execution {
+		t.Fatalf("head-only command failure must fail the invocation: %+v", r.Summary)
+	}
 }
 
 func TestGeometricMeanNoteDoesNotDependOnBenchmarkOrder(t *testing.T) {
@@ -294,13 +310,6 @@ func TestGeometricMeanCompare(t *testing.T) {
 
 func TestFormatHelpers(t *testing.T) {
 	t.Parallel()
-	for ns, want := range map[int64]string{
-		850: "850ns", 1500: "1.50µs", 1_820_000: "1.82ms", 28_410_000: "28.41ms", 3_400_000_000: "3.40s", 125_000_000_000: "125.00s",
-	} {
-		if got := FormatDuration(ns); got != want {
-			t.Errorf("FormatDuration(%d) = %q, want %q", ns, got, want)
-		}
-	}
 	if FormatRatio(15.613) != "15.61x" || FormatRatio(math.NaN()) != "-" {
 		t.Error("FormatRatio")
 	}

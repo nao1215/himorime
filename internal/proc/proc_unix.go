@@ -60,9 +60,6 @@ func ShellQuote(s string) (string, error) {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'", nil
 }
 
-// ShellName names the shell `shell: true` commands run through.
-func ShellName() string { return "/bin/sh -c" }
-
 func hasSeparator(name string) bool { return strings.ContainsRune(name, '/') }
 
 func isPathVar(k string) bool { return k == "PATH" }

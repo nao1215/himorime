@@ -34,7 +34,7 @@ func TestCommentReportsMissingHelperAsExecutionFailure(t *testing.T) {
 			return 0, errors.New("himorime-comment helper is not installed next to himorime or on PATH")
 		}
 	}, "comment", "report.json")
-	if r.code != exitcode.Execution || !strings.Contains(r.stderr, "helper is not installed") {
+	if r.code != exitcode.Execution || !strings.HasPrefix(r.stderr, "HMR4001: ") || !strings.Contains(r.stderr, "helper is not installed") {
 		t.Fatalf("result = %+v", r)
 	}
 }
