@@ -25,9 +25,6 @@ func TestDefinitionsAreComplete(t *testing.T) {
 			t.Errorf("Lookup(%s) = %+v", d.Name, got)
 		}
 	}
-	if len(Names()) != len(Defs()) {
-		t.Fatal("Names and Defs disagree")
-	}
 	if _, ok := Lookup("heap"); ok {
 		t.Fatal("Lookup found an unknown metric")
 	}
@@ -209,9 +206,12 @@ func TestFormat(t *testing.T) {
 		want string
 	}{
 		{KindDuration, 850, "", "850ns"},
+		{KindDuration, 1500, "", "1.50µs"},
 		{KindDuration, 12340, "", "12.34µs"},
 		{KindDuration, 1.82e6, "", "1.82ms"},
+		{KindDuration, 28.41e6, "", "28.41ms"},
 		{KindDuration, 3.4e9, "", "3.40s"},
+		{KindDuration, 125e9, "", "125.00s"},
 		{KindBytes, 512, "", "512B"},
 		{KindBytes, 1536, "", "1.50KiB"},
 		{KindBytes, 64 << 20, "", "64.00MiB"},

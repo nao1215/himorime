@@ -139,15 +139,6 @@ func Defs() []Def {
 	return out
 }
 
-// Names returns every metric name in report order.
-func Names() []Name {
-	out := make([]Name, len(defs))
-	for i, d := range defs {
-		out[i] = d.Name
-	}
-	return out
-}
-
 // Lookup returns the definition of a metric.
 func Lookup(n Name) (Def, bool) {
 	for _, d := range defs {

@@ -310,13 +310,6 @@ func TestGeometricMeanCompare(t *testing.T) {
 
 func TestFormatHelpers(t *testing.T) {
 	t.Parallel()
-	for ns, want := range map[int64]string{
-		850: "850ns", 1500: "1.50µs", 1_820_000: "1.82ms", 28_410_000: "28.41ms", 3_400_000_000: "3.40s", 125_000_000_000: "125.00s",
-	} {
-		if got := FormatDuration(ns); got != want {
-			t.Errorf("FormatDuration(%d) = %q, want %q", ns, got, want)
-		}
-	}
 	if FormatRatio(15.613) != "15.61x" || FormatRatio(math.NaN()) != "-" {
 		t.Error("FormatRatio")
 	}
