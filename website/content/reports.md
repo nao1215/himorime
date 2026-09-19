@@ -66,13 +66,13 @@ $ himorime compare --against main --format samples-csv --output samples.csv
 
 ## Markdown and GitHub Actions
 
-Markdown contains the same result tables as the terminal report and is suitable for a checked-in page. The `github` format writes a compact GitHub Actions job summary. Performance failures and measurement failures use distinct titles and exit statuses; see [Reference](/reference/#exit-codes).
+Markdown contains the same result tables as the terminal report and is suitable for a checked-in page. The `github` format contains only tables: all comparisons, budgets, measurement statistics, decision settings, collection methods and execution metadata.
 
-`himorime ci` writes Markdown to `$GITHUB_STEP_SUMMARY` automatically and emits annotations for exceeded budgets, regressions, inconclusive comparisons and execution failures. A metric with `gate: false` produces a notice rather than an error.
+When a measurement report is produced in GitHub Actions, its complete tables are also written to the log on standard error, including when JSON is written to standard output or a file. `himorime ci` appends the tables to `$GITHUB_STEP_SUMMARY` when available. Existing annotations and [exit statuses](/reference/#exit-codes) are unchanged.
 
 `himorime comment REPORT.json` posts a JSON report from a completed GitHub Actions `workflow_run` to its pull request. Use the two-workflow pattern in [GitHub Actions](/github-actions/#a-pull-request-comment), so the benchmark job stays read-only.
 
-PR comments show command-level counts, failures requiring attention and measurement caveats before any tables. Expand individual metrics for base/head values and changes, decision evidence for thresholds and reasons, or run metadata for versions, commits and environment. Tables containing only passing comparisons omit the result column; unavailable or floor-limited measurements remain explicit. The workflow link leads to the complete JSON report and logs, including any text or commands omitted to fit the comment limit.
+PR comments contain only the overall status, problem rows and a full-report link; passing and improved results are omitted. Errors appear before regressions, budget violations and inconclusive measurements. Comments show at most ten problems; the link leads to the reporting job, which logs every result and appends the same tables to its Job Summary when available. The source benchmark run and its JSON artifact remain reachable from the execution table. A missing or unwritable reporter Job Summary does not prevent logging or comment publication.
 
 ## Update part of a page
 

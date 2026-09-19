@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Changed
 
-- PR benchmark comments lead with command-level counts and actionable failures, with separate expandable metric tables, decision evidence and run metadata. Inconclusive measurements appear as caveats unless they fail the check; recorded measurements, verdicts and comment replacement are unchanged.
+- PR benchmark comments show the overall status, problem rows and a full-report link. Complete results, judgement settings and metadata appear as tables in Actions logs and Job Summaries; measurement, verdict, JSON and comment replacement contracts are unchanged.
 
 ### Fixed
 
