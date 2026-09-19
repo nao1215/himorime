@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 - Tool errors include an `HMR` diagnostic code on stderr, documented in the reference; exit statuses and report formats are unchanged.
 
+### Changed
+
+- PR benchmark comments lead with command-level counts and actionable failures, with separate expandable metric tables, decision evidence and run metadata. Inconclusive measurements appear as caveats unless they fail the check; recorded measurements, verdicts and comment replacement are unchanged.
+
 ### Fixed
 
 - PR comments validate the base repository by ID, accepting GitHub's slim workflow-run payload instead of requiring its absent `full_name` field.
