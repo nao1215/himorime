@@ -649,9 +649,9 @@ Locally, `himorime run` checks the same budgets without a base revision. In the 
 |---|---|
 | `1` | a budget was missed or a regression was confirmed: the code got slower, hungrier or less productive |
 | `4` | a command, hook, build or Git operation failed: the measurement did not complete |
-| `6` | a requested metric could not be measured: performance was not judged |
+| `6` | a requested metric could not be measured or a required budget could not be assessed |
 
-The last line of the log says the same in words, and annotations are titled `performance budget exceeded`, `performance regression`, `benchmark could not run` or `metric could not be measured`.
+The last line of the log says the same in words, and annotations are titled `performance budget exceeded`, `performance regression`, `benchmark could not run`, `metric could not be measured` or `required budget could not be assessed`.
 
 - The workflow is `pull_request` with `contents: read` and no secrets. himorime refuses `pull_request_target`.
 - Check out with `fetch-depth: 0` so the base commit exists locally.

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/nao1215/himorime/internal/config"
-	"github.com/nao1215/himorime/internal/exitcode"
 	"github.com/nao1215/himorime/internal/metric"
 	"github.com/nao1215/himorime/internal/proc"
 	"github.com/nao1215/himorime/internal/runner"
@@ -144,11 +143,12 @@ func judgeBenchmark(br runner.BenchmarkResult, o Options) Benchmark {
 		// A benchmark that did not complete (a hook failed, the run was
 		// interrupted) judges none of its commands: partial samples are kept
 		// in the report but never presented as a pass.
-		if r, failed := commandFailure(b, c, mode); failed {
-			c.Result = r
+		failureResult, failed := commandFailure(b, c, mode)
+		if failed {
+			c.Result = failureResult
 		}
 		budgets(c, cfg)
-		if mode == ModeCompare && !c.Result.isError() {
+		if mode == ModeCompare && !failed {
 			compareMetrics(c, br, cfg, o.Seed)
 		}
 		b.Result = worst(b.Result, c.Result)
@@ -439,67 +439,15 @@ func relative(b *Benchmark) {
 	}
 }
 
-// budgets checks every absolute budget of the command against the head.
-func budgets(c *Command, cfg config.Benchmark) {
-	for _, bud := range cfg.Budgets {
-		if bud.Command != c.Name {
-			continue
-		}
-		def := metric.MustLookup(bud.Metric)
-		check := BudgetCheck{
-			Metric:      string(bud.Metric),
-			Aggregation: string(bud.Aggregation),
-			Operator:    string(bud.Threshold.Op),
-			Limit:       bud.Threshold.Limit,
-			Unit:        def.Unit(cfg.Metrics.WorkUnit()),
-			Status:      BudgetNoData,
-		}
-		var ms *MetricSummary
-		if c.Head != nil {
-			ms = c.Head.Metrics[string(bud.Metric)]
-		}
-		switch {
-		case ms != nil && ms.Status == StatusUnsupported:
-			check.Status, check.Reason = BudgetSkipped, ms.Reason
-		case ms == nil || ms.Status != StatusMeasured || len(ms.Samples) == 0:
-			check.Reason = "no successful run measured this metric"
-			if ms != nil && ms.Reason != "" {
-				check.Reason = ms.Reason
-			}
-		default:
-			actual, _ := stats.Aggregate(ms.Samples, bud.Aggregation)
-			check.Actual = &actual
-			switch {
-			case ms.atFloor(actual):
-				// The true value is at most the floor. An upper bound the
-				// floor meets is met; anything else cannot be decided.
-				check.Status, check.Reason = BudgetSkipped, ReasonAtFloor
-				if bud.Threshold.Op.Upper() && bud.Threshold.Allows(float64(ms.Floor)) {
-					check.Status, check.Pass = BudgetPass, true
-				}
-			default:
-				check.Pass = bud.Threshold.Allows(actual)
-				check.Status = BudgetFail
-				if check.Pass {
-					check.Status = BudgetPass
-				}
-			}
-		}
-		if check.Status == BudgetFail && !c.Result.isError() {
-			c.Result = worst(c.Result, ResultOverBudget)
-		}
-		c.Budgets = append(c.Budgets, check)
-	}
-}
-
 // compareMetrics compares every comparable metric the benchmark measures.
 // Only the verdicts of gated metrics decide the command's result; a metric
 // with gate: false is compared and reported, but never changes the result.
 func compareMetrics(c *Command, br runner.BenchmarkResult, cfg config.Benchmark, seed uint64) {
-	result := ResultPass
-	if c.Result == ResultOverBudget {
-		result = ResultOverBudget
-	}
+	// Keep an execution or metric error above comparison verdicts. Normally
+	// callers skip comparison for an errored command, but preserving the
+	// existing result here also protects this invariant for direct callers and
+	// future judging paths.
+	result := c.Result
 	c.Comparisons = map[string]*MetricComparison{}
 	for _, def := range metric.Defs() {
 		if !def.Comparable || def.Name == metric.Throughput || !cfg.Metrics.Collects(def.Group) {
@@ -895,106 +843,6 @@ func commandSet(b Benchmark) []string {
 func contains(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
-			return true
-		}
-	}
-	return false
-}
-
-func summarize(r *Report) {
-	sum := &r.Summary
-	sum.Suites = len(r.Suites)
-	countChecks(r)
-	count := func(res Result) {
-		switch res {
-		case ResultPass:
-			sum.Pass++
-		case ResultImproved:
-			sum.Improved++
-		case ResultInconclusive:
-			sum.Inconclusive++
-		case ResultOverBudget:
-			sum.OverBudget++
-		case ResultRegression:
-			sum.Regression++
-		case ResultMetricError:
-			sum.MetricError++
-		case ResultError:
-			sum.Error++
-		}
-	}
-	for _, s := range r.Suites {
-		if s.NewInHead {
-			sum.NewSuites++
-		}
-		if s.Error != nil {
-			count(errorResult(runner.FailureKind(s.Error.Kind)))
-		}
-		for _, b := range s.Benchmarks {
-			sum.Benchmarks++
-			if b.Error != nil && len(b.Commands) == 0 {
-				count(errorResult(runner.FailureKind(b.Error.Kind)))
-			}
-			for _, c := range b.Commands {
-				sum.Commands++
-				count(c.Result)
-			}
-			if b.Error != nil && len(b.Commands) > 0 && !anyError(b.Commands) {
-				count(errorResult(runner.FailureKind(b.Error.Kind)))
-			}
-		}
-	}
-	switch {
-	case sum.Error > 0:
-		sum.ExitCode = exitcode.Execution
-	case sum.MetricError > 0:
-		sum.ExitCode = exitcode.Metric
-	case sum.Regression > 0 || sum.OverBudget > 0:
-		sum.ExitCode = exitcode.Failed
-	case sum.Inconclusive > 0 && sum.FailOnInconclusive:
-		sum.ExitCode = exitcode.Failed
-	default:
-		sum.ExitCode = exitcode.OK
-	}
-}
-
-// countChecks counts the comparisons that are not gated, by verdict, and the
-// budgets and comparisons skipped because their metric is unsupported or
-// peak RSS could not be observed beyond the measurement floor.
-func countChecks(r *Report) {
-	sum := &r.Summary
-	for _, s := range r.Suites {
-		for _, b := range s.Benchmarks {
-			for _, c := range b.Commands {
-				for _, bc := range c.Budgets {
-					if bc.Status == BudgetSkipped {
-						sum.Skipped++
-					}
-				}
-				for _, mc := range c.Comparisons {
-					switch {
-					case mc.Verdict == VerdictSkipped:
-						sum.Skipped++
-					case mc.DerivedFrom != "":
-					case mc.Gate:
-					case mc.Verdict == string(stats.VerdictRegression):
-						sum.NotGated.Regression++
-					case mc.Verdict == string(stats.VerdictImproved):
-						sum.NotGated.Improved++
-					case mc.Verdict == string(stats.VerdictInconclusive):
-						sum.NotGated.Inconclusive++
-					default:
-						sum.NotGated.Pass++
-					}
-				}
-			}
-		}
-	}
-}
-
-func anyError(cs []Command) bool {
-	for _, c := range cs {
-		if c.Result.isError() {
 			return true
 		}
 	}

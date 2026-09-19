@@ -30,8 +30,8 @@ const (
 	ResultInconclusive Result = "inconclusive"
 	ResultOverBudget   Result = "over_budget"
 	ResultRegression   Result = "regression"
-	// ResultMetricError: a requested metric could not be collected, so the
-	// command's performance could not be judged.
+	// ResultMetricError: a requested metric could not be collected, or a
+	// required budget could not be assessed, so performance could not be judged.
 	ResultMetricError Result = "metric_error"
 	ResultError       Result = "error"
 )
@@ -320,9 +320,9 @@ type BudgetCheck struct {
 	Limit  float64  `json:"limit"`
 	Actual *float64 `json:"actual"`
 	Unit   string   `json:"unit"`
-	// Status is pass, fail, skipped (the metric was unsupported, or a peak
-	// RSS at the floor could not be judged against the budget) or no_data
-	// (the command produced no successful run).
+	// Status is pass, fail, skipped (the metric was explicitly waived as
+	// unsupported, or a peak RSS at the floor could not be judged against the
+	// budget) or no_data (the command produced no successful run).
 	Status string `json:"status"`
 	Pass   bool   `json:"pass"`
 	Reason string `json:"reason"`

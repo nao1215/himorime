@@ -90,6 +90,7 @@ A benchmark can carry absolute budgets and compare several metrics, and not ever
 |---|---|---|---|
 | Budget | exceeded | `over_budget` | 1 |
 | Budget | its metric is unsupported and `metrics.unsupported: skip` | unchanged, budget `skipped` | 0 |
+| Budget | its measured value cannot be assessed, such as an RSS bound below the floor | `metric_error`, budget `skipped` | 6 |
 | Gated comparison (`gate: true`, the default) | `regression` | `regression` | 1 |
 | Gated comparison | `inconclusive` | `inconclusive` | 0, or 1 with `--fail-on-inconclusive` |
 | Gated comparison | `pass`, `improved` | `pass`, `improved` | 0 |

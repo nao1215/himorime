@@ -312,7 +312,7 @@ scenarios:
   # Linux counts the peak RSS of the process that starts a command as part of
   # the command's. himorime starts commands from a small spawner, so a tiny
   # command no longer reports himorime's own 10MiB and more.
-  - name: peak rss of a command smaller than its starter is reported at the floor on Linux
+  - name: peak rss floors and required budgets on Linux
     only: {os: linux}
     steps:
       - fixture:
@@ -341,6 +341,32 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.floor", gt: 0}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.peak_rss.samples_at_floor", equals: 10}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.floor", equals: 0}
+
+      - fixture:
+          file: himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: floor budget}
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: tiny
+                metrics: {memory: true}
+                commands:
+                  "true": {command: ["true"]}
+                budget:
+                  "true":
+                    memory: {peak_rss: {max: "<= 1KiB"}}
+      - run:
+          command: himorime run --quiet --format json
+      - assert:
+          exit_code: 6
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "metric_error"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].status", equals: "skipped"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].reason", equals: "the peak RSS is at or below the measurement floor"}
+              - {path: "$.summary.metric_error", equals: 1}
+              - {path: "$.summary.exit_code", equals: 6}
 
   - name: peak rss of a multi-process tree is unsupported on Windows and fails unless skipped
     only: {os: windows}

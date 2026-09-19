@@ -131,7 +131,7 @@ What remains is the floor: the peak RSS of the process that started a run, read 
 
 - Tables show a statistic at or below the floor as `≤ 6.30MiB`, the floor, with a sentence under the table.
 - In a comparison, a side whose compared statistic is at or below its floor is compared as if it used the whole floor. A regression from a base at its floor, or an improvement to a head at its floor, is still reported, because the real change can only be larger. When one side alone is at its floor, any other verdict is inconclusive: "the peak RSS is at or below the measurement floor". When both sides are at their floors, memory was not observed beyond the floor on either side, so that metric is `skipped` and excluded from the comparison result and inconclusive count.
-- A budget on a peak RSS at or below the floor passes when it is an upper bound (`<` or `<=`) that the floor itself meets, since the real value is lower still. Otherwise it is `skipped` with the same reason.
+- A budget on a peak RSS at or below the floor passes when it is an upper bound (`<` or `<=`) that the floor itself meets, since the real value is lower still. Otherwise its budget status is `skipped` with the same reason, and the command is `metric_error` with exit 6 because the required budget could not be assessed.
 
 To measure a command smaller than the floor, measure a larger input, or use a tool that reads the command's memory from inside it. Windows reads the peak working set of the started process itself, which the process that started it does not raise: its floor is always 0.
 
@@ -173,7 +173,7 @@ A metric in a report always has a status:
 | `unsupported` | The platform cannot measure it, and `metrics.unsupported` is `skip`. | `null`, with a reason |
 | `failed` | The platform supports it but did not report it, or the declared work could not be read. | `null`, with a reason |
 
-A missing value is never reported as zero. With the default `metrics.unsupported: fail`, himorime stops before building or running anything when a platform cannot measure a requested metric at all, and exits 6 when it learns so during a run. With `skip`, the rest is measured, the metric is `unsupported`, and its budgets and comparisons are `skipped`, never passed. A `failed` metric exits 6 under either policy.
+A missing value is never reported as zero. With the default `metrics.unsupported: fail`, himorime stops before building or running anything when a platform cannot measure a requested metric at all, and exits 6 when it learns so during a run. With `skip`, the rest is measured, the metric is `unsupported`, and its budgets and comparisons are `skipped` as an explicit waiver; a passing command is shown as `PASS WITH SKIPS`. A `failed` metric exits 6 under either policy. A required budget with no assessable value is not a waiver: an observed RSS floor keeps its budget `skipped` with a reason and makes the command `metric_error`; `no_data` caused by an execution failure remains an execution error.
 
 ## Overhead
 

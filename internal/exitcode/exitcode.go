@@ -7,7 +7,7 @@ package exitcode
 
 // Exit statuses.
 const (
-	// OK: every benchmark completed and every budget and regression check passed.
+	// OK: every selected benchmark completed without a failing required check.
 	OK = 0
 	// Failed: a budget was exceeded or a regression was confirmed (or, with
 	// --fail-on-inconclusive, a comparison was inconclusive).
@@ -21,9 +21,8 @@ const (
 	Execution = 4
 	// Internal: a bug or an unexpected environment failure inside himorime.
 	Internal = 5
-	// Metric: a requested metric could not be measured, because the platform
-	// does not support it or reading it failed. This can be detected before
-	// any command is executed.
+	// Metric: a requested metric could not be measured, or a required budget
+	// could not be assessed. Depending on the cause, commands may not have run.
 	Metric = 6
 )
 
@@ -37,13 +36,13 @@ type Code struct {
 // All returns every exit status in ascending order.
 func All() []Code {
 	return []Code{
-		{OK, "ok", "Every selected benchmark completed, and every budget and regression check passed. Inconclusive comparisons also exit 0 unless --fail-on-inconclusive is given."},
+		{OK, "ok", "Every selected benchmark completed without a failing required check. Explicitly skipped unsupported metrics are allowed; inconclusive comparisons exit 0 unless --fail-on-inconclusive is given."},
 		{Failed, "failed", "A performance budget was exceeded, a regression was confirmed on any metric, or --fail-on-inconclusive was given and a comparison was inconclusive. The measurement itself succeeded."},
 		{Config, "config", "A suite file is not valid YAML, does not match the schema, or fails semantic validation. Nothing was executed."},
 		{Usage, "usage", "The command line is invalid: an unknown flag or command, a missing argument, or no benchmark matched the selection."},
 		{Execution, "execution", "A measured command, hook or build failed or timed out, a Git operation failed, the base revision could not be resolved, or the run was interrupted."},
 		{Internal, "internal", "himorime hit an unexpected internal error. Please report it."},
-		{Metric, "metric", "A requested metric (throughput, cpu or memory) could not be measured: this platform does not support it and metrics.unsupported is fail, or the operating system did not report it. Depending on the cause, the commands may not have run."},
+		{Metric, "metric", "A requested metric (throughput, cpu or memory) could not be measured, or a required budget could not be assessed. Depending on the cause, the commands may not have run."},
 	}
 }
 
@@ -61,7 +60,7 @@ func Outcome(code int, inconclusiveOnly bool) string {
 	case Execution:
 		return "the measurement did not complete: a command, hook, build or Git operation failed, or the run was interrupted"
 	case Metric:
-		return "a requested metric could not be measured; performance was not judged"
+		return "a requested metric could not be measured or a required budget could not be assessed"
 	}
 	return ""
 }
