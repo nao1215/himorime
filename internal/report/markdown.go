@@ -181,6 +181,16 @@ func resultJudged(s Suite) bool {
 			if c.Result.isError() {
 				return true
 			}
+			for _, m := range []*Measurement{c.Head, c.Base} {
+				if m == nil {
+					continue
+				}
+				for _, ms := range m.Metrics {
+					if ms.Status == StatusUnsupported {
+						return true
+					}
+				}
+			}
 		}
 	}
 	return false

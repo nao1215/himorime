@@ -94,7 +94,7 @@ Grant `pull-requests: write` only to the benchmark job. Automatic comments are s
 |---|---|---|---|
 | `1` | `himorime: exit 1: performance check failed: ...` | `himorime: performance budget exceeded`, `himorime: performance regression` | The code got slower, less productive or hungrier. |
 | `4` | `himorime: exit 4: the measurement did not complete: ...` | `himorime: benchmark could not run` | A command, hook, build or Git operation failed. |
-| `6` | `himorime: exit 6: a requested metric could not be measured; ...` | `himorime: metric could not be measured` | The platform cannot measure a requested metric, or did not report it. |
+| `6` | `himorime: exit 6: a requested metric could not be measured or a required budget could not be assessed` | `himorime: metric could not be measured` or `himorime: required budget could not be assessed` | The platform cannot measure a requested metric, did not report it, or a required budget has no assessable value. |
 | `2`, `3` | the validation or usage error | none | The suite or the command line is wrong; nothing ran. |
 
 To keep performance advisory while still failing when the measurement breaks, accept only status 1 in the step: `himorime ci || [ $? -eq 1 ]`. The job summary and annotations still report the regression.

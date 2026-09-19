@@ -16,6 +16,7 @@ const (
 	TitleInconclusive = "himorime: inconclusive comparison"
 	TitleNotGated     = "himorime: performance regression (not gated)"
 	TitleMetricError  = "himorime: metric could not be measured"
+	TitleBudgetError  = "himorime: required budget could not be assessed"
 	TitleError        = "himorime: benchmark could not run"
 	TitleNewInHead    = "himorime: suite new in this revision"
 )
@@ -52,6 +53,11 @@ func benchmarkAnnotations(sb *strings.Builder, file string, b Benchmark, c Comma
 	for _, m := range []*Measurement{c.Base, c.Head} {
 		if m != nil && m.Error != nil {
 			annotate(sb, "error", errorTitle(m.Error), file, label+": "+errorLine(m.Error))
+		}
+	}
+	for _, bc := range c.Budgets {
+		if bc.Status == BudgetSkipped && bc.Reason == ReasonAtFloor && c.Result == ResultMetricError {
+			annotate(sb, "error", TitleBudgetError, file, fmt.Sprintf("%s: budget %s could not be assessed: %s", label, budgetName(bc), bc.Reason))
 		}
 	}
 	for _, bc := range c.Budgets {

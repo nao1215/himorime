@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - All paths after `--` are treated as operands, including multiple paths beginning with a dash.
 - Inconclusive-only comparison failures no longer claim that a performance threshold was violated.
 - Corrected stale configuration and exit-status documentation and the rendering of metric gate names in the reference.
+- A required absolute budget that cannot be assessed, such as a peak RSS bound below the collector floor, now reports `metric_error` and exits 6 instead of silently passing. The budget remains `skipped` with its concrete reason; an explicit `metrics.unsupported: skip` waiver still exits 0.
+- Exit 6 explanations now distinguish an unassessed required budget from a metric collection failure.
 
 ## [0.3.0] - 2026-09-19
 

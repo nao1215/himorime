@@ -113,3 +113,44 @@ scenarios:
               - {path: "$.summary.inconclusive", equals: 0}
               - {path: "$.summary.skipped", equals: 1}
               - {path: "$.summary.exit_code", equals: 0}
+
+  - name: required RSS budgets exit 6 under both inconclusive policies
+    only: {os: linux}
+    steps:
+      - fixture:
+          file: repo/himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: required floor budget}
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: tiny
+                metrics: {memory: true}
+                commands: {tool: {command: ["true"]}}
+                budget:
+                  tool:
+                    memory: {peak_rss: {max: "<= 1KiB"}}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: himorime compare --against main --quiet --format json
+          cwd: repo
+      - assert:
+          exit_code: 6
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "metric_error"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].status", equals: "skipped"}
+              - {path: "$.summary.skipped", equals: 2}
+              - {path: "$.summary.exit_code", equals: 6}
+      - run:
+          command: himorime compare --against main --quiet --format json --fail-on-inconclusive
+          cwd: repo
+      - assert:
+          exit_code: 6
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "metric_error"}
+              - {path: "$.summary.inconclusive", equals: 0}
+              - {path: "$.summary.exit_code", equals: 6}

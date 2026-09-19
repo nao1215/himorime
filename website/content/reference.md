@@ -51,7 +51,7 @@ Prints one line per command of every selected benchmark: suite file, benchmark, 
 himorime run [flags] [PATH...]
 ```
 
-Builds the suite's artifact when a build section exists, then measures every selected benchmark: latency, and the throughput, CPU time and peak RSS the suite asks for. Commands of one benchmark run interleaved in a seeded random order. Exits 1 when a budget is exceeded, 4 when a command fails, and 6 when a requested metric cannot be measured.
+Builds the suite's artifact when a build section exists, then measures every selected benchmark: latency, and the throughput, CPU time and peak RSS the suite asks for. Commands of one benchmark run interleaved in a seeded random order. Exits 1 when a budget is exceeded, 4 when a command fails, and 6 when a requested metric cannot be measured or a required budget cannot be assessed.
 
 | Flag | Description |
 |---|---|
@@ -74,7 +74,7 @@ Builds the suite's artifact when a build section exists, then measures every sel
 himorime compare --against REF [flags] [PATH...]
 ```
 
-Checks REF out into a temporary Git worktree, builds both REF and the current working tree (uncommitted changes included), and measures them interleaved on this machine. Commands run in ${root} of each revision, so each runs its own code; ${head_root} names the working tree's copy for shared fixtures. Every measured metric is compared in the direction that is worse for it; a metric with `regression.<metric>.gate: false` is reported but never fails. The working tree, index and branches are never modified. Exits 1 on a gated regression or an exceeded budget.
+Checks REF out into a temporary Git worktree, builds both REF and the current working tree (uncommitted changes included), and measures them interleaved on this machine. Commands run in ${root} of each revision, so each runs its own code; ${head_root} names the working tree's copy for shared fixtures. Every measured metric is compared in the direction that is worse for it; a metric with `regression.<metric>.gate: false` is reported but never fails. The working tree, index and branches are never modified. Exits 1 on a gated regression or an exceeded budget, and 6 when a requested metric cannot be measured or a required budget cannot be assessed.
 
 | Flag | Description |
 |---|---|
@@ -99,7 +99,7 @@ Checks REF out into a temporary Git worktree, builds both REF and the current wo
 himorime ci [flags] [PATH...]
 ```
 
-Like compare, with CI defaults: no colors, and a Markdown summary appended to $GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $HIMORIME_BASE_REF, else the base commit of the GitHub Actions pull_request, merge_group or push event. pull_request_target is refused. In GitHub Actions, every missed budget, regression and failure is also printed as an annotation.
+Like compare, with CI defaults: no colors, and a Markdown summary appended to $GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $HIMORIME_BASE_REF, else the base commit of the GitHub Actions pull_request, merge_group or push event. pull_request_target is refused. In GitHub Actions, every missed budget, regression and failure is also printed as an annotation. Exits 6 when a requested metric cannot be measured or a required budget cannot be assessed.
 
 | Flag | Description |
 |---|---|
@@ -158,13 +158,13 @@ Shows the command list, or the usage and flags of one command.
 <!-- BEGIN GENERATED: exit-codes -->
 | Code | Name | Meaning |
 |---|---|---|
-| `0` | ok | Every selected benchmark completed, and every budget and regression check passed. Inconclusive comparisons also exit 0 unless --fail-on-inconclusive is given. |
+| `0` | ok | Every selected benchmark completed without a failing required check. Explicitly skipped unsupported metrics are allowed; inconclusive comparisons exit 0 unless --fail-on-inconclusive is given. |
 | `1` | failed | A performance budget was exceeded, a regression was confirmed on any metric, or --fail-on-inconclusive was given and a comparison was inconclusive. The measurement itself succeeded. |
 | `2` | config | A suite file is not valid YAML, does not match the schema, or fails semantic validation. Nothing was executed. |
 | `3` | usage | The command line is invalid: an unknown flag or command, a missing argument, or no benchmark matched the selection. |
 | `4` | execution | A measured command, hook or build failed or timed out, a Git operation failed, the base revision could not be resolved, or the run was interrupted. |
 | `5` | internal | himorime hit an unexpected internal error. Please report it. |
-| `6` | metric | A requested metric (throughput, cpu or memory) could not be measured: this platform does not support it and metrics.unsupported is fail, or the operating system did not report it. Depending on the cause, the commands may not have run. |
+| `6` | metric | A requested metric (throughput, cpu or memory) could not be measured, or a required budget could not be assessed. Depending on the cause, the commands may not have run. |
 <!-- END GENERATED: exit-codes -->
 
 Execution failures take precedence over metric failures, which take precedence over performance failures. An inconclusive comparison exits 0 unless `--fail-on-inconclusive` is set. JSON reports record the chosen status in `summary.exit_code`.

@@ -10,6 +10,8 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/exitcode"
 	"github.com/nao1215/himorime/internal/metric"
 	"github.com/nao1215/himorime/internal/runner"
 )
@@ -183,11 +185,17 @@ func TestBudgetOnPeakRSSAtTheFloor(t *testing.T) {
 			if bc.Actual == nil || *bc.Actual != 3<<20 {
 				t.Fatalf("actual = %v, want the measured statistic", bc.Actual)
 			}
+			wantResult := ResultPass
+			wantExit := exitcode.OK
+			if tt.status == BudgetSkipped {
+				wantResult = ResultMetricError
+				wantExit = exitcode.Metric
+			}
 			wantSkipped := 0
 			if tt.status == BudgetSkipped {
 				wantSkipped = 1
 			}
-			if c.Result != ResultPass || r.Summary.Skipped != wantSkipped {
+			if c.Result != wantResult || r.Summary.Skipped != wantSkipped || r.Summary.ExitCode != wantExit {
 				t.Fatalf("result %s, skipped %d", c.Result, r.Summary.Skipped)
 			}
 			var out bytes.Buffer
@@ -195,8 +203,21 @@ func TestBudgetOnPeakRSSAtTheFloor(t *testing.T) {
 			if !strings.Contains(out.String(), "≤ 5.00MiB") {
 				t.Errorf("budget table does not show the floor:\n%s", out.String())
 			}
-			if tt.status == BudgetSkipped && !strings.Contains(out.String(), "skipped: the peak RSS is at or below the measurement floor") {
+			if tt.status == BudgetSkipped && (!strings.Contains(out.String(), "COULD NOT BE ASSESSED") || !strings.Contains(out.String(), "could not be assessed: the peak RSS is at or below the measurement floor")) {
 				t.Errorf("terminal does not say why the budget was skipped:\n%s", out.String())
+			}
+			if tt.status == BudgetSkipped {
+				md := markdownOf(t, r)
+				if !strings.Contains(md, "COULD NOT BE ASSESSED") || !strings.Contains(md, "could not be assessed: the peak RSS is at or below the measurement floor") {
+					t.Errorf("markdown does not say why the budget was unassessed:\n%s", md)
+				}
+				var summary bytes.Buffer
+				if err := WriteGitHubSummary(&summary, r); err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(summary.String(), "COULD NOT BE ASSESSED") || !strings.Contains(summary.String(), "the peak RSS is at or below the measurement floor") {
+					t.Errorf("job summary does not say why the budget was unassessed:\n%s", summary.String())
+				}
 			}
 		})
 	}
@@ -206,6 +227,62 @@ func TestBudgetOnPeakRSSAtTheFloor(t *testing.T) {
 	b.Benchmark.Budgets = append(b.Benchmark.Budgets, budget(t, "tool", metric.PeakRSS, metric.AggMax, "<= 32MiB"))
 	if bc := judge(ModeRun, false, b).Suites[0].Benchmarks[0].Commands[0].Budgets[0]; bc.Status != BudgetFail || bc.Reason != "" {
 		t.Fatalf("a budget above the floor = %+v", bc)
+	}
+}
+
+func TestFloorBudgetMetricErrorSurvivesComparison(t *testing.T) {
+	t.Parallel()
+	base := floorResult("x", 3<<20, repeat(5<<20, 20)...)
+	head := floorResult("x", 3<<20, repeat(5<<20, 20)...)
+	head.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.PeakRSS, metric.AggMax, "<= 4MiB")}
+	r := judge(ModeCompare, false, pairSides("x", base, head))
+	c := &r.Suites[0].Benchmarks[0].Commands[0]
+	if c.Result != ResultMetricError || c.Comparisons == nil || c.Comparisons["latency"] == nil || r.Summary.ExitCode != exitcode.Metric {
+		t.Fatalf("floor budget = %s, summary %+v", c.Result, r.Summary)
+	}
+	// Verify a repeated comparison also preserves the required-budget error.
+	compareMetrics(c, pairSides("x", base, head), head.Benchmark, 42)
+	if c.Result != ResultMetricError {
+		t.Fatalf("comparison overwrote metric error with %s", c.Result)
+	}
+	var out bytes.Buffer
+	if err := WriteAnnotations(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "title=himorime%3A required budget could not be assessed") ||
+		!strings.Contains(out.String(), "budget peak rss max could not be assessed: the peak RSS is at or below the measurement floor") {
+		t.Fatalf("floor annotation = %s", out.String())
+	}
+}
+
+func TestNoDataBudgetKeepsExecutionError(t *testing.T) {
+	t.Parallel()
+	noData := runResult("no data", "", map[string][]time.Duration{"tool": nil}, "tool")
+	noData.Benchmark.Budgets = []config.Budget{latencyBudget(t, "tool", metric.AggMedian, "<= 1s")}
+	r := judge(ModeRun, false, noData)
+	c := r.Suites[0].Benchmarks[0].Commands[0]
+	if c.Budgets[0].Status != BudgetNoData || c.Result != ResultMetricError || r.Summary.ExitCode != exitcode.Metric {
+		t.Fatalf("no-data budget = %+v, result %s, summary %+v", c.Budgets[0], c.Result, r.Summary)
+	}
+	execution := runResult("execution", "", map[string][]time.Duration{"tool": nil}, "tool")
+	execution.Benchmark.Budgets = noData.Benchmark.Budgets
+	execution.Commands[0].Sides[runner.SideHead].Failure = &runner.Failure{Kind: runner.FailExitCode, ExitCode: 1, Message: "exited"}
+	r = judge(ModeRun, false, execution)
+	c = r.Suites[0].Benchmarks[0].Commands[0]
+	if c.Budgets[0].Status != BudgetNoData || c.Result != ResultError || r.Summary.ExitCode != exitcode.Execution {
+		t.Fatalf("execution no-data budget = %+v, result %s, summary %+v", c.Budgets[0], c.Result, r.Summary)
+	}
+}
+
+func TestBenchmarkExecutionErrorOutranksFloorBudget(t *testing.T) {
+	t.Parallel()
+	b := floorResult("cleanup", 3<<20, repeat(5<<20, 10)...)
+	b.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.PeakRSS, metric.AggMax, "<= 4MiB")}
+	b.Failure = &runner.Failure{Kind: runner.FailCleanup, Message: "cleanup failed"}
+	r := judge(ModeRun, false, b)
+	c := r.Suites[0].Benchmarks[0].Commands[0]
+	if c.Result != ResultError || r.Summary.Error != 1 || r.Summary.MetricError != 0 || r.Summary.ExitCode != exitcode.Execution {
+		t.Fatalf("benchmark execution error = %s, summary %+v", c.Result, r.Summary)
 	}
 }
 

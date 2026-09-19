@@ -64,6 +64,46 @@ scenarios:
               - "| Benchmark | Metric | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result | Reason | Rule |"
               - "| sleepy / app |"
 
+  - name: ci exits 6 when a required RSS budget is below the floor
+    only: {os: linux}
+    env:
+      GITHUB_ACTIONS: "true"
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_EVENT_PATH: ${workdir}/event.json
+    steps:
+      - fixture:
+          file: repo/himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: floor budget}
+            defaults: {warmup: 1, runs: 10}
+            benchmarks:
+              - name: tiny
+                metrics: {memory: true}
+                commands: {tool: {command: ["true"]}}
+                budget:
+                  tool:
+                    memory: {peak_rss: {max: "<= 1KiB"}}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run: {command: "e2ehelper event pull_request ${workdir}/repo ${workdir}/event.json"}
+      - run:
+          command: himorime ci --quiet --format json --output ${workdir}/result.json
+          cwd: repo
+      - assert:
+          exit_code: 6
+          stderr: {contains: "himorime: exit 6: a requested metric could not be measured or a required budget could not be assessed"}
+      - assert:
+          file:
+            path: result.json
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].result", equals: "metric_error"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].status", equals: "skipped"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].budgets[0].reason", equals: "the peak RSS is at or below the measurement floor"}
+              - {path: "$.summary.metric_error", equals: 1}
+              - {path: "$.summary.exit_code", equals: 6}
+
   - name: a regression in a pull request exits 1 and says so in the summary
     env:
       GITHUB_ACTIONS: "true"

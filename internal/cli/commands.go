@@ -68,7 +68,8 @@ func Commands() []Command {
 			Long: "Builds the suite's artifact when a build section exists, then measures every selected " +
 				"benchmark: latency, and the throughput, CPU time and peak RSS the suite asks for. Commands of " +
 				"one benchmark run interleaved in a seeded random order. Exits 1 when a budget is exceeded, 4 " +
-				"when a command fails, and 6 when a requested metric cannot be measured.",
+				"when a command fails, and 6 when a requested metric cannot be measured or a required budget " +
+				"cannot be assessed.",
 			Flags: runFlags,
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "run", args) },
 		},
@@ -82,7 +83,8 @@ func Commands() []Command {
 				"tree's copy for shared fixtures. Every measured metric is compared in the direction that is " +
 				"worse for it; a metric with `regression.<metric>.gate: false` is reported but never fails. The " +
 				"working tree, index and branches are never modified. Exits 1 on a gated regression or an " +
-				"exceeded budget.",
+				"exceeded budget, and 6 when a requested metric cannot be measured or a required budget " +
+				"cannot be assessed.",
 			Flags: compareFlags,
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "compare", args) },
 		},
@@ -94,7 +96,8 @@ func Commands() []Command {
 				"$GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $HIMORIME_BASE_REF, " +
 				"else the base commit of the GitHub Actions pull_request, merge_group or push event. " +
 				"pull_request_target is refused. In GitHub Actions, every missed budget, regression and " +
-				"failure is also printed as an annotation.",
+				"failure is also printed as an annotation. Exits 6 when a requested metric cannot be measured " +
+				"or a required budget cannot be assessed.",
 			Flags: ciFlags,
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "ci", args) },
 		},

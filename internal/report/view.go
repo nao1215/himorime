@@ -17,10 +17,11 @@ import (
 
 // Labels shown in a RESULT column besides the Result values.
 const (
-	labelUnsupported = "UNSUPPORTED"
-	labelSkipped     = "SKIPPED"
-	labelNoData      = "NO DATA"
-	labelFail        = "FAIL"
+	labelPassWithSkips = "PASS WITH SKIPS"
+	labelBudgetError   = "COULD NOT BE ASSESSED"
+	labelSkipped       = "SKIPPED"
+	labelNoData        = "NO DATA"
+	labelFail          = "FAIL"
 	// labelNotGated follows the verdict of a comparison with gate: false.
 	labelNotGated = "(NOT GATED)"
 )
@@ -134,8 +135,8 @@ func metricSummary(m *Measurement, n metric.Name) *MetricSummary {
 }
 
 // groupLabel is the RESULT cell of one command in the table of one metric
-// group: an error first, then UNSUPPORTED, then the worst of the group's
-// budgets and comparisons.
+// group: an error first, then the worst of the group's budgets and
+// comparisons, or PASS WITH SKIPS for an explicitly waived metric.
 func groupLabel(c Command, g metric.Group) (string, Result) {
 	if c.Result.isError() {
 		return verdictLabel(c.Result), c.Result
@@ -158,7 +159,7 @@ func groupLabel(c Command, g metric.Group) (string, Result) {
 		}
 	}
 	if unsupported && result == ResultPass {
-		return labelUnsupported, ResultInconclusive
+		return labelPassWithSkips, ResultPass
 	}
 	return verdictLabel(result), result
 }
@@ -286,6 +287,10 @@ func budgetView(c Command, bc BudgetCheck) budgetRow {
 	case BudgetFail:
 		row.label, row.result = labelFail, ResultOverBudget
 	case BudgetSkipped:
+		if bc.Reason == ReasonAtFloor && c.Result == ResultMetricError {
+			row.label, row.result = labelBudgetError, ResultMetricError
+			break
+		}
 		row.label, row.result = labelSkipped, ResultInconclusive
 	default:
 		row.label, row.result = labelNoData, ResultError
@@ -492,7 +497,8 @@ func budgetNotes(label string, c Command) []string {
 		case BudgetSkipped:
 			reason := "the metric is unsupported here"
 			if bc.Reason == ReasonAtFloor {
-				reason = bc.Reason
+				notes = append(notes, fmt.Sprintf("%s: budget %s could not be assessed: %s", label, budgetName(bc), bc.Reason))
+				continue
 			}
 			notes = append(notes, fmt.Sprintf("%s: budget %s skipped: %s", label, budgetName(bc), reason))
 		}

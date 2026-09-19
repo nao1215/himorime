@@ -107,10 +107,13 @@ func TestJudgeNotRequestedAndUnsupportedAreNotZero(t *testing.T) {
 	}
 	var out bytes.Buffer
 	_ = WriteTerminal(&out, r, TerminalOptions{})
-	for _, want := range []string{"memory not measured: peak rss is not supported: 2 processes", "SKIPPED", "UNSUPPORTED", "budget peak rss max skipped"} {
+	for _, want := range []string{"memory not measured: peak rss is not supported: 2 processes", "SKIPPED", "PASS WITH SKIPS", "budget peak rss max skipped"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("terminal lacks %q:\n%s", want, out.String())
 		}
+	}
+	if markdown := markdownOf(t, r); !strings.Contains(markdown, "PASS WITH SKIPS") {
+		t.Errorf("markdown lacks PASS WITH SKIPS:\n%s", markdown)
 	}
 }
 
