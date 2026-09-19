@@ -158,6 +158,10 @@ Every metric of every report says how it was collected, so a value can be read w
 
 Tables and Markdown repeat the aggregation in a sentence under the CPU and memory tables. himorime does not measure the combined memory of a process tree or a container; a cgroup's memory peak is outside what it reads.
 
+For a Linux-only combined-memory requirement, measure separately in a dedicated, delegated cgroup v2 and read `memory.peak`. This accounts for cgroup memory, including file cache and kernel charges, not summed process RSS. Shared pages and pages charged before entering the group need care. See the [kernel's memory controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory).
+
+Use a fresh group per measurement, wait for all descendants, and keep wrapper startup outside any latency comparison. A wrapper needs writable delegation and an available memory controller; it is not a portable himorime collector. Do not sum individual process peaks: sequential allocations would be counted as concurrent, and shared pages could be counted twice. Keep `peak_rss` budgets for the documented single-process peak semantics.
+
 ## Unsupported, failed and not requested
 
 A metric in a report always has a status:

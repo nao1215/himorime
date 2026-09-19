@@ -27,7 +27,11 @@ CPU utilization, user and system time are reported but not compared: they are pa
 
 ## The statistic
 
-For each compared metric of each command, himorime computes the observed change of the statistic (median by default, or mean):
+Revision comparisons support median (the default) or mean, not p95/p99. To guard slow executions, combine the median comparison with an absolute `budget.<command>.latency` percentile limit, such as `{p95: "<= 500ms", p99: "<= 1s"}`. A head-side budget can fail even when the median passes. It checks a latency requirement, not a statistically confirmed change from the base: an unchanged heavy tail can also exceed it.
+
+Percentiles need enough observations of the slow cases. With ten runs, p99 is near the observed maximum; if none hits the rare slow path, no percentile can recover it. Use a larger fixed `runs` count for tail checks; meeting adaptive run-count and duration limits does not establish adequate tail sampling. A relative tail-regression gate would need separate sample-size guidance and false-alarm calibration; changing the statistic name alone would not provide that.
+
+For each compared metric of each command, himorime computes the observed change of the selected statistic:
 
 ```text
 change = (head - base) / base × 100%

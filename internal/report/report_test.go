@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1103,4 +1104,141 @@ func githubFixture(kind string) *Report {
 
 func fixtureStats(v float64) *MetricStats {
 	return &MetricStats{Count: 20, Median: v, Mean: v, Min: v, Max: v, Percentiles: map[string]float64{"p90": v, "p95": v, "p99": v}}
+}
+
+func TestDocumentedSavedComparisonExport(t *testing.T) {
+	t.Parallel()
+	page, err := os.ReadFile("../../website/content/reports.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, ok := strings.Cut(string(page), "### Reuse a saved comparison\n")
+	if !ok {
+		t.Fatal("saved-report recipe is missing")
+	}
+	_, script, ok := strings.Cut(section, "jq -ers '")
+	if !ok {
+		t.Fatal("recipe must reject an empty input stream")
+	}
+	query, _, ok := strings.Cut(script, "' result.json")
+	if !ok {
+		t.Fatal("recipe must read the saved file")
+	}
+	jq, err := exec.LookPath("jq")
+	if err != nil {
+		t.Skip("jq is needed for the optional export recipe")
+	}
+	export := func(input string) ([]byte, error) {
+		cmd := exec.CommandContext(t.Context(), jq, "-ers", query)
+		cmd.Stdin = strings.NewReader(input)
+		return cmd.CombinedOutput()
+	}
+	for _, kind := range []string{"pass", "improved", "inconclusive", "regression", "budget", "metric-error", "error", "mixed"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+			rep := githubFixture(kind)
+			rep.SchemaVersion = SchemaVersion
+			var raw bytes.Buffer
+			if err := WriteJSON(&raw, rep); err != nil {
+				t.Fatal(err)
+			}
+			before := raw.String()
+			out, err := export(before)
+			if err != nil {
+				t.Fatalf("export: %v: %s", err, out)
+			}
+			again, err := export(before)
+			if err != nil || !bytes.Equal(out, again) || raw.String() != before {
+				t.Fatal("export must be deterministic and read-only")
+			}
+			reader := csv.NewReader(bytes.NewReader(out))
+			reader.Comma = '\t'
+			rows, err := reader.ReadAll()
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := 1
+			for _, s := range rep.Suites {
+				for _, b := range s.Benchmarks {
+					for _, c := range b.Commands {
+						expected += len(c.Comparisons)
+					}
+				}
+			}
+			if len(rows) != expected || len(rows[0]) != 12 {
+				t.Fatalf("export rows=%d, want %d, columns=%d", len(rows), expected, len(rows[0]))
+			}
+			for _, row := range rows[1:] {
+				if row[8] == "" {
+					t.Fatal("missing recorded verdict")
+				}
+			}
+			if kind == "inconclusive" && !strings.Contains(string(out), "<= 16777216") {
+				t.Fatal("floor-limited value was presented as exact")
+			}
+		})
+	}
+	for _, input := range []string{"", "{", "null", "{}", `{"schema_version":"2"}`, `{"schema_version":"1","suites":[]} {"schema_version":"1","suites":[]}`} {
+		if out, err := export(input); err == nil {
+			t.Fatalf("invalid input accepted: %s => %s", input, out)
+		}
+	}
+	// Reformat old saved values without inventing absent execution settings or
+	// deriving a verdict from the current configuration.
+	old := `{"schema_version":"1","suites":[{"name":"s","benchmarks":[{"name":"b","commands":[{"name":"c","comparisons":{"latency":{"unit":"ns","base":1,"head":2,"verdict":"pass","reason":"recorded decision"}}}]}]}]}`
+	if out, err := export(old); err != nil || !strings.Contains(string(out), "s\tb\tc\tlatency\tns\t\t1\t2\tpass\trecorded decision") {
+		t.Fatalf("old report: %s, %v", out, err)
+	}
+	advisory := strings.Replace(old, `"verdict":"pass"`, `"verdict":"regression","gate":false,"derived_from":"latency"`, 1)
+	if out, err := export(advisory); err != nil || !strings.Contains(string(out), "regression\trecorded decision\tfalse\tlatency") {
+		t.Fatalf("gating and derivation must survive export: %s, %v", out, err)
+	}
+	if out, err := export(`{"schema_version":"1","suites":[]}`); err != nil || bytes.Count(out, []byte("\n")) != 1 {
+		t.Fatalf("no comparisons must produce only a header: %s, %v", out, err)
+	}
+}
+
+func TestTailBudgetsComplementMedianComparison(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name               string
+		n, slow            int
+		baseTail, headTail time.Duration
+		budgetResult       string
+	}{
+		{"unchanged", 100, 10, 20 * time.Millisecond, 20 * time.Millisecond, BudgetPass},
+		{"tail-only slowdown", 100, 10, 20 * time.Millisecond, 100 * time.Millisecond, BudgetFail},
+		{"heavy unchanged tail", 100, 10, time.Second, time.Second, BudgetFail},
+		{"small sample sees slow run", 10, 1, 20 * time.Millisecond, 100 * time.Millisecond, BudgetFail},
+		{"small sample misses rare tail", 10, 0, 20 * time.Millisecond, 100 * time.Millisecond, BudgetPass},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			base, head := samples(10*time.Millisecond, tt.n, 0), samples(10*time.Millisecond, tt.n, 0)
+			for i := 0; i < tt.slow; i++ {
+				base[i], head[i] = tt.baseTail, tt.headTail
+			}
+			b := compareResult(tt.name, base, head)
+			b.Benchmark.Budgets = []config.Budget{latencyBudget(t, "tool", "p95", "<= 50ms"), latencyBudget(t, "tool", "p99", "<= 50ms")}
+			r := judge(ModeCompare, false, b)
+			c := r.Suites[0].Benchmarks[0].Commands[0]
+			if mc := c.Comparisons["latency"]; mc.Base == nil || mc.Head == nil || *mc.Base != float64(10*time.Millisecond) || *mc.Head != *mc.Base {
+				t.Fatalf("median changed: %+v", mc)
+			}
+			if len(c.Budgets) != 2 {
+				t.Fatal("tail budgets are missing")
+			}
+			for _, bc := range c.Budgets {
+				if bc.Status != tt.budgetResult {
+					t.Fatalf("%s=%s, want %s (actual=%v)", bc.Aggregation, bc.Status, tt.budgetResult, bc.Actual)
+				}
+			}
+			if tt.budgetResult == BudgetFail && r.Summary.ExitCode != exitcode.Failed {
+				t.Fatalf("tail budget did not fail the check: %+v", r.Summary)
+			}
+			if tt.name == "tail-only slowdown" && c.Comparisons["latency"].Verdict != string(ResultPass) {
+				t.Fatalf("fixture must isolate a passing median: %+v", c.Comparisons["latency"])
+			}
+		})
+	}
 }
