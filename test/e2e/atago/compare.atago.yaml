@@ -86,12 +86,12 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^BENCHMARK +BASE +HEAD +DIFF +CHANGE +CONFIDENCE +TOLERANCE +RESULT$"
+            matches: "(?m)^TARGET +METRIC +VALUE +RESULT +REASON$"
       - assert:
           stdout:
             # Identical builds: PASS, or INCONCLUSIVE on a noisy shared
             # runner, but never a regression.
-            matches: "(?m)^sleepy +[0-9.]+ms +[0-9.]+ms +[+-]?[0-9.]+(ns|µs|ms) +[+-][0-9.]+% +\\S+ +\\+10% +(PASS|INCONCLUSIVE)$"
+            matches: "(?m)^sleepy / app +Latency \\(median\\) +[0-9.]+ms → [0-9.]+ms \\([+-][0-9.]+%\\) +(PASS|INCONCLUSIVE) +.+$"
       - assert:
           stderr:
             contains: "with the working tree"
@@ -179,7 +179,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^sleepy .* IMPROVED$"
+            matches: "(?m)^sleepy / app +Latency \\(median\\) +\\S+ → \\S+ \\(-[0-9.]+%\\) +IMPROVED +-+$"
 
   - name: noisy measurements are inconclusive and fail only with --fail-on-inconclusive
     steps:
@@ -206,7 +206,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            contains: ["INCONCLUSIVE", "bimodal / app: inconclusive: measurements are noisier than max_cv", "1 inconclusive"]
+            contains: ["INCONCLUSIVE", "bimodal / app", "measurements are noisier than max_cv", "1 inconclusive"]
       - run:
           command: himorime compare --against main --fail-on-inconclusive --quiet
           cwd: repo
@@ -264,7 +264,7 @@ scenarios:
           cwd: repo
       - assert:
           exit_code: 4
-          stdout: {contains: ["error: build failed: build (base) exited with status 2"]}
+          stdout: {contains: ["compare", "suite", "build failed: build (base) exited with status 2"]}
       - run: {command: git worktree list --porcelain, cwd: repo}
       - assert:
           stdout: {count: 1, contains: "worktree "}
@@ -492,7 +492,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^sleepy +.* REGRESSION \\(NOT GATED\\)$"
+            matches: "(?m)^sleepy / app +Latency \\(median\\) +.* REGRESSION \\(NOT GATED\\) +-+$"
       - assert:
           stdout:
             contains: ["(NOT GATED) marks a metric with gate: false", "not gated: 1 regressed"]

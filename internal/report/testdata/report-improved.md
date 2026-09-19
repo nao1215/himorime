@@ -1,3 +1,15 @@
+| Target | Metric | Value | Result | Reason |
+|---|---|---|---|---|
+| version / himorime | Latency (median) | 10.00ms → 5.00ms (-50.0%) | IMPROVED | - |
+| validate / himorime | CPU time (median) | 12.00ms → 12.10ms (+0.8%) | PASS | the difference is smaller than min\_difference |
+| validate / himorime | Latency (median) | 10.00ms → 10.10ms (+1.0%) | PASS | the difference is smaller than min\_difference |
+| validate / himorime | Peak RSS (median) | 32.00MiB → 33.00MiB (+3.1%) | PASS | the difference is smaller than min\_difference |
+| version / himorime | CPU time (median) | 12.00ms → 12.10ms (+0.8%) | PASS | the difference is smaller than min\_difference |
+| version / himorime | Peak RSS (median) | 32.00MiB → 33.00MiB (+3.1%) | PASS | the difference is smaller than min\_difference |
+
+<details>
+<summary>Detailed statistics and decision rules</summary>
+
 | Benchmark | Metric | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result | Reason | Rule | P(regression) | P(improvement) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | version / himorime | Latency | 10.00ms | 5.00ms | -5.00ms | -50.0% | -55.0% … -45.0% | 0.0% | +10% | IMPROVED | - | R1 | - | - |
@@ -26,6 +38,11 @@
 |---|---|---|---|---|---|
 | R1 | median | 1.00ms | 95.0% | 10 | 0.5 |
 | R2 | median | 2.00MiB | 95.0% | 10 | 0.5 |
+
+</details>
+
+<details>
+<summary>Collection and environment</summary>
 
 | Collection | Metric | Source | Scope | Process aggregation |
 |---|---|---|---|---|
@@ -58,3 +75,5 @@
 | Base source | - |
 | Working tree dirty | false |
 | Suite | CLI performance |
+
+</details>

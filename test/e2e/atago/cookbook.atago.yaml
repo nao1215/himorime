@@ -155,13 +155,13 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^count 50k lines +\\S+ +\\S+ +\\S+ +[+-][0-9.]+% +\\S+ +\\+10% +(PASS|INCONCLUSIVE)$"
+            matches: "(?m)^count 50k lines / wordcount +Latency \\(median\\) +\\S+ → \\S+ \\([+-][0-9.]+%\\) +(PASS|INCONCLUSIVE) +-+$"
       - assert:
           stdout:
-            contains: ["latency\nBENCHMARK", "throughput\nBENCHMARK", "cpu total\nBENCHMARK", "peak rss\nBENCHMARK", "MiB/s"]
+            contains: ["count 50k lines / wordcount", "Latency (median)", "Throughput (median)", "CPU time (median)", "Peak RSS (median)", "MiB/s"]
       - assert:
           stdout:
-            matches: "(?m)^count 50k lines +[0-9.]+MiB/s +[0-9.]+MiB/s +\\S+ +[+-][0-9.]+% +\\S+ +-9.09% +(PASS|INCONCLUSIVE|IMPROVED) \\(FROM LATENCY\\)$"
+            matches: "(?m)^count 50k lines / wordcount +Throughput \\(median\\) +[0-9.]+MiB/s → [0-9.]+MiB/s \\([+-][0-9.]+%\\) +(PASS|INCONCLUSIVE|IMPROVED) \\(FROM LATENCY\\) +-+$"
       - assert:
           stderr: {contains: "including uncommitted changes"}
       - run: {command: git status --porcelain, cwd: repo}
@@ -188,7 +188,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^count records +\\S+ +\\S+ +\\S+ +[+-][0-9.]+% +\\S+ +\\+20% +(PASS|INCONCLUSIVE)$"
+            matches: "(?m)^count records / script +Latency \\(median\\) +\\S+ → \\S+ \\([+-][0-9.]+%\\) +(PASS|INCONCLUSIVE) +.+$"
       # Only the working tree's script gets slower. With no build, the base
       # revision still runs its own script, so the change is a regression.
       - run:
@@ -258,7 +258,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^work then wait +.* REGRESSION \\(NOT GATED\\)$"
+            matches: "(?m)^work then wait / sleepy +Latency \\(median\\) +.* REGRESSION \\(NOT GATED\\) +-+$"
       - assert:
           stdout: {contains: "not gated: 1 regressed"}
 
@@ -438,10 +438,10 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            contains: ["INCONCLUSIVE", "bimodal / sleepy: inconclusive: measurements are noisier than max_cv"]
+            contains: ["INCONCLUSIVE", "bimodal / sleepy", "measurements are noisier than max_cv"]
       - assert:
           stdout:
-            matches: "(?m)^steady +[0-9.]+ms +[0-9.]+ms +\\S+ +[+-][0-9.]+% +\\S+ +\\+20% +(PASS|INCONCLUSIVE)$"
+            matches: "(?m)^steady / sleepy +Latency \\(median\\) +\\S+ → \\S+ \\([+-][0-9.]+%\\) +(PASS|INCONCLUSIVE) +.+$"
       - run:
           command: himorime compare --against main --quiet --fail-on-inconclusive examples/noisy
           cwd: repo
@@ -484,7 +484,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^small +readall .* PASS$"
+            matches: "(?m)^small / readall +Latency \\(median\\) +.* PASS +-+$"
             not_contains: "large"
       - run:
           command: himorime run --quiet --runs 3 --format json ${env:HIMORIME_REPO}/examples/input-sizes
@@ -506,7 +506,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^regenerate then count +wordcount .* PASS$"
+            matches: "(?m)^regenerate then count / wordcount +Latency \\(median\\) +.* PASS +-+$"
 
   - name: Clean up after success, failure or interruption
     steps:
@@ -516,7 +516,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^with cleanup +wordcount .* PASS$"
+            matches: "(?m)^with cleanup / wordcount +Latency \\(median\\) +.* PASS +-+$"
 
   - name: Benchmark a warm cache
     steps:
@@ -557,7 +557,7 @@ scenarios:
       - assert:
           exit_code: 4
           stdout:
-            contains: ["hangs / sleepy: timeout: timed out after 1s and was stopped"]
+            contains: ["hangs / sleepy (head)", "timeout: timed out after 1s and was stopped"]
 
   - name: Treat a non-zero exit as an error
     steps:
@@ -568,11 +568,12 @@ scenarios:
           exit_code: 4
           stdout:
             contains:
-              - "unexpected failure / sleepy: exit code: exited with status 3 (allowed: 0)"
+              - "unexpected failure / sleepy (head)"
+              - "exit code: exited with status 3 (allowed: 0)"
               - "stderr: sleepy: exiting with status 3 as asked"
       - assert:
           stdout:
-            matches: "(?m)^expected exit code +sleepy .* PASS$"
+            matches: "(?m)^expected exit code / sleepy +Latency \\(median\\) +.* PASS +-+$"
 
   - name: Use a shell pipeline
     steps:
@@ -582,7 +583,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^pipeline +pipeline .* PASS$"
+            matches: "(?m)^pipeline / pipeline +Latency \\(median\\) +.* PASS +-+$"
 
   - name: Understand the geometric mean
     steps:

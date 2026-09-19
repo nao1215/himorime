@@ -120,8 +120,8 @@ func TestMarkdownHasNoGeometricMeanNote(t *testing.T) {
 	if err := WriteTerminal(&term, r, TerminalOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(term.String(), "no geometric mean: ") {
-		t.Errorf("the terminal keeps the note:\n%s", term.String())
+	if strings.Contains(term.String(), "1.00x") {
+		t.Errorf("the compact terminal shows a redundant ratio:\n%s", term.String())
 	}
 }
 

@@ -124,13 +124,13 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^BENCHMARK +COMMAND +MEDIAN +MEAN +STDDEV +RELATIVE +RESULT$"
+            matches: "(?m)^TARGET +METRIC +VALUE +RESULT +REASON$"
       - assert:
           stdout:
-            matches: "(?m)^sleepers +short +\\S+ +\\S+ +\\S+ +1\\.00x +PASS$"
+            matches: "(?m)^sleepers / short +Latency \\(median\\) +\\S+ +PASS +-+$"
       - assert:
           stdout:
-            matches: "(?m)^sleepers +long +[0-9.]+ms +\\S+ +\\S+ +[0-9.]+x +PASS$"
+            matches: "(?m)^sleepers / long +Latency \\(median\\) +[0-9.]+ms \\([0-9.]+x vs baseline\\) +PASS +-+$"
       - assert:
           stderr:
             contains: ['benchmark "sleepers": 2 measurement units, 1 warmup, 5 runs', "finished after 5 rounds"]
@@ -318,13 +318,13 @@ scenarios:
       - assert:
           exit_code: 1
           stdout:
-            matches: "(?m)^slow +helper .* OVER BUDGET$"
+            matches: "(?m)^slow / helper +Latency \\(median\\) +\\S+ +OVER BUDGET +-+$"
       - assert:
           stdout:
-            matches: "(?m)^fast +helper .* PASS$"
+            matches: "(?m)^fast / helper +Latency \\(median\\) +\\S+ +PASS +-+$"
       - assert:
           stdout:
-            contains: ["slow / helper: budget median < 10.00ms not met", "1 passed, 1 over budget"]
+            contains: ["slow / helper", "latency median", "limit < 10.00ms", "budget not met", "1 passed, 1 over budget"]
 
   - name: a command that exits non-zero is an execution error with its stderr, and secrets are masked
     env:
@@ -353,13 +353,13 @@ scenarios:
       - assert:
           exit_code: 4
           stdout:
-            matches: "(?m)^broken +bad +- +- +- +- +ERROR$"
+            matches: "(?m)^broken / bad \\(head\\) +execution +- +ERROR +.+$"
       - assert:
           stdout:
-            contains: ["broken / bad: exit code: exited with status 3 (allowed: 0)", "stderr: leaked ***"]
+            contains: ["broken / bad (head)", "exit code: exited with status 3 (allowed: 0)", "stderr: leaked ***"]
       - assert:
           stdout:
-            matches: "(?m)^expected exit +grep-like .* PASS$"
+            matches: "(?m)^expected exit / grep-like +Latency \\(median\\) +\\S+ +PASS +-+$"
       - assert:
           stdout:
             not_contains: "e2e-token-value-123456"
@@ -390,7 +390,7 @@ scenarios:
       - assert:
           exit_code: 4
           stdout:
-            contains: ["hangs / spawner: timeout: timed out after 500ms and was stopped"]
+            contains: ["hangs / spawner (head)", "timeout: timed out after 500ms and was stopped"]
       # The grandchild writes its marker two seconds after it starts; wait
       # past that and check it never did.
       - run:
@@ -496,10 +496,10 @@ scenarios:
       - assert:
           exit_code: 4
           stdout:
-            matches: "(?m)^consumes state +consume .* PASS$"
+            matches: "(?m)^consumes state / consume +Latency \\(median\\) +.* PASS +-+$"
       - assert:
           stdout:
-            matches: "(?m)^without prepare_each +consume +- .* ERROR$"
+            matches: "(?m)^without prepare_each / consume \\(head\\) +execution +- +ERROR +.+$"
 
   - name: cleanup runs after success, after a failed command, and after a failed setup
     steps:
@@ -529,7 +529,7 @@ scenarios:
       - assert:
           exit_code: 4
           stdout:
-            contains: ["setup fails: setup failed: setup[0] exited with status 5", "stderr: setup broke"]
+            contains: ["setup fails", "setup failed: setup[0] exited with status 5", "stderr: setup broke"]
       - assert:
           file: {path: cleaned-success, exists: true}
       - assert:
@@ -588,7 +588,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^pipeline +piped .* PASS$"
+            matches: "(?m)^pipeline / piped +Latency \\(median\\) +.* PASS +-+$"
 
   - name: warm and cold caches measure differently
     steps:
@@ -726,10 +726,10 @@ scenarios:
       - assert:
           exit_code: 4
           stdout:
-            matches: "(?m)^on a terminal +interactive +\\S+ +\\S+ +\\S+ +1\\.00x +PASS$"
+            matches: "(?m)^on a terminal / interactive +Latency \\(median\\) +\\S+ +PASS +-+$"
       - assert:
           stdout:
-            contains: ["without one / interactive: exit code: exited with status 2", "standard input is not a terminal"]
+            contains: ["without one / interactive (head)", "exit code: exited with status 2", "standard input is not a terminal"]
       - assert:
           file:
             path: seen.txt
