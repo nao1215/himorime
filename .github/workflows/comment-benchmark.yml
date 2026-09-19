@@ -1,6 +1,3 @@
-# Copy this file to .github/workflows/comment-benchmark.yml.
-# Posts the artifact from the Benchmark workflow without checking out or
-# executing pull request code.
 name: Comment benchmark result
 
 on:
