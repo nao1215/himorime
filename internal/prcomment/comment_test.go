@@ -14,12 +14,12 @@ import (
 
 const workflowPayload = `{
   "action":"completed",
-  "repository":{"full_name":"octo/bench"},
+  "repository":{"id":123,"full_name":"octo/bench"},
   "workflow_run":{
     "id":9001,"name":"benchmark","workflow_id":44,"run_number":12,"run_attempt":2,
     "event":"pull_request","status":"completed","conclusion":"failure","html_url":"https://github.example/octo/bench/actions/runs/9001",
-    "repository":{"full_name":"octo/bench"},
-    "pull_requests":[{"number":7,"base":{"repo":{"full_name":"octo/bench"}}}]
+    "repository":{"id":123,"full_name":"octo/bench"},
+    "pull_requests":[{"number":7,"base":{"repo":{"id":123,"name":"bench","url":"https://api.github.example/repos/octo/bench"}},"head":{"repo":{"id":456,"name":"bench","url":"https://api.github.example/repos/contributor/bench"}}}]
   }
 }`
 
@@ -51,8 +51,16 @@ func TestResolveWorkflowRun(t *testing.T) {
 		{"wrong event", workflowPayload, "pull_request", "octo/bench", "only available"},
 		{"foreign repository", strings.Replace(workflowPayload, `"full_name":"octo/bench"`, `"full_name":"evil/repo"`, 1), "workflow_run", "octo/bench", "does not match"},
 		{"not a pull request workflow", strings.Replace(workflowPayload, `"event":"pull_request"`, `"event":"push"`, 1), "workflow_run", "octo/bench", "want pull_request"},
-		{"no associated pull request", strings.Replace(workflowPayload, `"pull_requests":[{"number":7,"base":{"repo":{"full_name":"octo/bench"}}}]`, `"pull_requests":[]`, 1), "workflow_run", "octo/bench", "exactly one"},
-		{"foreign pull request", strings.Replace(workflowPayload, `"full_name":"octo/bench"}}}]`, `"full_name":"evil/repo"}}}]`, 1), "workflow_run", "octo/bench", "does not belong"},
+		{"no associated pull request", strings.Replace(workflowPayload, `"pull_requests":[`, `"pull_requests":[],"ignored":[`, 1), "workflow_run", "octo/bench", "exactly one"},
+		{"foreign pull request", strings.Replace(workflowPayload, `"id":123,"name":"bench"`, `"id":999,"name":"bench"`, 1), "workflow_run", "octo/bench", "does not belong"},
+		{"missing base repository ID", strings.Replace(workflowPayload, `"id":123,"name":"bench"`, `"name":"bench"`, 1), "workflow_run", "octo/bench", "does not belong"},
+		{"zero base repository ID", strings.Replace(workflowPayload, `"id":123,"name":"bench"`, `"id":0,"name":"bench"`, 1), "workflow_run", "octo/bench", "does not belong"},
+		{"missing event repository ID", strings.Replace(workflowPayload, `"id":123,`, ``, 1), "workflow_run", "octo/bench", "does not match"},
+		{"zero repository IDs", strings.ReplaceAll(workflowPayload, `"id":123`, `"id":0`), "workflow_run", "octo/bench", "does not match"},
+		{"negative repository IDs", strings.ReplaceAll(workflowPayload, `"id":123`, `"id":-123`), "workflow_run", "octo/bench", "does not match"},
+		{"source repository mismatch", strings.Replace(workflowPayload, `    "repository":{"id":123,`, `    "repository":{"id":999,`, 1), "workflow_run", "octo/bench", "does not match"},
+		{"missing source repository ID", strings.Replace(workflowPayload, `    "repository":{"id":123,`, `    "repository":{`, 1), "workflow_run", "octo/bench", "does not match"},
+		{"foreign source repository name", strings.Replace(workflowPayload, `    "repository":{"id":123,"full_name":"octo/bench"}`, `    "repository":{"id":123,"full_name":"evil/repo"}`, 1), "workflow_run", "octo/bench", "does not match"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

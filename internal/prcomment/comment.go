@@ -70,6 +70,7 @@ type WorkflowRun struct {
 type workflowRunEvent struct {
 	Action     string `json:"action"`
 	Repository struct {
+		ID       int64  `json:"id"`
 		FullName string `json:"full_name"`
 	} `json:"repository"`
 	WorkflowRun *struct {
@@ -83,13 +84,14 @@ type workflowRunEvent struct {
 		Conclusion string `json:"conclusion"`
 		HTMLURL    string `json:"html_url"`
 		Repository struct {
+			ID       int64  `json:"id"`
 			FullName string `json:"full_name"`
 		} `json:"repository"`
 		PullRequests []struct {
 			Number int `json:"number"`
 			Base   struct {
 				Repo struct {
-					FullName string `json:"full_name"`
+					ID int64 `json:"id"`
 				} `json:"repo"`
 			} `json:"base"`
 		} `json:"pull_requests"`
@@ -117,7 +119,7 @@ func (e Env) ResolveWorkflowRun(readFile func(string) ([]byte, error)) (Workflow
 		return WorkflowRun{}, fmt.Errorf("parse the workflow_run event payload: %w", err)
 	}
 	wr := ev.WorkflowRun
-	if wr == nil || ev.Repository.FullName != e.Repository || wr.Repository.FullName != e.Repository {
+	if wr == nil || ev.Repository.ID < 1 || wr.Repository.ID != ev.Repository.ID || ev.Repository.FullName != e.Repository || wr.Repository.FullName != e.Repository {
 		return WorkflowRun{}, errors.New("workflow_run repository does not match GITHUB_REPOSITORY")
 	}
 	if wr.Event != "pull_request" {
@@ -130,7 +132,8 @@ func (e Env) ResolveWorkflowRun(readFile func(string) ([]byte, error)) (Workflow
 		return WorkflowRun{}, fmt.Errorf("workflow_run is associated with %d pull requests, want exactly one", len(wr.PullRequests))
 	}
 	pr := wr.PullRequests[0]
-	if pr.Number < 1 || pr.Base.Repo.FullName != e.Repository {
+	// Pull request base repositories use GitHub's slim shape, without full_name.
+	if pr.Number < 1 || pr.Base.Repo.ID != ev.Repository.ID {
 		return WorkflowRun{}, errors.New("workflow_run pull request does not belong to GITHUB_REPOSITORY")
 	}
 	if wr.ID < 1 || wr.WorkflowID < 1 || wr.RunNumber < 1 || wr.RunAttempt < 1 || strings.TrimSpace(wr.Name) == "" {
