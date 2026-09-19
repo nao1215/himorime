@@ -88,8 +88,16 @@ jobs:
   comment:
     if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
+      # Install released code, never code from the pull request.
+      # setup-himorime v0.1.2 does not install the comment helper.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+          cache: false
+      - name: Install himorime and its comment helper
+        run: go install github.com/nao1215/himorime@v0.2.2 github.com/nao1215/himorime/cmd/himorime-comment@v0.2.2
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: himorime-report

@@ -295,6 +295,7 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 	t.Parallel()
 	files, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
 	files = append(files, filepath.Join(root, "examples", "github-actions", "benchmark.yml"))
+	files = append(files, filepath.Join(root, "examples", "github-actions", "comment.yml"))
 	if len(files) < 5 {
 		t.Fatalf("found only %d workflows", len(files))
 	}
@@ -312,8 +313,8 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 	}
 }
 
-// TestWorkflowPermissionsAreReadOnly allows write permissions only in the
-// release workflow.
+// TestWorkflowPermissionsAreReadOnly reserves writes for releasing and the
+// separately validated comment reporter.
 func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 	t.Parallel()
 	files, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
@@ -326,12 +327,75 @@ func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 		if filepath.Base(f) == "release.yml" {
 			continue
 		}
-		if m := write.FindStringSubmatch(text); m != nil {
-			t.Errorf("%s grants %s: write; only release.yml may", f, m[1])
+		for _, m := range write.FindAllStringSubmatch(text, -1) {
+			if filepath.Base(f) != "comment-benchmark.yml" || m[1] != "pull-requests" {
+				t.Errorf("%s grants unexpected %s: write", f, m[1])
+			}
 		}
 		if strings.Contains(text, "pull_request_target") {
 			t.Errorf("%s uses pull_request_target", f)
 		}
+	}
+}
+
+func TestBenchmarkCommentWorkflow(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(root, ".github", "workflows", "comment-benchmark.yml")
+	text := read(t, path)
+	var wf struct {
+		On struct {
+			WorkflowRun struct {
+				Workflows []string `yaml:"workflows"`
+				Types     []string `yaml:"types"`
+			} `yaml:"workflow_run"`
+		} `yaml:"on"`
+		Permissions map[string]string `yaml:"permissions"`
+		Jobs        map[string]struct {
+			If      string `yaml:"if"`
+			Timeout int    `yaml:"timeout-minutes"` //nolint:tagliatelle // GitHub's workflow syntax uses hyphens.
+			Steps   []struct {
+				Uses string            `yaml:"uses"`
+				Run  string            `yaml:"run"`
+				With map[string]string `yaml:"with"`
+				Env  map[string]string `yaml:"env"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal([]byte(text), &wf); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(wf.On.WorkflowRun.Workflows, ",") != "Benchmark" || strings.Join(wf.On.WorkflowRun.Types, ",") != "completed" {
+		t.Fatal("reporter must consume completed Benchmark runs")
+	}
+	if len(wf.Permissions) != 3 || wf.Permissions["actions"] != "read" || wf.Permissions["contents"] != "read" || wf.Permissions["pull-requests"] != "write" {
+		t.Fatalf("reporter permissions: %v", wf.Permissions)
+	}
+	job := wf.Jobs["comment"]
+	if len(wf.Jobs) != 1 || job.If != "github.event.workflow_run.event == 'pull_request'" || job.Timeout <= 0 {
+		t.Fatal("reporter must be bounded and accept only pull-request runs")
+	}
+	var installed, downloaded, posted bool
+	for _, step := range job.Steps {
+		if strings.Contains(step.Uses, "checkout") {
+			t.Fatal("reporter must not check out pull-request code")
+		}
+		if strings.Contains(step.Run, "go install") {
+			installed = strings.Contains(step.Run, "github.com/nao1215/himorime@v0.2.2") && strings.Contains(step.Run, "github.com/nao1215/himorime/cmd/himorime-comment@v0.2.2")
+		}
+		if strings.HasPrefix(step.Uses, "actions/download-artifact@") {
+			downloaded = step.With["name"] == "himorime-report" && step.With["run-id"] == "${{ github.event.workflow_run.id }}" && step.With["path"] == "${{ runner.temp }}"
+		}
+		if step.Run == `himorime comment "$RUNNER_TEMP/himorime.json"` {
+			posted = installed && downloaded && step.Env["GITHUB_TOKEN"] == "${{ github.token }}"
+		} else if step.Env["GITHUB_TOKEN"] != "" {
+			t.Fatal("only the comment step may receive GITHUB_TOKEN")
+		}
+	}
+	if !posted {
+		t.Fatal("reporter must install both binaries and post the triggering run's artifact")
+	}
+	if example := read(t, filepath.Join(root, "examples", "github-actions", "comment.yml")); !strings.HasSuffix(example, text) {
+		t.Fatal("the comment example must match the deployed workflow")
 	}
 }
 
