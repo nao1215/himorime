@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Fixed
 
+- The dogfood version benchmark skips RSS collection while all other dogfood benchmarks retain CPU and memory metrics.
 - All paths after `--` are treated as operands, including multiple paths beginning with a dash.
 - Inconclusive-only comparison failures no longer claim that a performance threshold was violated.
 - Corrected stale configuration and exit-status documentation and the rendering of metric gate names in the reference.
