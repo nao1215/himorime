@@ -76,7 +76,7 @@ func suitePaths(args []string) ([]string, error) {
 func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 	paths, err := suitePaths(args)
 	if err != nil {
-		diag.Print(stderr, exitcode.Config, "himorime: %v", err)
+		diag.PrintCode(stderr, diag.Input, "himorime: %v", err)
 		return nil, exitcode.Config
 	}
 	var suites []loadedSuite
@@ -92,7 +92,7 @@ func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 				status = exitcode.Config
 				continue
 			}
-			diag.Print(stderr, exitcode.Execution, "himorime: %v", err)
+			diag.PrintCode(stderr, diag.Input, "himorime: %v", err)
 			if status == 0 {
 				status = exitcode.Execution
 			}
