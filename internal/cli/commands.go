@@ -99,7 +99,7 @@ func Commands() []Command {
 			Name:  "comment",
 			Usage: "himorime comment [--hide-footer] REPORT.json",
 			Short: "Post a benchmark report on its pull request",
-			Long: "Reads a JSON report produced by himorime and creates or updates one pull request comment. " +
+			Long: "Reads a JSON report produced by himorime, posts the latest pull request comment, and removes older himorime comments. " +
 				"This command only accepts GitHub Actions workflow_run events, so the report cannot choose its " +
 				"repository or pull request. It exits 0 for a valid report even when that report found a regression.",
 			Flags: registerCommentFlags,

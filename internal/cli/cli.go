@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -22,15 +21,17 @@ import (
 // App carries everything a command touches outside its arguments, so tests
 // can run the CLI in-process against a fake environment.
 type App struct {
-	Stdin      io.Reader
-	Stdout     io.Writer
-	Stderr     io.Writer
-	LookupEnv  func(string) (string, bool)
-	Environ    func() []string
-	Getwd      func() (string, error)
-	ReadFile   func(string) ([]byte, error)
-	Now        func() time.Time
-	HTTPClient *http.Client
+	Stdin     io.Reader
+	Stdout    io.Writer
+	Stderr    io.Writer
+	LookupEnv func(string) (string, bool)
+	Environ   func() []string
+	Getwd     func() (string, error)
+	ReadFile  func(string) ([]byte, error)
+	Now       func() time.Time
+	// RunCommentHelper launches the separately packaged pull request reporter.
+	// Tests replace it so they do not depend on a platform-specific executable.
+	RunCommentHelper func(context.Context, []string, io.Reader, io.Writer, io.Writer, []string) (int, error)
 	// StdoutIsTerminal reports whether stdout is an interactive terminal.
 	StdoutIsTerminal bool
 	// Capabilities reports what this platform can measure; the platform's
@@ -69,7 +70,7 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		Getwd:            os.Getwd,
 		ReadFile:         os.ReadFile,
 		Now:              time.Now,
-		HTTPClient:       http.DefaultClient,
+		RunCommentHelper: runCommentHelper,
 		StdoutIsTerminal: isTerminal(stdout),
 	}
 	return app.Run(ctx, args)

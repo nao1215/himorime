@@ -117,7 +117,7 @@ func checkArchive(dist, version, goos, goarch string, host bool, fail func(strin
 		fail("%s: %v", name, err)
 		return
 	}
-	for _, want := range []string{"himorime" + exe, "LICENSE", "README.md", "CHANGELOG.md", "completions/himorime.bash", "completions/himorime.zsh", "completions/himorime.fish", "completions/himorime.ps1"} {
+	for _, want := range []string{"himorime" + exe, "himorime-comment" + exe, "LICENSE", "README.md", "CHANGELOG.md", "completions/himorime.bash", "completions/himorime.zsh", "completions/himorime.fish", "completions/himorime.ps1"} {
 		if len(files[want]) == 0 {
 			fail("%s lacks %s", name, want)
 		}
@@ -138,6 +138,13 @@ func checkArchive(dist, version, goos, goarch string, host bool, fail func(strin
 		return
 	}
 	checkBuildInfo(name, binPath, goos, goarch, version, fail)
+	commentBin := files["himorime-comment"+exe]
+	commentPath := filepath.Join(tmp, "himorime-comment"+exe)
+	if err := os.WriteFile(commentPath, commentBin, 0o700); err != nil {
+		fail("%v", err)
+		return
+	}
+	checkBuildPlatform(name+" himorime-comment", commentPath, goos, goarch, fail)
 	if !strings.Contains(string(files["completions/himorime.bash"]), "complete -o default -F _himorime himorime") {
 		fail("%s: the bash completion is not the generated script", name)
 	}
@@ -175,6 +182,24 @@ func checkBuildInfo(name, bin, goos, goarch, version string, fail func(string, .
 	}
 }
 
+func checkBuildPlatform(name, bin, goos, goarch string, fail func(string, ...any)) {
+	info, err := buildinfo.ReadFile(bin)
+	if err != nil {
+		fail("%s: read build info: %v", name, err)
+		return
+	}
+	settings := map[string]string{}
+	for _, setting := range info.Settings {
+		settings[setting.Key] = setting.Value
+	}
+	if settings["GOOS"] != goos || settings["GOARCH"] != goarch {
+		fail("%s: binary is %s/%s", name, settings["GOOS"], settings["GOARCH"])
+	}
+	if settings["CGO_ENABLED"] != "0" || settings["-trimpath"] != "true" {
+		fail("%s: expected CGO_ENABLED=0 and -trimpath", name)
+	}
+}
+
 func runBinary(name, bin, dir, version string, fail func(string, ...any)) {
 	out, err := command(dir, bin, "version")
 	if err != nil || !strings.HasPrefix(out, "himorime v"+version+" (") {
@@ -191,6 +216,9 @@ func runBinary(name, bin, dir, version string, fail func(string, ...any)) {
 	}
 	if _, err := command(dir, bin, "frobnicate"); !exitCode(err, 3) {
 		fail("%s: an unknown command must exit 3, got %v", name, err)
+	}
+	if out, err := command(dir, bin, "comment", "--help"); err != nil || !strings.Contains(out, "--hide-footer") {
+		fail("%s: himorime comment --help: %v\n%s", name, err, out)
 	}
 	fmt.Printf("smoke: ran %s\n", name)
 }

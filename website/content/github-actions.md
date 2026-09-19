@@ -37,7 +37,7 @@ jobs:
         with:
           go-version: stable
       # Installs a prebuilt, checksum-verified himorime release.
-      - uses: nao1215/setup-himorime@b2896dee554ef31ea979f0388d9be22779ce73a2 # v0.1.1
+      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
       # Compares the pull request base and head, writes a job summary and
       # annotations, and saves JSON for the separate comment workflow.
       - run: himorime ci --format json --output "$RUNNER_TEMP/himorime.json"
@@ -89,7 +89,7 @@ jobs:
     if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: nao1215/setup-himorime@b2896dee554ef31ea979f0388d9be22779ce73a2 # v0.1.1
+      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: himorime-report

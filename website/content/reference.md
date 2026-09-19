@@ -124,7 +124,7 @@ Like compare, with CI defaults: no colors, and a Markdown summary appended to $G
 himorime comment [--hide-footer] REPORT.json
 ```
 
-Reads a JSON report produced by himorime and creates or updates one pull request comment. This command only accepts GitHub Actions workflow_run events, so the report cannot choose its repository or pull request. It exits 0 for a valid report even when that report found a regression.
+Reads a JSON report produced by himorime, posts the latest pull request comment, and removes older himorime comments. This command only accepts GitHub Actions workflow_run events, so the report cannot choose its repository or pull request. It exits 0 for a valid report even when that report found a regression.
 
 | Flag | Description |
 |---|---|

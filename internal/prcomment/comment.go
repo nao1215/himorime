@@ -1,4 +1,4 @@
-package ghactions
+package prcomment
 
 import (
 	"bytes"
@@ -26,8 +26,32 @@ const (
 	maxAPIResponseBytes = 8 * 1024 * 1024
 )
 
-var commentMarkerRE = regexp.MustCompile(`^<!-- himorime:benchmark-report:v1 workflow_id=([0-9]+) run_number=([0-9]+) run_attempt=([0-9]+) -->`)
+var commentMarkerV2RE = regexp.MustCompile(`^<!-- himorime:benchmark-report:v2 run_id=([0-9]+) workflow_id=([0-9]+) run_number=([0-9]+) run_attempt=([0-9]+) -->`)
+var commentMarkerV1RE = regexp.MustCompile(`^<!-- himorime:benchmark-report:v1 workflow_id=([0-9]+) run_number=([0-9]+) run_attempt=([0-9]+) -->`)
 var repositoryRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*/[A-Za-z0-9_.-]+$`)
+
+// Env is the trusted GitHub Actions environment used by the reporter.
+type Env struct {
+	Actions    bool
+	EventName  string
+	EventPath  string
+	Repository string
+	APIURL     string
+	Token      string
+}
+
+// FromLookup reads the reporter environment.
+func FromLookup(lookup func(string) (string, bool)) Env {
+	get := func(key string) string {
+		value, _ := lookup(key)
+		return value
+	}
+	return Env{
+		Actions: get("GITHUB_ACTIONS") == "true", EventName: get("GITHUB_EVENT_NAME"),
+		EventPath: get("GITHUB_EVENT_PATH"), Repository: get("GITHUB_REPOSITORY"),
+		APIURL: get("GITHUB_API_URL"), Token: get("GITHUB_TOKEN"),
+	}
+}
 
 // WorkflowRun is the trusted destination and source-run identity extracted
 // from a workflow_run payload. None of these values comes from the report.
@@ -146,7 +170,7 @@ type CommentRenderOptions struct {
 // RenderComment renders a bounded, escaped summary suitable for a pull
 // request comment. Large reports are represented by at most maxCommentRows.
 func RenderComment(r *report.Report, run WorkflowRun, opts CommentRenderOptions) (string, error) {
-	marker := fmt.Sprintf("<!-- himorime:benchmark-report:v1 workflow_id=%d run_number=%d run_attempt=%d -->", run.WorkflowID, run.RunNumber, run.RunAttempt)
+	marker := fmt.Sprintf("<!-- himorime:benchmark-report:v2 run_id=%d workflow_id=%d run_number=%d run_attempt=%d -->", run.RunID, run.WorkflowID, run.RunNumber, run.RunAttempt)
 	var details bytes.Buffer
 	if err := report.WriteMarkdown(&details, r); err != nil {
 		return "", fmt.Errorf("render benchmark details: %w", err)
@@ -281,7 +305,7 @@ func commandDetails(c report.Command) string {
 	return strings.Join(details, "; ")
 }
 
-// CommentClient creates or updates the sticky comment for one source workflow.
+// CommentClient keeps one current himorime comment on a pull request.
 type CommentClient struct {
 	HTTP       *http.Client
 	APIURL     string
@@ -289,49 +313,109 @@ type CommentClient struct {
 	Repository string
 }
 
-// Upsert creates or updates the sticky comment. stale is true when a newer
-// run already owns the comment, in which case no mutation is sent.
+// Upsert posts this run's result, then removes every owned himorime comment
+// except the globally newest result. Posting before the final list makes
+// concurrent workflow_run jobs converge without overwriting each other.
 func (c CommentClient) Upsert(ctx context.Context, run WorkflowRun, body string) (stale bool, err error) {
-	if c.HTTP == nil {
-		c.HTTP = http.DefaultClient
+	c, base, p, err := c.prepare(run)
+	if err != nil {
+		return false, err
 	}
-	if c.Token == "" {
-		return false, errors.New("GITHUB_TOKEN is not set")
+	incoming := marker{Version: 2, RunID: run.RunID, WorkflowID: run.WorkflowID, RunNumber: run.RunNumber, RunAttempt: run.RunAttempt}
+	path := fmt.Sprintf("/repos/%s/%s/issues/%d/comments", url.PathEscape(p[0]), url.PathEscape(p[1]), run.PullRequest)
+	var created issueComment
+	if err := c.send(ctx, apiEndpoint(base, path), http.MethodPost, map[string]string{"body": body}, &created); err != nil {
+		return false, err
 	}
-	base, err := url.Parse(c.APIURL)
-	if err != nil || (base.Scheme != "https" && base.Scheme != "http") || base.Host == "" || base.User != nil {
-		return false, errors.New("GITHUB_API_URL is invalid")
-	}
-	if c.Repository != run.Repository || !validRepository(c.Repository) {
-		return false, errors.New("comment repository does not match the workflow_run target")
+	if created.ID < 1 {
+		return false, errors.New("GitHub API returned a comment without an id")
 	}
 	comments, err := c.list(ctx, base, run.PullRequest)
 	if err != nil {
 		return false, err
 	}
-	var existing *issueComment
-	var current marker
+	owned := ownedComments(comments)
+	if !hasCommentID(owned, created.ID) {
+		created.Body = body
+		created.User.Login, created.User.Type = "github-actions[bot]", "Bot"
+		owned = append(owned, ownedComment{Comment: &created, Marker: incoming})
+	}
+	winner := newestOwned(owned)
+	if winner == nil {
+		return false, errors.New("posted himorime comment was not found")
+	}
+	if err := c.deleteOld(ctx, base, p, winner, owned); err != nil {
+		return false, err
+	}
+	return winner.ID != created.ID, nil
+}
+
+func (c CommentClient) prepare(run WorkflowRun) (CommentClient, *url.URL, []string, error) {
+	if c.HTTP == nil {
+		c.HTTP = http.DefaultClient
+	}
+	if c.Token == "" {
+		return c, nil, nil, errors.New("GITHUB_TOKEN is not set")
+	}
+	base, err := url.Parse(c.APIURL)
+	if err != nil || (base.Scheme != "https" && base.Scheme != "http") || base.Host == "" || base.User != nil {
+		return c, nil, nil, errors.New("GITHUB_API_URL is invalid")
+	}
+	if c.Repository != run.Repository || !validRepository(c.Repository) {
+		return c, nil, nil, errors.New("comment repository does not match the workflow_run target")
+	}
+	return c, base, strings.Split(c.Repository, "/"), nil
+}
+
+func ownedComments(comments []issueComment) []ownedComment {
+	var owned []ownedComment
 	for i := range comments {
 		m, ok := parseMarker(comments[i].Body)
-		if !ok || m.WorkflowID != run.WorkflowID || comments[i].User.Login != "github-actions[bot]" || comments[i].User.Type != "Bot" {
+		if !ok || comments[i].User.Login != "github-actions[bot]" || comments[i].User.Type != "Bot" {
 			continue
 		}
-		if existing == nil || newer(m, current) {
-			existing, current = &comments[i], m
+		owned = append(owned, ownedComment{Comment: &comments[i], Marker: m})
+	}
+	return owned
+}
+
+func newestOwned(owned []ownedComment) *issueComment {
+	var winner *ownedComment
+	for _, old := range owned {
+		if old.Marker.Version < 2 {
+			continue
+		}
+		if winner == nil || newer(old.Marker, winner.Marker) || sameRun(old.Marker, winner.Marker) && old.Comment.ID > winner.Comment.ID {
+			candidate := old
+			winner = &candidate
 		}
 	}
-	incoming := marker{WorkflowID: run.WorkflowID, RunNumber: run.RunNumber, RunAttempt: run.RunAttempt}
-	if existing != nil && newer(current, incoming) {
-		return true, nil
+	if winner == nil {
+		return nil
 	}
-	p := strings.Split(c.Repository, "/")
-	path := fmt.Sprintf("/repos/%s/%s/issues/%d/comments", url.PathEscape(p[0]), url.PathEscape(p[1]), run.PullRequest)
-	method := http.MethodPost
-	if existing != nil {
-		method = http.MethodPatch
-		path = fmt.Sprintf("/repos/%s/%s/issues/comments/%d", url.PathEscape(p[0]), url.PathEscape(p[1]), existing.ID)
+	return winner.Comment
+}
+
+func hasCommentID(owned []ownedComment, id int64) bool {
+	for _, old := range owned {
+		if old.Comment.ID == id {
+			return true
+		}
 	}
-	return false, c.send(ctx, apiEndpoint(base, path), method, map[string]string{"body": body}, nil)
+	return false
+}
+
+func (c CommentClient) deleteOld(ctx context.Context, base *url.URL, repository []string, existing *issueComment, owned []ownedComment) error {
+	for _, old := range owned {
+		if existing != nil && old.Comment.ID == existing.ID {
+			continue
+		}
+		deletePath := fmt.Sprintf("/repos/%s/%s/issues/comments/%d", url.PathEscape(repository[0]), url.PathEscape(repository[1]), old.Comment.ID)
+		if err := c.send(ctx, apiEndpoint(base, deletePath), http.MethodDelete, nil, nil); err != nil {
+			return fmt.Errorf("delete old himorime comment %d: %w", old.Comment.ID, err)
+		}
+	}
+	return nil
 }
 
 type issueComment struct {
@@ -410,27 +494,56 @@ func (c CommentClient) send(ctx context.Context, u *url.URL, method string, payl
 }
 
 type marker struct {
+	Version    int
+	RunID      int64
 	WorkflowID int64
 	RunNumber  int64
 	RunAttempt int64
 }
 
 func parseMarker(body string) (marker, bool) {
-	m := commentMarkerRE.FindStringSubmatch(body)
-	if m == nil {
+	if match := commentMarkerV2RE.FindStringSubmatch(body); match != nil {
+		values, ok := markerValues(match[1:])
+		if !ok {
+			return marker{}, false
+		}
+		return marker{Version: 2, RunID: values[0], WorkflowID: values[1], RunNumber: values[2], RunAttempt: values[3]}, true
+	}
+	match := commentMarkerV1RE.FindStringSubmatch(body)
+	if match == nil {
 		return marker{}, false
 	}
-	values := make([]int64, 3)
+	values, ok := markerValues(match[1:])
+	if !ok {
+		return marker{}, false
+	}
+	return marker{Version: 1, WorkflowID: values[0], RunNumber: values[1], RunAttempt: values[2]}, true
+}
+
+func markerValues(parts []string) ([]int64, bool) {
+	values := make([]int64, len(parts))
 	for i := range values {
-		v, err := strconv.ParseInt(m[i+1], 10, 64)
+		v, err := strconv.ParseInt(parts[i], 10, 64)
 		if err != nil || v < 1 {
-			return marker{}, false
+			return nil, false
 		}
 		values[i] = v
 	}
-	return marker{WorkflowID: values[0], RunNumber: values[1], RunAttempt: values[2]}, true
+	return values, true
 }
 
 func newer(a, b marker) bool {
-	return a.RunNumber > b.RunNumber || a.RunNumber == b.RunNumber && a.RunAttempt > b.RunAttempt
+	if a.Version < 2 {
+		return false
+	}
+	return a.RunID > b.RunID || a.RunID == b.RunID && a.RunAttempt > b.RunAttempt
+}
+
+func sameRun(a, b marker) bool {
+	return a.Version == 2 && b.Version == 2 && a.RunID == b.RunID && a.RunAttempt == b.RunAttempt
+}
+
+type ownedComment struct {
+	Comment *issueComment
+	Marker  marker
 }
