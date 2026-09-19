@@ -135,7 +135,7 @@ For a `pull_request` event, `actions/checkout` checks out the merge commit of th
 
 ## Keeping the report
 
-The workflow above saves `himorime-report` even when a benchmark exits 1, 4 or 6. Download it from the run page, or use the comment workflow to publish its compact summary.
+The workflow saves `himorime-report` after measurement reaches the report-writing step. A regression (exit 1) and execution failures during measurement still produce a report. Setup, worktree, configuration, or metric setup failures (exit 2, 4, or 6 before report writing) can stop before an artifact exists. Download the artifact from the run page, or use the comment workflow to publish its compact summary.
 
 ## Other CI systems
 

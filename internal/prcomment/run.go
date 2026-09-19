@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
@@ -54,7 +55,7 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer, deps Dep
 		deps.ReadFile = os.ReadFile
 	}
 	if deps.HTTP == nil {
-		deps.HTTP = http.DefaultClient
+		deps.HTTP = &http.Client{Timeout: 30 * time.Second}
 	}
 	env := FromLookup(deps.LookupEnv)
 	run, err := env.ResolveWorkflowRun(deps.ReadFile)

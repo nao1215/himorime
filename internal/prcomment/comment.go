@@ -358,8 +358,8 @@ func (c CommentClient) prepare(run WorkflowRun) (CommentClient, *url.URL, []stri
 		return c, nil, nil, errors.New("GITHUB_TOKEN is not set")
 	}
 	base, err := url.Parse(c.APIURL)
-	if err != nil || (base.Scheme != "https" && base.Scheme != "http") || base.Host == "" || base.User != nil {
-		return c, nil, nil, errors.New("GITHUB_API_URL is invalid")
+	if err != nil || base.Scheme != "https" || base.Host == "" || base.User != nil {
+		return c, nil, nil, errors.New("GITHUB_API_URL must be an https URL")
 	}
 	if c.Repository != run.Repository || !validRepository(c.Repository) {
 		return c, nil, nil, errors.New("comment repository does not match the workflow_run target")
