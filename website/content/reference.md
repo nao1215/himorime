@@ -171,14 +171,17 @@ Execution failures take precedence over metric failures, which take precedence o
 
 ## Diagnostic codes
 
-Tool errors printed to standard error carry an `HMR` code whose first digit identifies the corresponding error category (exit statuses 2–6). Use the exit status for scripts and the diagnostic code when reporting a problem. Measurement-result lines for success and performance-result exit `1`, including `--fail-on-inconclusive`, have no diagnostic prefix; an auxiliary operation such as writing an annotation can still report a separate error. Detailed messages explain the cause within each category.
+Tool errors printed to standard error carry an `HMR` code identifying the error category and cause. Use the exit status for scripts and the diagnostic code when reporting a problem. Measurement-result lines for success and performance-result exit `1`, including `--fail-on-inconclusive`, have no diagnostic prefix; an auxiliary operation such as writing an annotation can still report a separate error.
 
 <!-- BEGIN GENERATED: error-codes -->
 | Code | Name | Meaning |
 |---|---|---|
 | `HMR2001` | invalid input | A suite or saved report is missing, malformed, or invalid. |
 | `HMR3001` | invalid command line | The command name, flag, or command-line argument is invalid. |
-| `HMR4001` | execution failed | A command, hook, build, Git operation, report write, or cleanup step failed. |
+| `HMR4001` | command, hook, or build failed | A measured command, hook, or build failed or timed out. |
+| `HMR4002` | Git operation failed | A Git repository, revision, or worktree operation failed. |
+| `HMR4003` | output failed | CLI output, a generated suite, a report, or a job summary could not be written. |
+| `HMR4004` | interrupted | The run was interrupted and cleanup was performed. |
 | `HMR5001` | internal error | himorime encountered an unexpected internal error. |
 | `HMR6001` | metric unavailable | A requested metric is unsupported or could not be collected. |
 <!-- END GENERATED: error-codes -->

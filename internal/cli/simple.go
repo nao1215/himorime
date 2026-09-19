@@ -48,13 +48,13 @@ func runInit(_ context.Context, a *App, args []string) int {
 			diag.Print(a.Stderr, exitcode.Usage, "himorime init: %s already exists; it was not changed (use --force to overwrite it)", path)
 			return exitcode.Usage
 		}
-		diag.Print(a.Stderr, exitcode.Execution, "himorime init: %v", err)
+		diag.PrintCode(a.Stderr, diag.Report, "himorime init: %v", err)
 		return exitcode.Execution
 	}
 	_, werr := f.WriteString(InitTemplate)
 	cerr := f.Close()
 	if err := errors.Join(werr, cerr); err != nil {
-		diag.Print(a.Stderr, exitcode.Execution, "himorime init: write %s: %v", path, err)
+		diag.PrintCode(a.Stderr, diag.Report, "himorime init: write %s: %v", path, err)
 		return exitcode.Execution
 	}
 	fmt.Fprintf(a.Stdout, "wrote %s\nnext: himorime validate %s && himorime run %s\n", path, path, path)
@@ -139,7 +139,7 @@ func runList(_ context.Context, a *App, args []string) int {
 		enc := json.NewEncoder(a.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(entries); err != nil {
-			diag.Print(a.Stderr, exitcode.Execution, "himorime list: %v", err)
+			diag.PrintCode(a.Stderr, diag.Report, "himorime list: %v", err)
 			return exitcode.Execution
 		}
 		return exitcode.OK
