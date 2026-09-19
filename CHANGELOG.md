@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Fixed
 
+- Comparisons whose bootstrap encounters a zero base statistic are inconclusive instead of discarding those draws and overstating confidence in an improvement or pass. This can affect zero-valued CPU samples with a raised or disabled noise gate; the report explains why inference is unavailable.
+
 - Memory comparisons with both statistics at or below their RSS floors are skipped without computing a change or confidence. They do not count as inconclusive or fail `--fail-on-inconclusive`.
 - E2E runs preserve the complete CPU-regression JSON report, including reasons and samples, outside the disposable scenario directory. CI uploads these diagnostics on success or failure; the original intermittent runner failure remains unconfirmed.
 - Documented that revision comparisons belong to the suite repository and other tools are installed commands. Service-dependent commands remain outside the v0.x scope.
