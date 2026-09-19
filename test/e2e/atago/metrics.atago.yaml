@@ -122,7 +122,7 @@ scenarios:
           command: himorime run --quiet "my suite"
       - assert:
           stdout:
-            contains: ["throughput\nBENCHMARK", "records/s", "MiB/s", "unreachable floor / app: budget throughput min >= 1.00M records/s not met"]
+            contains: ["Throughput (median)", "records/s", "MiB/s", "unreachable floor / app", "throughput min", "limit >= 1.00M records/s", "budget not met", "OVER BUDGET", "FAIL"]
 
   - name: cpu time and utilization separate a busy command from a sleeping one
     steps:
@@ -181,7 +181,7 @@ scenarios:
           command: himorime run --quiet
       - assert:
           stdout:
-            contains: ["cpu\nBENCHMARK", "UTILIZATION", "above 100% means more than one CPU was busy", "over budget / burn: budget cpu user max < 1.00ms not met"]
+            contains: ["CPU time (median)", "over budget / burn", "cpu user max", "limit < 1.00ms", "budget not met", "OVER BUDGET", "FAIL"]
 
   - name: peak rss reflects the memory a command holds
     steps:
@@ -222,7 +222,7 @@ scenarios:
           command: himorime run --quiet
       - assert:
           stdout:
-            matches: "(?m)^holds 96MiB +app +[0-9.]+MiB +[0-9.]+MiB +OVER BUDGET$"
+            matches: "(?m)^holds 96MiB / app +Peak RSS \\(median\\) +[0-9.]+MiB +OVER BUDGET +-+$"
 
   - name: several metrics are judged together and the failing one is named
     steps:
@@ -252,16 +252,19 @@ scenarios:
           exit_code: 1
           stdout:
             contains:
-              - "latency\nBENCHMARK"
-              - "\nthroughput\nBENCHMARK"
-              - "\ncpu\nBENCHMARK"
-              - "\nmemory\nBENCHMARK"
-              - "\nbudgets\nBENCHMARK"
-              - "everything / app: budget peak rss median < 16.00MiB not met"
+              - "Latency (median)"
+              - "Throughput (median)"
+              - "CPU time (median)"
+              - "Peak RSS (median)"
+              - "everything / app"
+              - "peak rss median"
+              - "16.00MiB"
+              - "OVER BUDGET"
+              - "FAIL"
               - "0 passed, 1 over budget"
       - assert:
           stdout:
-            matches: "(?m)^everything +app +throughput median +>= 0\\.01 files/s +\\S+ files/s +PASS$"
+            matches: "(?m)^everything / app +throughput median +\\S+ files/s \\(limit >= 0\\.01 files/s\\) +PASS +-+$"
 
   - name: cpu time covers the whole process tree
     steps:
@@ -456,7 +459,7 @@ scenarios:
           command: himorime run --quiet failing.himorime.yaml
       - assert:
           exit_code: 4
-          stdout: {contains: ["broken / app: exit code: exited with status 3", "stderr: broken on purpose"]}
+          stdout: {contains: ["broken / app (head)", "exit code: exited with status 3", "stderr: broken on purpose"]}
           stderr: {contains: "himorime: exit 4: the measurement did not complete"}
 
   - name: GitHub Actions annotations tell a performance failure from a measurement failure
@@ -573,10 +576,10 @@ scenarios:
       - assert:
           exit_code: 1
           stdout:
-            contains: ["cpu total\nBENCHMARK", "peak rss\nBENCHMARK"]
+            contains: ["CPU time (median)", "Peak RSS (median)"]
       - assert:
           stdout:
-            matches: "(?m)^memory +[0-9.]+MiB +[0-9.]+MiB +\\+[0-9.]+MiB +\\+[0-9.]+% +\\S+ +\\+50% +REGRESSION$"
+            matches: '(?m)^memory / app +Peak RSS \(median\) +[0-9.]+MiB → [0-9.]+MiB \(\+[0-9.]+%\) +REGRESSION +.+$'
 
   - name: throughput is compared as higher-is-better
     steps:
@@ -810,7 +813,7 @@ scenarios:
           timeout: 60s
       - assert:
           exit_code: 4
-          stdout: {contains: "hangs / spawner: timeout: timed out after 500ms and was stopped"}
+          stdout: {contains: ["hangs / spawner (head)", "timeout: timed out after 500ms and was stopped"]}
       - run:
           command: e2ehelper sleep 3s
       - assert:

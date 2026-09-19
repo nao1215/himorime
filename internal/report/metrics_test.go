@@ -107,7 +107,7 @@ func TestJudgeNotRequestedAndUnsupportedAreNotZero(t *testing.T) {
 	}
 	var out bytes.Buffer
 	_ = WriteTerminal(&out, r, TerminalOptions{})
-	for _, want := range []string{"memory not measured: peak rss is not supported: 2 processes", "SKIPPED", "PASS WITH SKIPS", "budget peak rss max skipped"} {
+	for _, want := range []string{"peak rss is not supported: 2 processes", "SKIPPED", "PASS WITH SKIPS", "peak rss max"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("terminal lacks %q:\n%s", want, out.String())
 		}
@@ -182,19 +182,16 @@ func TestJudgeMultipleMetricBudgets(t *testing.T) {
 	_ = WriteTerminal(&out, r, TerminalOptions{})
 	text := out.String()
 	for _, want := range []string{
-		"latency\nBENCHMARK  COMMAND",
-		"\nthroughput\nBENCHMARK  COMMAND            MEDIAN              MEAN               MIN  RESULT",
-		"b          tool     10.00k records/s  10.00k records/s  10.00k records/s  PASS",
-		"\ncpu\nBENCHMARK  COMMAND      USER   SYSTEM     TOTAL  UTILIZATION  RESULT",
-		"b          tool     120.00ms  30.00ms  150.00ms       150.0%  PASS",
-		"\nmemory\nBENCHMARK  COMMAND  PEAK RSS       MAX  RESULT",
-		"b          tool     64.00MiB  64.00MiB  OVER BUDGET",
-		"\nbudgets\nBENCHMARK  COMMAND  METRIC",
+		"TARGET",
+		"b / tool",
+		"10.00k records/s",
+		"150.00ms",
+		"64.00MiB",
 		"peak rss max",
 		"<= 32.00MiB",
 		"FAIL",
-		"b / tool: budget peak rss max <= 32.00MiB not met (measured 64.00MiB)",
-		"above 100% means more than one CPU was busy",
+		"64.00MiB (limit <= 32.00MiB)",
+		"budget not met",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("terminal lacks %q:\n%s", want, text)
@@ -260,14 +257,14 @@ func TestJudgeCompareDirections(t *testing.T) {
 	}
 	var out bytes.Buffer
 	_ = WriteTerminal(&out, r, TerminalOptions{})
-	for _, want := range []string{"latency\nBENCHMARK", "\npeak rss\nBENCHMARK", "32.00MiB  48.00MiB  +16.00MiB  +50.0%", "REGRESSION", "\nthroughput\n", "(FROM LATENCY)"} {
+	for _, want := range []string{"Latency", "Peak RSS", "32.00MiB → 48.00MiB (+50.0%)", "REGRESSION", "(FROM LATENCY)"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("terminal lacks %q:\n%s", want, out.String())
 		}
 	}
 	out.Reset()
 	_ = WriteGitHubSummary(&out, r)
-	for _, want := range []string{"| m / tool | Peak RSS | 32.00MiB | 48.00MiB | +16.00MiB | +50.0% |"} {
+	for _, want := range []string{"| m / tool | Peak RSS (median) | 32.00MiB → 48.00MiB (+50.0%) | REGRESSION |"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("summary lacks %q:\n%s", want, out.String())
 		}
@@ -425,7 +422,7 @@ func TestJudgeCompareGate(t *testing.T) {
 
 	var out bytes.Buffer
 	_ = WriteTerminal(&out, r, TerminalOptions{})
-	for _, want := range []string{"REGRESSION (NOT GATED)", "(NOT GATED) marks a metric with gate: false", "not gated: 1 regressed", "exit 0"} {
+	for _, want := range []string{"REGRESSION (NOT GATED)", "not gated: 1 regressed", "exit 0"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("terminal lacks %q:\n%s", want, out.String())
 		}
@@ -628,11 +625,6 @@ func TestMetricCollectionIsRecorded(t *testing.T) {
 			t.Errorf("%s collection = %v, want %v", name, got, want)
 		}
 	}
-	if mem.ProcessAggregation == proc.AggregationMaxProcess {
-		var out bytes.Buffer
-		_ = WriteTerminal(&out, r, TerminalOptions{})
-		if !strings.Contains(out.String(), "not the combined memory of processes running at the same time") {
-			t.Errorf("terminal does not explain how peak RSS combines processes:\n%s", out.String())
-		}
-	}
+	// Collection details are retained in the JSON and GitHub details section;
+	// the terminal stays focused on the measured value and verdict.
 }

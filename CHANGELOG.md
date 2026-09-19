@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 - A tool comparison page covering himorime, hyperfine, benchstat, Bencher and CodSpeed, including their different uses and limitations.
 
+### Changed
+
+- Terminal reports prioritize results and reasons; GitHub summaries put detailed statistics and metadata in expandable sections. JSON reports are unchanged.
+
 ### Fixed
 
 - Diagnostics distinguish Git failures, output failures and interruptions without changing exit statuses or JSON reports.

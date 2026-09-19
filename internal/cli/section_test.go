@@ -238,7 +238,7 @@ func TestFailingVersionCommandExits4(t *testing.T) {
     silent: [@EXE@, sleep, 1ms]
 `))
 	r = run(t, dir, nil, "run", "--quiet")
-	if r.code != exitcode.Execution || !strings.Contains(r.stdout, "error: setup failed: report.versions.silent printed nothing") {
+	if r.code != exitcode.Execution || !strings.Contains(r.stdout, "setup failed: report.versions.silent printed nothing") || !strings.Contains(r.stdout, "ERROR") {
 		t.Fatalf("silent version command: %+v", r)
 	}
 }

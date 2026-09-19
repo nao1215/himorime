@@ -52,7 +52,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^sleepy .* (PASS|INCONCLUSIVE)$"
+            matches: "(?m)^sleepy / app +Latency \\(median\\) +\\S+ → \\S+( \\([+-][0-9.]+%\\))? +(PASS|INCONCLUSIVE) +.+$"
             not_contains: "\x1b["
       - assert:
           stderr: {matches: "comparing base [0-9a-f]{12} \\([0-9a-f]{40}\\) with the working tree"}
@@ -60,7 +60,7 @@ scenarios:
           file:
             path: summary.md
             contains:
-              - "output of an earlier step\n| Benchmark |"
+              - "output of an earlier step\n| Target | Metric | Value | Result | Reason |"
               - "| Benchmark | Metric | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result | Reason | Rule |"
               - "| sleepy / app |"
 
@@ -138,7 +138,7 @@ scenarios:
           stdout: {empty: true}
           stderr:
             contains: ["| Benchmark | Metric | Base | Head |", "REGRESSION", "| Rule | Statistic |", "| Seed |"]
-            not_contains: ["Decision evidence", "<details>"]
+            not_contains: ["Decision evidence"]
       - assert:
           file:
             path: result.json
@@ -187,7 +187,7 @@ scenarios:
           exit_code: 1
           stdout:
             # The suite path uses the platform's separator.
-            matches: "(?m)^suite: adopted \\(bench[/\\\\]himorime\\.yaml\\)\\r?\\nnew in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked\\r?$"
+            matches: "(?m)^suite: adopted \\(bench[/\\\\]himorime\\.yaml\\)\\r?\\nnew in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked\\r?\\nTARGET +METRIC +VALUE +RESULT +REASON$"
             contains: ["OVER BUDGET", "1 over budget · 1 benchmark · 1 suite new in this revision · seed "]
             not_contains: ["BASE", "CONFIDENCE"]
           stderr:
