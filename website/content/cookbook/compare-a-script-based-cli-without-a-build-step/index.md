@@ -53,4 +53,3 @@ One `count records` row. A slower `work.sh` in the working tree is a `REGRESSION
 - The script needs `sh`; on Windows, point `command` at an interpreter that exists there.
 
 Example: [`examples/script-compare`](https://github.com/nao1215/himorime/tree/main/examples/script-compare)
-

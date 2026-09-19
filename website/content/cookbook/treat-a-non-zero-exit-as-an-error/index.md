@@ -47,4 +47,3 @@ $ himorime run examples/failing-command
 - Values of secret-looking environment variables are masked in the reported standard error.
 
 Example: [`examples/failing-command`](https://github.com/nao1215/himorime/tree/main/examples/failing-command)
-

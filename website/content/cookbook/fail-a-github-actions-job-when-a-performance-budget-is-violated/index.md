@@ -129,4 +129,3 @@ The last line of the log says the same in words, and annotations are titled `per
 - The same suite file runs unchanged on a laptop and in CI; only the command differs.
 
 Example: [`examples/github-actions`](https://github.com/nao1215/himorime/tree/main/examples/github-actions)
-

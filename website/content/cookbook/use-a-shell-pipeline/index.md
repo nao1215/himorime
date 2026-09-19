@@ -48,4 +48,3 @@ Two rows: `argv` and `pipeline`. The pipeline is slower partly because its time 
 - Substituted variables are quoted for the shell. himorime never subtracts shell start-up time.
 
 Example: [`examples/shell`](https://github.com/nao1215/himorime/tree/main/examples/shell)
-

@@ -46,4 +46,3 @@ One `PASS` row. `cleanup` also runs when a command fails, when `setup` fails, an
 - After Ctrl+C, cleanup gets up to 30 seconds before himorime gives up on it.
 
 Example: [`examples/cleanup`](https://github.com/nao1215/himorime/tree/main/examples/cleanup)
-

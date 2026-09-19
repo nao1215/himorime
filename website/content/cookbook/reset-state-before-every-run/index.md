@@ -45,4 +45,3 @@ One `PASS` row. `prepare_each` ran 11 times (1 warmup + 10 runs) and none of tha
 - `stdout: last-output.txt` keeps the latest run's output inside `${workdir}` instead of discarding it.
 
 Example: [`examples/prepare-each`](https://github.com/nao1215/himorime/tree/main/examples/prepare-each)
-

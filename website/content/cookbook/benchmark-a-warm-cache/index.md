@@ -55,4 +55,3 @@ $ himorime run examples/cache
 - The warmup run of `warm cache` is also a cache hit, because `setup` ran before it.
 
 Example: [`examples/cache`](https://github.com/nao1215/himorime/tree/main/examples/cache)
-

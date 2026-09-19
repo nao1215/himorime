@@ -52,4 +52,3 @@ Only the `startup` benchmark runs. `--skip-tag slow` gives the same here, and `-
 - `himorime list --tag smoke` shows what would run.
 
 Example: [`examples/tags`](https://github.com/nao1215/himorime/tree/main/examples/tags)
-

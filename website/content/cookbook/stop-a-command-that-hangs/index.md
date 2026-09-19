@@ -42,4 +42,3 @@ $ himorime run examples/timeout
 - A timeout is an execution error, not a slow sample: the command did not complete.
 
 Example: [`examples/timeout`](https://github.com/nao1215/himorime/tree/main/examples/timeout)
-

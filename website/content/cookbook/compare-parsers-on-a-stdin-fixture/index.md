@@ -55,4 +55,3 @@ Two benchmarks, each with a `scanner` and a `readall` row, and a geometric mean 
 - `stdin: {content: ...}` passes inline text instead of a file.
 
 Example: [`examples/stdin-fixture`](https://github.com/nao1215/himorime/tree/main/examples/stdin-fixture)
-

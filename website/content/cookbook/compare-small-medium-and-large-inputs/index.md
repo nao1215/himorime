@@ -69,4 +69,3 @@ Without `--tag` there are three benchmarks, `small`, `medium` and `large`, each 
 - Read the per-case rows first. The geometric mean is a summary and hides that an implementation can win on small inputs and lose on large ones.
 
 Example: [`examples/input-sizes`](https://github.com/nao1215/himorime/tree/main/examples/input-sizes)
-
