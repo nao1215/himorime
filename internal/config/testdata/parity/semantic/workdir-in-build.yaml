@@ -1,6 +1,6 @@
 # expect: ${workdir} is not available in build
 version: "1"
-suite: {name: x}
+name: x
 build:
   command: [go, build, -o, "${workdir}/x"]
 benchmarks:

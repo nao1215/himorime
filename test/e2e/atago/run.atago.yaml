@@ -15,7 +15,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: build output}
+            name: build output
             build:
               shell: true
               command: echo stdout-failure-detail && exit 3
@@ -34,7 +34,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: conflicting outputs}
+            name: conflicting outputs
             benchmarks:
               - name: test
                 commands:
@@ -60,7 +60,7 @@ scenarios:
           file: suite/himorime.yaml
           content: |
             version: "1"
-            suite: {name: confined report}
+            name: confined report
             defaults: {runs: 1, warmup: 0}
             benchmarks:
               - name: test
@@ -80,7 +80,7 @@ scenarios:
           file: selected.yaml
           content: |
             version: "1"
-            suite: {name: selected}
+            name: selected
             defaults: {runs: 1, warmup: 0}
             benchmarks:
               - name: selected
@@ -90,7 +90,7 @@ scenarios:
           file: excluded.yaml
           content: |
             version: "1"
-            suite: {name: excluded}
+            name: excluded
             build: {command: [e2ehelper, exit, "3"]}
             benchmarks:
               - name: excluded
@@ -111,7 +111,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: table}
+            name: table
             defaults: {warmup: 1, runs: 5}
             benchmarks:
               - name: sleepers
@@ -141,7 +141,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: json}
+            name: json
             defaults: {warmup: 0, runs: 4}
             benchmarks:
               - name: sleep
@@ -177,7 +177,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: "formats | escaped"}
+            name: "formats | escaped"
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: "commas, pipes | and quotes \""
@@ -213,7 +213,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: sections}
+            name: sections
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: quick
@@ -300,19 +300,19 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: budget}
+            name: budget
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: slow
                 commands:
-                  helper: {command: [e2ehelper, sleep, 80ms]}
-                budget:
-                  helper: {median: "< 10ms"}
+                  helper:
+                    command: [e2ehelper, sleep, 80ms]
+                    budget: {latency: {median: "< 10ms"}}
               - name: fast
                 commands:
-                  helper: {command: [e2ehelper, sleep, 1ms]}
-                budget:
-                  helper: {median: "< 5s"}
+                  helper:
+                    command: [e2ehelper, sleep, 1ms]
+                    budget: {latency: {median: "< 5s"}}
       - run:
           command: himorime run --quiet
       - assert:
@@ -334,7 +334,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: failing}
+            name: failing
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: broken
@@ -373,7 +373,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: timeout}
+            name: timeout
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: hangs
@@ -406,7 +406,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: selection}
+            name: selection
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: smoke check
@@ -445,7 +445,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: stdin}
+            name: stdin
             defaults: {warmup: 2, runs: 5}
             benchmarks:
               - name: committed fixture
@@ -478,7 +478,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: prepare}
+            name: prepare
             defaults: {warmup: 2, runs: 6}
             benchmarks:
               - name: consumes state
@@ -507,7 +507,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: cleanup}
+            name: cleanup
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: succeeds
@@ -544,7 +544,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: interrupt}
+            name: interrupt
             defaults: {warmup: 0, runs: 200}
             benchmarks:
               - name: long
@@ -573,7 +573,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: shell}
+            name: shell
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: pipeline
@@ -596,7 +596,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: cache}
+            name: cache
             defaults: {warmup: 1, runs: 5}
             benchmarks:
               - name: warm
@@ -626,7 +626,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: adaptive}
+            name: adaptive
             defaults: {warmup: 0, min_runs: 3, max_runs: 6, min_time: 0s}
             benchmarks:
               - name: min runs only
@@ -655,7 +655,7 @@ scenarios:
           file: complete.himorime.yaml
           content: |
             version: "1"
-            suite: {name: complete}
+            name: complete
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: small
@@ -672,7 +672,7 @@ scenarios:
           file: partial.himorime.yaml
           content: |
             version: "1"
-            suite: {name: partial}
+            name: partial
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: small
@@ -706,7 +706,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: terminal}
+            name: terminal
             defaults: {warmup: 1, runs: 3, metrics: {cpu: true, memory: true}}
             benchmarks:
               - name: on a terminal
@@ -742,7 +742,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: terminal}
+            name: terminal
             defaults: {warmup: 0, runs: 1}
             benchmarks:
               - name: on a terminal
@@ -762,7 +762,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: terminal}
+            name: terminal
             benchmarks:
               - name: on a terminal
                 terminal: true
@@ -783,7 +783,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: readonly}
+            name: readonly
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: read-only dir

@@ -141,29 +141,6 @@ func (p *Percent) UnmarshalYAML(_ context.Context, node ast.Node) error {
 	return nil
 }
 
-// UnmarshalYAML accepts true, false, or a mapping with scope.
-func (c *RawCollector) UnmarshalYAML(_ context.Context, node ast.Node) error {
-	if b, ok := unwrap(node).(*ast.BoolNode); ok {
-		c.enabled = b.Value
-		c.Scope = ""
-		return nil
-	}
-	if _, ok := unwrap(node).(*ast.MappingNode); !ok {
-		return errAt(node, "expected true, false or a mapping with scope, got %s", kindOf(node))
-	}
-	type plain RawCollector
-	var p plain
-	if err := yaml.NodeToValue(node, &p, yaml.DisallowUnknownField()); err != nil {
-		return err
-	}
-	*c = RawCollector(p)
-	c.enabled = true
-	return nil
-}
-
-// Enabled reports whether the collector is switched on.
-func (c RawCollector) Enabled() bool { return c.enabled }
-
 // Argv is a command: either a list of arguments executed without a shell, or a
 // single string, which is only valid together with `shell: true`.
 type Argv struct {

@@ -1,7 +1,0 @@
-# expect: budget refers to unknown command "b"
-version: "1"
-suite: {name: x}
-benchmarks:
-  - name: a
-    commands: {a: {command: [a]}}
-    budget: {b: {median: "< 1s"}}

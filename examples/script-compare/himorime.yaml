@@ -6,9 +6,8 @@
 #   himorime compare --against main examples/script-compare
 version: "1"
 
-suite:
-  name: script compare
-  description: A shell script measured as the base revision has it and as the working tree has it, with no build step.
+name: script compare
+description: A shell script measured as the base revision has it and as the working tree has it, with no build step.
 
 defaults:
   warmup: 1

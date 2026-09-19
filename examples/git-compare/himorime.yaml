@@ -6,9 +6,8 @@
 #   himorime compare --against main examples/git-compare
 version: "1"
 
-suite:
-  name: git compare
-  description: The word counter built from a base revision and from the working tree.
+name: git compare
+description: The word counter built from a base revision and from the working tree.
 
 # In a comparison the build runs twice: once in a temporary worktree of the
 # base revision and once in your working tree, uncommitted changes included.
@@ -22,7 +21,7 @@ defaults:
   regression:
     confidence: 0.95
     latency:
-      metric: median
+      statistic: median
       max_percent: 10
 
 benchmarks:
@@ -42,9 +41,9 @@ benchmarks:
     regression:
       # Throughput derives its verdict from latency. CPU and memory are
       # independent measurements with their own tolerances.
-      cpu:
+      cpu_total:
         max_percent: 15
         min_difference: 2ms
-      memory:
+      peak_rss:
         max_percent: 10
         min_difference: 2MiB

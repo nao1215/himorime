@@ -29,7 +29,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: pull request}
+            name: pull request
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
             defaults: {warmup: 0, runs: 10}
@@ -75,15 +75,15 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: floor budget}
+            name: floor budget
             defaults: {warmup: 1, runs: 10}
             benchmarks:
               - name: tiny
                 metrics: {memory: true}
-                commands: {tool: {command: ["true"]}}
-                budget:
+                commands:
                   tool:
-                    memory: {peak_rss: {max: "<= 1KiB"}}
+                    command: ["true"]
+                    budget: {peak_rss: {max: "<= 1KiB"}}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
@@ -116,7 +116,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: pull request}
+            name: pull request
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
             defaults: {warmup: 0, runs: 10}
@@ -170,14 +170,14 @@ scenarios:
           file: repo/bench/himorime.yaml
           content: |
             version: "1"
-            suite: {name: adopted}
+            name: adopted
             defaults: {warmup: 0, runs: 1}
             benchmarks:
               - name: version
                 commands:
-                  app: {command: [e2ehelper, sleep, 40ms]}
-                budget:
-                  app: {median: "<= 1ms"}
+                  app:
+                    command: [e2ehelper, sleep, 40ms]
+                    budget: {latency: {median: "<= 1ms"}}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m "add a suite", cwd: repo}
       - run:
@@ -218,14 +218,14 @@ scenarios:
           file: repo/bench/himorime.yaml
           content: |
             version: "1"
-            suite: {name: adopted}
+            name: adopted
             defaults: {warmup: 0, runs: 1}
             benchmarks:
               - name: version
                 commands:
-                  app: {command: [e2ehelper, sleep, 1ms]}
-                budget:
-                  app: {median: "<= 10s"}
+                  app:
+                    command: [e2ehelper, sleep, 1ms]
+                    budget: {latency: {median: "<= 10s"}}
       - run:
           command: himorime ci --quiet --format json bench
           cwd: repo
@@ -248,7 +248,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: events}
+            name: events
             defaults: {warmup: 0, runs: 10}
             benchmarks:
               - name: quick
@@ -289,7 +289,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: refused}
+            name: refused
             benchmarks:
               - name: never
                 commands:
@@ -309,7 +309,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: no base}
+            name: no base
             benchmarks:
               - name: never
                 commands:
@@ -339,7 +339,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: shallow}
+            name: shallow
             defaults: {warmup: 0, runs: 10}
             benchmarks:
               - name: quick
@@ -361,7 +361,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: local}
+            name: local
             defaults: {warmup: 0, runs: 10}
             benchmarks:
               - name: quick

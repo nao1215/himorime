@@ -1,6 +1,6 @@
 # expect: a variable inside quotes in a shell command would be quoted twice
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     commands:

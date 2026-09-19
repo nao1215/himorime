@@ -7,9 +7,8 @@
 #   HIMORIME_BASE_REF=main himorime ci examples/github-actions
 version: "1"
 
-suite:
-  name: github actions
-  description: Budgets and regression checks the pull request workflow enforces.
+name: github actions
+description: Budgets and regression checks the pull request workflow enforces.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -37,24 +36,21 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}"]
-    # Absolute budgets hold on every run, with or without a base revision.
-    # Shared runners are slow and noisy, so the limits leave a wide margin.
-    budget:
-      wordcount:
-        latency:
-          p95: "<= 2s"
-        throughput:
-          median: ">= 10000 lines/s"
-        cpu:
-          total:
+        # Absolute budgets hold on every run, with or without a base revision.
+        # Shared runners are slow and noisy, so the limits leave a wide margin.
+        budget:
+          latency:
+            p95: "<= 2s"
+          throughput:
+            median: ">= 10000 lines/s"
+          cpu_total:
             median: "<= 2s"
-        memory:
           peak_rss:
             max: "<= 256MiB"
     regression:
-      cpu:
+      cpu_total:
         max_percent: 20
         min_difference: 5ms
-      memory:
+      peak_rss:
         max_percent: 10
         min_difference: 4MiB

@@ -1,6 +1,5 @@
 version: "1"
-suite:
-  name: minimal
+name: minimal
 benchmarks:
   - name: startup
     commands:

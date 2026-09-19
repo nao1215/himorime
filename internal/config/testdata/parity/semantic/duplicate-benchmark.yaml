@@ -1,6 +1,6 @@
 # expect: is already used by benchmarks[0]
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     commands: {a: {command: [a]}}

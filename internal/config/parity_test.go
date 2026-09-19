@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -102,6 +103,60 @@ func TestSchemaParitySchemaInvalid(t *testing.T) {
 	}
 }
 
+func TestRemovedSyntaxSchemaParity(t *testing.T) {
+	t.Parallel()
+	s := diskSchema(t)
+	base := `version: "1"
+name: x
+benchmarks:
+  - name: a
+    commands:
+      tool:
+        command: [tool]
+`
+	tests := []struct {
+		name  string
+		extra string
+		field string
+	}{
+		{"suite object", "suite: {name: x}\n", "suite"},
+		{"benchmark budget", "    budget: {tool: {median: \"< 20ms\"}}\n", "benchmarks[0].budget"},
+		{"latency metric", "    metrics: {latency: true}\n", "benchmarks[0].metrics.latency"},
+		{"cpu scope", "    metrics: {cpu: {scope: process_tree}}\n", "benchmarks[0].metrics.cpu"},
+		{"memory scope", "    metrics: {memory: {scope: process_tree}}\n", "benchmarks[0].metrics.memory"},
+		{"nested cpu budget", "        budget: {cpu: {total: {median: \"<= 1ms\"}}}\n", "benchmarks[0].commands.tool.budget.cpu"},
+		{"nested memory budget", "        budget: {memory: {peak_rss: {max: \"<= 1MiB\"}}}\n", "benchmarks[0].commands.tool.budget.memory"},
+		{"cpu regression", "    regression: {cpu: {max_percent: 5}}\n", "benchmarks[0].regression.cpu"},
+		{"memory regression", "    regression: {memory: {max_percent: 5}}\n", "benchmarks[0].regression.memory"},
+		{"latency metric setting", "    regression: {latency: {metric: mean}}\n", "benchmarks[0].regression.latency.metric"},
+		{"cpu metric setting", "    regression: {cpu_total: {metric: mean}}\n", "benchmarks[0].regression.cpu_total.metric"},
+		{"memory metric setting", "    regression: {peak_rss: {metric: mean}}\n", "benchmarks[0].regression.peak_rss.metric"},
+		{"mean shorthand", "        budget: {mean: \"< 1s\"}\n", "benchmarks[0].commands.tool.budget.mean"},
+		{"median shorthand", "        budget: {median: \"< 1s\"}\n", "benchmarks[0].commands.tool.budget.median"},
+		{"min shorthand", "        budget: {min: \"< 1s\"}\n", "benchmarks[0].commands.tool.budget.min"},
+		{"max shorthand", "        budget: {max: \"< 1s\"}\n", "benchmarks[0].commands.tool.budget.max"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := []byte(base + tt.extra)
+			if schemaAccepts(t, s, src) {
+				t.Fatal("disk schema accepted removed syntax")
+			}
+			_, err := Parse(tt.name, filepath.Join(t.TempDir(), "himorime.yaml"), src)
+			var verr *ValidationError
+			if !errors.As(err, &verr) {
+				t.Fatalf("Parse() error = %v, want ValidationError", err)
+			}
+			for _, issue := range verr.Issues {
+				if issue.Field == tt.field {
+					return
+				}
+			}
+			t.Fatalf("Parse() fields did not include %q: %v", tt.field, err)
+		})
+	}
+}
+
 func TestSchemaParitySemanticInvalid(t *testing.T) {
 	t.Parallel()
 	s := diskSchema(t)
@@ -183,19 +238,14 @@ func TestSchemaKeysMatchRawStructs(t *testing.T) {
 		drop   []string
 	}{
 		{"top level", root, RawFile{}, nil},
-		{"suite", prop("suite"), RawSuite{}, nil},
 		{"defaults", prop("defaults"), RawDefaults{}, nil},
 		{"exec", def("exec"), RawExec{}, nil},
 		{"benchmark", def("benchmark"), RawBenchmark{}, nil},
 		{"command", def("benchCommand"), RawCommand{}, nil},
-		{"budget", def("budgetSet"), RawBudget{}, nil},
-		{"cpu budget", def("budgetSet")["properties"].(map[string]any)["cpu"].(map[string]any), RawCPUBudget{}, nil},
-		{"memory budget", def("budgetSet")["properties"].(map[string]any)["memory"].(map[string]any), RawMemoryBudget{}, nil},
 		{"metrics", def("metrics"), RawMetrics{}, nil},
 		{"metrics (defaults)", def("metricsDefaults"), RawMetrics{}, []string{"throughput"}},
 		{"throughput", def("metrics")["properties"].(map[string]any)["throughput"].(map[string]any), RawThroughput{}, nil},
 		{"work", def("work"), RawWork{}, nil},
-		{"collector", def("collector")["oneOf"].([]any)[1].(map[string]any), RawCollector{}, nil},
 		{"cpu regression", def("cpuRegression"), RawMetricRegression{}, nil},
 		{"memory regression", def("memoryRegression"), RawMetricRegression{}, nil},
 		{"regression (defaults)", def("regression"), RawRegression{}, []string{"commands"}},
@@ -232,6 +282,31 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func TestFlatBudgetKeysMatchMetricDefinitions(t *testing.T) {
+	t.Parallel()
+	var root map[string]any
+	if err := json.Unmarshal(mustSchema(t), &root); err != nil {
+		t.Fatal(err)
+	}
+	defs := root["definitions"].(map[string]any)
+	command := defs["benchCommand"].(map[string]any)
+	props := command["properties"].(map[string]any)
+	budget := props["budget"].(map[string]any)["properties"].(map[string]any)
+	want := make([]string, 0, len(metric.Defs()))
+	for _, d := range metric.Defs() {
+		want = append(want, string(d.Name))
+	}
+	sort.Strings(want)
+	got := make([]string, 0, len(budget))
+	for name := range budget {
+		got = append(got, name)
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("flat budget keys = %v, metric definitions = %v", got, want)
+	}
 }
 
 // FuzzLoad feeds arbitrary documents to the loader. It must never panic, and

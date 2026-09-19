@@ -1,6 +1,6 @@
 # expect: is not allowed in a path
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     cwd: "${env:HOME}"

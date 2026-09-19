@@ -4,9 +4,8 @@
 # https://nao1215.github.io/himorime/cookbook/#understand-cpu-utilization-above-100
 version: "1"
 
-suite:
-  name: cpu utilization
-  description: A single-threaded and a multi-threaded word count of the same file.
+name: cpu utilization
+description: A single-threaded and a multi-threaded word count of the same file.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -25,12 +24,10 @@ benchmarks:
     commands:
       scanner:
         command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]
-      parallel:
-        command: ["${artifact}", -impl, parallel, -workers, "4", "${workdir}/input.txt"]
-    budget:
-      scanner:
-        cpu:
+        budget:
           # Utilization is CPU time divided by wall-clock time. A
           # single-threaded program stays near or below 100%.
-          utilization:
+          cpu_utilization:
             median: "<= 150%"
+      parallel:
+        command: ["${artifact}", -impl, parallel, -workers, "4", "${workdir}/input.txt"]

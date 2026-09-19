@@ -8,9 +8,8 @@
 #   himorime run examples/tags --filter '^startup'
 version: "1"
 
-suite:
-  name: tags
-  description: A quick smoke benchmark next to a slower one.
+name: tags
+description: A quick smoke benchmark next to a slower one.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]

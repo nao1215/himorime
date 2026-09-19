@@ -5,9 +5,8 @@
 # confirmed regression; `make bench` runs the suite locally.
 version: "1"
 
-suite:
-  name: himorime dogfood
-  description: Start-up, validation and a small measured run of himorime itself.
+name: himorime dogfood
+description: Start-up, validation and a small measured run of himorime itself.
 
 build:
   command: [go, build, -trimpath, -o, "${artifact}", .]
@@ -26,10 +25,10 @@ defaults:
     latency:
       max_percent: 10
       min_difference: 1ms
-    cpu:
+    cpu_total:
       max_percent: 15
       min_difference: 2ms
-    memory:
+    peak_rss:
       max_percent: 15
       min_difference: 2MiB
 

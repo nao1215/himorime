@@ -1,8 +1,10 @@
 # expect: the limit must be greater than zero
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     metrics: {memory: true}
-    commands: {a: {command: [a]}}
-    budget: {a: {memory: {peak_rss: {max: "< 0KiB"}}}}
+    commands:
+      a:
+        command: [a]
+        budget: {peak_rss: {max: "< 0KiB"}}

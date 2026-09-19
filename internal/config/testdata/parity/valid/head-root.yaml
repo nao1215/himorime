@@ -1,5 +1,5 @@
 version: "1"
-suite: {name: shared fixtures}
+name: shared fixtures
 benchmarks:
   - name: script
     # Relative paths are relative to ${root}: each revision runs its own

@@ -25,18 +25,18 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: selected comparisons}
+            name: selected comparisons
             defaults: {warmup: 0, runs: 10}
             benchmarks:
               - name: budget
                 commands:
                   compared: {command: [e2ehelper, sleep, 1ms]}
-                  budgeted: {command: [e2ehelper, sleep, 40ms]}
+                  budgeted:
+                    command: [e2ehelper, sleep, 40ms]
+                    budget: {latency: {median: "< 1ms"}}
                 regression:
                   commands: [compared]
                   latency: {gate: false}
-                budget:
-                  budgeted: {median: "< 1ms"}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
@@ -68,7 +68,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: compare}
+            name: compare
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
             defaults: {warmup: 1, runs: 10}
@@ -104,7 +104,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: compare}
+            name: compare
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
             defaults: {warmup: 1, runs: 10}
@@ -159,7 +159,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: compare}
+            name: compare
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
             defaults: {warmup: 0, runs: 10}
@@ -188,7 +188,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: noisy}
+            name: noisy
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
             defaults: {warmup: 0, runs: 10}
@@ -221,7 +221,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: compare}
+            name: compare
             defaults: {warmup: 0, runs: 10}
             benchmarks:
               - name: sleepy
@@ -246,7 +246,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: compare}
+            name: compare
             build:
               command: [e2ehelper, copy, new-delay.txt, "$${artifact}"]
             defaults: {warmup: 0, runs: 10}
@@ -277,7 +277,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: interrupt}
+            name: interrupt
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
             defaults: {warmup: 0, runs: 500}
@@ -308,7 +308,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: partial}
+            name: partial
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
             defaults: {warmup: 0, runs: 10}
@@ -342,7 +342,7 @@ scenarios:
           file: repo/bench/himorime.yaml
           content: |
             version: "1"
-            suite: {name: script}
+            name: script
             defaults: {warmup: 1, runs: 10}
             benchmarks:
               - name: script
@@ -380,7 +380,7 @@ scenarios:
 
   - name: a fixture that only the working tree has fails the base with a hint
     steps:
-      - fixture: {file: repo/himorime.yaml, content: "version: \"1\"\nsuite: {name: fixture}\ndefaults: {warmup: 0, runs: 2, regression: {min_samples: 2}}\nbenchmarks:\n  - name: new input\n    stdin: input.txt\n    commands:\n      app: {command: [e2ehelper, sleep, 1ms]}\n"}
+      - fixture: {file: repo/himorime.yaml, content: "version: \"1\"\nname: fixture\ndefaults: {warmup: 0, runs: 2, regression: {min_samples: 2}}\nbenchmarks:\n  - name: new input\n    stdin: input.txt\n    commands:\n      app: {command: [e2ehelper, sleep, 1ms]}\n"}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
@@ -404,7 +404,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: adaptive}
+            name: adaptive
             defaults: {warmup: 0, min_runs: 2, max_runs: 10, min_time: 1ms}
             benchmarks:
               - name: sleepy
@@ -437,7 +437,7 @@ scenarios:
             json:
               - {path: "$.suites[0].benchmarks[0].rounds", equals: 2}
       # max_runs below min_samples is refused before anything runs.
-      - fixture: {file: repo/himorime.yaml, content: "version: \"1\"\nsuite: {name: adaptive}\ndefaults: {warmup: 0, min_runs: 2, max_runs: 4}\nbenchmarks:\n  - name: sleepy\n    commands:\n      app: {command: [e2ehelper, sleep-from, delay.txt]}\n    regression: {min_samples: 5}\n"}
+      - fixture: {file: repo/himorime.yaml, content: "version: \"1\"\nname: adaptive\ndefaults: {warmup: 0, min_runs: 2, max_runs: 4}\nbenchmarks:\n  - name: sleepy\n    commands:\n      app: {command: [e2ehelper, sleep-from, delay.txt]}\n    regression: {min_samples: 5}\n"}
       - run:
           command: himorime compare --against main --quiet
           cwd: repo
@@ -458,7 +458,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: gate}
+            name: gate
             defaults: {warmup: 1, runs: 10}
             benchmarks:
               - name: sleepy
@@ -504,7 +504,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: work}
+            name: work
             defaults: {warmup: 0, runs: 10, regression: {min_samples: 5}}
             benchmarks:
               - name: sleepy

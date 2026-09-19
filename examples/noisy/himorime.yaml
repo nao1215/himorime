@@ -7,9 +7,8 @@
 #   himorime compare --against main --fail-on-inconclusive examples/noisy
 version: "1"
 
-suite:
-  name: noisy
-  description: A stand-in program with bimodal run times, and a steady one with noise-tolerant settings.
+name: noisy
+description: A stand-in program with bimodal run times, and a steady one with noise-tolerant settings.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -46,6 +45,6 @@ benchmarks:
       latency:
         max_percent: 20
         min_difference: 2ms
-      cpu:
+      cpu_total:
         max_percent: 50
         min_difference: 5ms

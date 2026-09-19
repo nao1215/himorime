@@ -35,9 +35,8 @@ Your CLI must start quickly, and you want CI to fail when a change makes it slow
 # https://nao1215.github.io/himorime/cookbook/#protect-the-startup-latency-of-a-cli
 version: "1"
 
-suite:
-  name: startup
-  description: How long the word counter takes to start, print its version and exit.
+name: startup
+description: How long the word counter takes to start, print its version and exit.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -54,14 +53,13 @@ benchmarks:
         # A list of arguments runs without a shell, the same way on Linux,
         # macOS and Windows.
         command: ["${artifact}", -version]
+        budget:
+          latency:
+            median: "< 250ms"
+            p95: "<= 500ms"
     # A budget is a limit you chose. When it is missed himorime exits 1,
     # whatever the base branch does. Keep CI limits generous: shared runners
     # start processes several times slower than a laptop.
-    budget:
-      wordcount:
-        median: "< 250ms"
-        latency:
-          p95: "<= 500ms"
 ```
 
 ```console
@@ -70,7 +68,7 @@ $ himorime run examples/startup
 
 A latency table, a budgets table with `PASS` for the median and the 95th percentile, and exit status 0. When a budget is missed its row says `FAIL`, the latency row says `OVER BUDGET`, a note names the budget and the measured value, and himorime exits 1.
 
-- `median: "< 250ms"` is a shorthand for `latency: {median: "< 250ms"}`. Percentiles such as `p95` or `p99.9` need the `latency:` form.
+- Budgets are keyed by metric: use `latency: {median: "< 250ms"}` for the median and add percentiles such as `p95` under the same key.
 - A command this short mostly measures process creation. It catches start-up regressions, not algorithmic ones.
 - A budget does not need a base revision, so the same file works in `himorime run` on a laptop and in CI.
 
@@ -88,9 +86,8 @@ Your tool processes large files, and what matters is how much it gets through pe
 # https://nao1215.github.io/himorime/cookbook/#protect-the-throughput-of-large-csv-and-json-processing
 version: "1"
 
-suite:
-  name: throughput
-  description: Bytes and records per second of the word counter on large CSV and JSON Lines inputs.
+name: throughput
+description: Bytes and records per second of the word counter on large CSV and JSON Lines inputs.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -113,12 +110,10 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}", "${workdir}/input.csv"]
-    budget:
-      wordcount:
-        # Higher is better, so a throughput budget is a floor.
-        throughput:
-          median: ">= 5MiB/s"
-
+        budget:
+          # Higher is better, so a throughput budget is a floor.
+          throughput:
+            median: ">= 5MiB/s"
   - name: jsonl records
     setup:
       - command: ["${artifact}", -gen, "200000", -gen-format, jsonl, -o, "${workdir}/input.jsonl"]
@@ -131,11 +126,10 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}", "${workdir}/input.jsonl"]
-    budget:
-      wordcount:
-        throughput:
-          median: ">= 50000 records/s"
-          min: ">= 20000 records/s"
+        budget:
+          throughput:
+            median: ">= 50000 records/s"
+            min: ">= 20000 records/s"
 ```
 
 ```console
@@ -165,9 +159,8 @@ A change made the program burn more CPU, even if the wall-clock time on your mac
 #   himorime compare --against main examples/cpu-regression
 version: "1"
 
-suite:
-  name: cpu regression
-  description: CPU time of the word counter, compared between a base revision and the working tree.
+name: cpu regression
+description: CPU time of the word counter, compared between a base revision and the working tree.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -187,17 +180,15 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}", "${workdir}/input.txt"]
-    budget:
-      wordcount:
-        cpu:
-          total:
+        budget:
+          cpu_total:
             median: "<= 5s"
     regression:
       # Latency and CPU time get separate tolerances. CPU time ignores time
       # spent waiting, so it moves less when the runner is busy.
       latency:
         max_percent: 25
-      cpu:
+      cpu_total:
         max_percent: 20
         # A difference smaller than this is never a regression, however large
         # it is in percent.
@@ -230,9 +221,8 @@ A change made the program hold much more memory at its peak, and you want the pu
 #   himorime compare --against main examples/memory-regression
 version: "1"
 
-suite:
-  name: memory regression
-  description: Peak resident set size of the word counter, compared between two revisions.
+name: memory regression
+description: Peak resident set size of the word counter, compared between two revisions.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -250,15 +240,13 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}", "${workdir}/input.txt"]
-    budget:
-      wordcount:
-        memory:
+        budget:
           peak_rss:
             max: "<= 512MiB"
     regression:
       latency:
         max_percent: 50
-      memory:
+      peak_rss:
         max_percent: 20
         min_difference: 4MiB
 ```
@@ -288,9 +276,8 @@ You want to see how different tools, or different modes of one tool, perform on 
 # https://nao1215.github.io/himorime/cookbook/#compare-similar-clis-on-the-same-input
 version: "1"
 
-suite:
-  name: compare CLIs
-  description: Two word counter implementations and git hashing the same file.
+name: compare CLIs
+description: Two word counter implementations and git hashing the same file.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -345,9 +332,8 @@ Before pushing, you want to know whether your changes, committed or not, made th
 #   himorime compare --against main examples/git-compare
 version: "1"
 
-suite:
-  name: git compare
-  description: The word counter built from a base revision and from the working tree.
+name: git compare
+description: The word counter built from a base revision and from the working tree.
 
 # In a comparison the build runs twice: once in a temporary worktree of the
 # base revision and once in your working tree, uncommitted changes included.
@@ -361,7 +347,7 @@ defaults:
   regression:
     confidence: 0.95
     latency:
-      metric: median
+      statistic: median
       max_percent: 10
 
 benchmarks:
@@ -381,10 +367,10 @@ benchmarks:
     regression:
       # Throughput derives its verdict from latency. CPU and memory are
       # independent measurements with their own tolerances.
-      cpu:
+      cpu_total:
         max_percent: 15
         min_difference: 2ms
-      memory:
+      peak_rss:
         max_percent: 10
         min_difference: 2MiB
 ```
@@ -415,9 +401,8 @@ Your CLI is a script run by an interpreter, so there is nothing to build, and yo
 #   himorime compare --against main examples/script-compare
 version: "1"
 
-suite:
-  name: script compare
-  description: A shell script measured as the base revision has it and as the working tree has it, with no build step.
+name: script compare
+description: A shell script measured as the base revision has it and as the working tree has it, with no build step.
 
 defaults:
   warmup: 1
@@ -470,9 +455,8 @@ Your program spends most of its time waiting, so its latency follows the runner'
 #   himorime compare --against main examples/gate-cpu-memory
 version: "1"
 
-suite:
-  name: gate cpu and memory
-  description: A program that does a fixed amount of work and then waits, compared on CPU time and peak RSS; its latency is shown but decides nothing.
+name: gate cpu and memory
+description: A program that does a fixed amount of work and then waits, compared on CPU time and peak RSS; its latency is shown but decides nothing.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -502,12 +486,12 @@ benchmarks:
       latency:
         gate: false
       # CPU time and peak RSS decide the result and the exit status.
-      cpu:
+      cpu_total:
         max_percent: 25
         # Two Windows scheduler ticks: a difference smaller than this cannot
         # be told from the accounting on the coarsest platform.
         min_difference: 32ms
-      memory:
+      peak_rss:
         max_percent: 25
         min_difference: 4MiB
 ```
@@ -540,9 +524,8 @@ Every pull request must stay within its budgets and must not regress against its
 #   HIMORIME_BASE_REF=main himorime ci examples/github-actions
 version: "1"
 
-suite:
-  name: github actions
-  description: Budgets and regression checks the pull request workflow enforces.
+name: github actions
+description: Budgets and regression checks the pull request workflow enforces.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -570,25 +553,22 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}"]
-    # Absolute budgets hold on every run, with or without a base revision.
-    # Shared runners are slow and noisy, so the limits leave a wide margin.
-    budget:
-      wordcount:
-        latency:
-          p95: "<= 2s"
-        throughput:
-          median: ">= 10000 lines/s"
-        cpu:
-          total:
+        # Absolute budgets hold on every run, with or without a base revision.
+        # Shared runners are slow and noisy, so the limits leave a wide margin.
+        budget:
+          latency:
+            p95: "<= 2s"
+          throughput:
+            median: ">= 10000 lines/s"
+          cpu_total:
             median: "<= 2s"
-        memory:
           peak_rss:
             max: "<= 256MiB"
     regression:
-      cpu:
+      cpu_total:
         max_percent: 20
         min_difference: 5ms
-      memory:
+      peak_rss:
         max_percent: 10
         min_difference: 4MiB
 ```
@@ -677,9 +657,8 @@ You want results you can archive, load into a spreadsheet, paste into a pull req
 #   himorime run examples/reports --summary summary.md
 version: "1"
 
-suite:
-  name: reports
-  description: Two ways to count the same file, for report examples.
+name: reports
+description: Two ways to count the same file, for report examples.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -735,9 +714,8 @@ The CPU table says `246%` and you want to know whether that is a bug.
 # https://nao1215.github.io/himorime/cookbook/#understand-cpu-utilization-above-100
 version: "1"
 
-suite:
-  name: cpu utilization
-  description: A single-threaded and a multi-threaded word count of the same file.
+name: cpu utilization
+description: A single-threaded and a multi-threaded word count of the same file.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -756,15 +734,13 @@ benchmarks:
     commands:
       scanner:
         command: ["${artifact}", -impl, scanner, "${workdir}/input.txt"]
-      parallel:
-        command: ["${artifact}", -impl, parallel, -workers, "4", "${workdir}/input.txt"]
-    budget:
-      scanner:
-        cpu:
+        budget:
           # Utilization is CPU time divided by wall-clock time. A
           # single-threaded program stays near or below 100%.
-          utilization:
+          cpu_utilization:
             median: "<= 150%"
+      parallel:
+        command: ["${artifact}", -impl, parallel, -workers, "4", "${workdir}/input.txt"]
 ```
 
 ```console
@@ -792,9 +768,8 @@ Your command starts other processes, a shell, `make`, a compiler, and you need t
 # https://nao1215.github.io/himorime/cookbook/#understand-process-tree-measurement-on-each-os
 version: "1"
 
-suite:
-  name: process tree
-  description: CPU time of a program that does its work itself, and of one that delegates it to two child processes.
+name: process tree
+description: CPU time of a program that does its work itself, and of one that delegates it to two child processes.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -806,9 +781,8 @@ defaults:
 benchmarks:
   - name: spin 100ms
     metrics:
-      cpu:
-        # The started process and its descendants. Only process_tree exists.
-        scope: process_tree
+      # The started process and its descendants. Only process_tree exists.
+      cpu: true
     commands:
       alone:
         command: ["${artifact}", -busy, -ms, "100"]
@@ -850,9 +824,8 @@ Comparisons on shared runners flip between pass and fail, and you want results y
 #   himorime compare --against main --fail-on-inconclusive examples/noisy
 version: "1"
 
-suite:
-  name: noisy
-  description: A stand-in program with bimodal run times, and a steady one with noise-tolerant settings.
+name: noisy
+description: A stand-in program with bimodal run times, and a steady one with noise-tolerant settings.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -889,7 +862,7 @@ benchmarks:
       latency:
         max_percent: 20
         min_difference: 2ms
-      cpu:
+      cpu_total:
         max_percent: 50
         min_difference: 5ms
 ```
@@ -920,9 +893,8 @@ The same suite runs on Linux and Windows, and one metric cannot be measured on o
 # https://nao1215.github.io/himorime/cookbook/#handle-a-metric-this-platform-cannot-measure
 version: "1"
 
-suite:
-  name: unsupported metrics
-  description: Peak RSS of a command that starts a child process, which Windows cannot report.
+name: unsupported metrics
+description: Peak RSS of a command that starts a child process, which Windows cannot report.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -943,9 +915,7 @@ benchmarks:
     commands:
       sleepy:
         command: ["${artifact}", -ms, "20", -children, "1"]
-    budget:
-      sleepy:
-        memory:
+        budget:
           peak_rss:
             max: "<= 256MiB"
 ```
@@ -974,9 +944,8 @@ Your tools read standard input, and you want every run to see the same committed
 # https://nao1215.github.io/himorime/cookbook/#compare-parsers-on-a-stdin-fixture
 version: "1"
 
-suite:
-  name: stdin fixture
-  description: Both implementations read the same access log on standard input.
+name: stdin fixture
+description: Both implementations read the same access log on standard input.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -1032,9 +1001,8 @@ Performance depends on input size, and you want each size as its own case instea
 # https://nao1215.github.io/himorime/cookbook/#compare-small-medium-and-large-inputs
 version: "1"
 
-suite:
-  name: input sizes
-  description: The same two implementations on small, medium and large inputs.
+name: input sizes
+description: The same two implementations on small, medium and large inputs.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -1102,9 +1070,8 @@ The command changes something it depends on (a file, a cache, a database), so ev
 # https://nao1215.github.io/himorime/cookbook/#reset-state-before-every-run
 version: "1"
 
-suite:
-  name: prepare each
-  description: Every run starts from a freshly generated output file.
+name: prepare each
+description: Every run starts from a freshly generated output file.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -1149,9 +1116,8 @@ Your benchmark creates something that must not be left behind, whether the bench
 # https://nao1215.github.io/himorime/cookbook/#clean-up-after-success-failure-or-interruption
 version: "1"
 
-suite:
-  name: cleanup
-  description: setup creates a cache, cleanup purges it however the benchmark ends.
+name: cleanup
+description: setup creates a cache, cleanup purges it however the benchmark ends.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -1198,9 +1164,8 @@ Your program has a cache, and you want to measure both the warm path and a cold 
 # https://nao1215.github.io/himorime/cookbook/#benchmark-a-warm-cache
 version: "1"
 
-suite:
-  name: cache
-  description: The same count with a primed cache and with a cache wiped before every run.
+name: cache
+description: The same count with a primed cache and with a cache wiped before every run.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -1258,9 +1223,8 @@ The full suite is slow, and a pull request or a pre-commit check should run only
 #   himorime run examples/tags --filter '^startup'
 version: "1"
 
-suite:
-  name: tags
-  description: A quick smoke benchmark next to a slower one.
+name: tags
+description: A quick smoke benchmark next to a slower one.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -1308,9 +1272,8 @@ A command can hang, and a benchmark must not block CI forever or leave processes
 # https://nao1215.github.io/himorime/cookbook/#stop-a-command-that-hangs
 version: "1"
 
-suite:
-  name: timeout
-  description: A command that would take 30 seconds is stopped after one.
+name: timeout
+description: A command that would take 30 seconds is stopped after one.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -1353,9 +1316,8 @@ A benchmark whose command fails is measuring an error path; that must be reporte
 # https://nao1215.github.io/himorime/cookbook/#treat-a-non-zero-exit-as-an-error
 version: "1"
 
-suite:
-  name: failing command
-  description: A command that exits 3, and one whose exit 1 is expected.
+name: failing command
+description: A command that exits 3, and one whose exit 1 is expected.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -1401,9 +1363,8 @@ You need a pipe or a redirection, which an argument list cannot express.
 # https://nao1215.github.io/himorime/cookbook/#use-a-shell-pipeline
 version: "1"
 
-suite:
-  name: shell
-  description: The same count through argv and through a shell pipeline.
+name: shell
+description: The same count through argv and through a shell pipeline.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -1451,9 +1412,8 @@ You want one overall number across cases, and need to know when himorime refuses
 # https://nao1215.github.io/himorime/cookbook/#understand-the-geometric-mean
 version: "1"
 
-suite:
-  name: missing case
-  description: The readall implementation has no measurement for the large case.
+name: missing case
+description: The readall implementation has no measurement for the large case.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]

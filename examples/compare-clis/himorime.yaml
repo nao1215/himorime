@@ -4,9 +4,8 @@
 # https://nao1215.github.io/himorime/cookbook/#compare-similar-clis-on-the-same-input
 version: "1"
 
-suite:
-  name: compare CLIs
-  description: Two word counter implementations and git hashing the same file.
+name: compare CLIs
+description: Two word counter implementations and git hashing the same file.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]

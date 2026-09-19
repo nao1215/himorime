@@ -40,8 +40,8 @@ func (v *validator) add(p path, hint, format string, args ...any) {
 
 func (v *validator) resolve(raw *RawFile) *Suite {
 	root := path{}
-	s := &Suite{Name: raw.Suite.Name, Description: raw.Suite.Description}
-	v.checkText(root.key("suite").key("name"), raw.Suite.Name)
+	s := &Suite{Name: raw.Name, Description: raw.Description}
+	v.checkText(root.key("name"), raw.Name)
 	v.hasBuild = raw.Build != nil
 
 	defaults := raw.Defaults
@@ -122,8 +122,8 @@ func (v *validator) applyRegression(base Regression, raw *RawRegression, p path)
 		r.Commands = raw.Commands
 	}
 	r.Latency = v.applyMetricRegression(r.Latency, raw.Latency, p.key("latency"), metric.KindDuration)
-	r.CPU = v.applyMetricRegression(r.CPU, raw.CPU, p.key("cpu"), metric.KindDuration)
-	r.Memory = v.applyMetricRegression(r.Memory, raw.Memory, p.key("memory"), metric.KindBytes)
+	r.CPU = v.applyMetricRegression(r.CPU, raw.CPUTotal, p.key("cpu_total"), metric.KindDuration)
+	r.Memory = v.applyMetricRegression(r.Memory, raw.PeakRSS, p.key("peak_rss"), metric.KindBytes)
 	return r
 }
 
@@ -132,8 +132,8 @@ func (v *validator) applyMetricRegression(base MetricRegression, raw *RawMetricR
 		return base
 	}
 	r := base
-	if raw.Metric != nil {
-		r.Metric = Metric(*raw.Metric)
+	if raw.Statistic != nil {
+		r.Metric = Metric(*raw.Statistic)
 	}
 	if raw.MaxPercent != nil {
 		r.MaxPercent = raw.MaxPercent.Value
@@ -350,7 +350,15 @@ func (v *validator) resolveBenchmark(p path, rb RawBenchmark, d *RawDefaults, ba
 		}
 	}
 	b.Metrics = v.resolveMetrics(p.key("metrics"), d.Metrics, rb.Metrics)
-	b.Budgets = v.resolveBudgets(p.key("budget"), rb, b, names)
+	for _, name := range rb.Commands.Names {
+		if rc := rb.Commands.ByKey[name]; rc.Budget != nil {
+			for _, e := range v.budgetEntries(p.key("commands").key(name).key("budget"), rc.Budget) {
+				if bud, ok := v.resolveBudget(name, e, b.Metrics); ok {
+					b.Budgets = append(b.Budgets, bud)
+				}
+			}
+		}
+	}
 
 	b.Regression = v.applyRegression(baseRegression, rb.Regression, p.key("regression"))
 	if rb.Regression != nil {
@@ -371,7 +379,7 @@ func (v *validator) checkRegressionMetrics(p path, raw *RawRegression, m Metrics
 		key   string
 		group metric.Group
 		set   bool
-	}{{"cpu", metric.GroupCPU, raw.CPU != nil}, {"memory", metric.GroupMemory, raw.Memory != nil}} {
+	}{{"cpu_total", metric.GroupCPU, raw.CPUTotal != nil}, {"peak_rss", metric.GroupMemory, raw.PeakRSS != nil}} {
 		if x.set && !m.Collects(x.group) {
 			v.add(p.key(x.key), metricHint(x.group), "regression.%s is set but this benchmark does not measure %s", x.key, x.group)
 		}
@@ -394,10 +402,10 @@ func (v *validator) resolveMetrics(p path, d, rb *RawMetrics) Metrics {
 			continue
 		}
 		if raw.CPU != nil {
-			m.CPU = raw.CPU.Enabled()
+			m.CPU = *raw.CPU
 		}
 		if raw.Memory != nil {
-			m.Memory = raw.Memory.Enabled()
+			m.Memory = *raw.Memory
 		}
 		if raw.Unsupported != nil {
 			m.Unsupported = *raw.Unsupported
@@ -458,42 +466,11 @@ type budgetEntry struct {
 	path   path
 }
 
-func (v *validator) resolveBudgets(p path, rb RawBenchmark, b Benchmark, names string) []Budget {
-	var out []Budget
-	for _, name := range sortedBudgetKeys(rb.Budget, rb.Commands.Names) {
-		if _, ok := b.Command(name); !ok {
-			v.add(p.key(name), "budgets are keyed by command name: "+names, "budget refers to unknown command %q", name)
-			continue
-		}
-		for _, e := range v.budgetEntries(p.key(name), rb.Budget[name]) {
-			if bud, ok := v.resolveBudget(name, e, b.Metrics); ok {
-				out = append(out, bud)
-			}
-		}
-	}
-	return out
-}
-
 // budgetEntries flattens one command's budgets in report order: metric order,
 // then aggregation order.
-func (v *validator) budgetEntries(p path, rbud RawBudget) []budgetEntry {
+func (v *validator) budgetEntries(p path, rbud map[string]map[string]string) []budgetEntry {
 	var entries []budgetEntry
-	latency := map[string]string{}
-	shorthand := map[string]bool{}
-	for key, expr := range map[string]*string{"mean": rbud.Mean, "median": rbud.Median, "min": rbud.Min, "max": rbud.Max} {
-		if expr != nil {
-			latency[key] = *expr
-			shorthand[key] = true
-		}
-	}
-	for key, expr := range rbud.Latency {
-		if shorthand[key] {
-			v.add(p.key("latency").key(key), "keep only one of "+key+" and latency."+key, "the latency %s budget is declared twice", key)
-			continue
-		}
-		latency[key] = expr
-	}
-	add := func(n metric.Name, m map[string]string, base path, shorthandKeys map[string]bool) {
+	add := func(n metric.Name, m map[string]string, base path) {
 		keys := make([]string, 0, len(m))
 		for k := range m {
 			keys = append(keys, k)
@@ -501,22 +478,13 @@ func (v *validator) budgetEntries(p path, rbud RawBudget) []budgetEntry {
 		sort.Slice(keys, func(i, j int) bool { return metric.Aggregation(keys[i]).Less(metric.Aggregation(keys[j])) })
 		for _, k := range keys {
 			ep := base.key(k)
-			if shorthandKeys[k] {
-				ep = p.key(k)
-			}
 			entries = append(entries, budgetEntry{metric: n, agg: k, expr: m[k], path: ep})
 		}
 	}
-	add(metric.Latency, latency, p.key("latency"), shorthand)
-	add(metric.Throughput, rbud.Throughput, p.key("throughput"), nil)
-	if rbud.CPU != nil {
-		add(metric.CPUUser, rbud.CPU.User, p.key("cpu").key("user"), nil)
-		add(metric.CPUSystem, rbud.CPU.System, p.key("cpu").key("system"), nil)
-		add(metric.CPUTotal, rbud.CPU.Total, p.key("cpu").key("total"), nil)
-		add(metric.CPUUtilization, rbud.CPU.Utilization, p.key("cpu").key("utilization"), nil)
-	}
-	if rbud.Memory != nil {
-		add(metric.PeakRSS, rbud.Memory.PeakRSS, p.key("memory").key("peak_rss"), nil)
+	for _, d := range metric.Defs() {
+		if values, ok := rbud[string(d.Name)]; ok {
+			add(d.Name, values, p.key(string(d.Name)))
+		}
 	}
 	return entries
 }
@@ -679,25 +647,4 @@ func sortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// sortedBudgetKeys orders budget entries by command declaration order, then
-// any unknown names alphabetically, so issues and reports are deterministic.
-func sortedBudgetKeys(m map[string]RawBudget, order []string) []string {
-	var keys []string
-	seen := map[string]bool{}
-	for _, name := range order {
-		if _, ok := m[name]; ok {
-			keys = append(keys, name)
-			seen[name] = true
-		}
-	}
-	var rest []string
-	for k := range m {
-		if !seen[k] {
-			rest = append(rest, k)
-		}
-	}
-	sort.Strings(rest)
-	return append(keys, rest...)
 }

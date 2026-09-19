@@ -1,7 +1,7 @@
 # expect: leaves the project
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
-    stdin: "${root}/../../etc/passwd"
+    stdin: "${root}/../../../etc/passwd"
     commands: {a: {command: [a]}}

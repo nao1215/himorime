@@ -20,8 +20,8 @@ Every round runs each compared command once for each revision, in an order shuff
 |---|---|---|---|
 | latency | the statistic of the run times | it grows | `regression.latency` |
 | throughput | work / the selected latency statistic | it shrinks | derived from `regression.latency` |
-| CPU time | the statistic of user + system time | it grows | `regression.cpu` |
-| peak RSS | the statistic of the runs' peaks | it grows | `regression.memory` |
+| CPU time | the statistic of user + system time | it grows | `regression.cpu_total` |
+| peak RSS | the statistic of the runs' peaks | it grows | `regression.peak_rss` |
 
 CPU utilization, user and system time are reported but not compared: they are parts of CPU time, or have no better direction. Latency, CPU and memory each get their own verdict; the command's result is the worst verdict of the gated metrics, so a memory regression fails the check even when latency passed. Throughput derives its verdict from latency and never gates or counts a second time. A throughput budget still fails a run independently.
 
@@ -74,8 +74,8 @@ A percentage alone misleads for small values: 10% of a 2ms command is 200µs, le
 ```yaml
 regression:
   latency: {max_percent: 10, min_difference: 2ms}
-  cpu: {max_percent: 15, min_difference: 5ms}
-  memory: {max_percent: 5, min_difference: 1MiB}
+  cpu_total: {max_percent: 15, min_difference: 5ms}
+  peak_rss: {max_percent: 5, min_difference: 1MiB}
 ```
 
 A change smaller than `min_difference` passes, whatever its percentage.
@@ -108,8 +108,8 @@ Budgets are always enforced: a budget you do not want to fail on is a budget to 
 ```yaml
 regression:
   latency: {gate: false}
-  cpu: {max_percent: 15, min_difference: 5ms}
-  memory: {max_percent: 10, min_difference: 4MiB}
+  cpu_total: {max_percent: 15, min_difference: 5ms}
+  peak_rss: {max_percent: 10, min_difference: 4MiB}
 ```
 
 The latency comparison is still computed with the same bootstrap and shown with its verdict, so a slowdown is visible. It is marked `(NOT GATED)` in tables, has `"gate": false` in JSON and a `gate` column in CSV, becomes a GitHub Actions notice instead of an error, and is counted in `summary.not_gated` rather than in `summary.regression`. A not-gated comparison is never shown as a plain `PASS`, and `--fail-on-inconclusive` ignores it.

@@ -25,8 +25,7 @@ next: himorime validate himorime.yaml && himorime run himorime.yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
 version: "1"
 
-suite:
-  name: my benchmarks
+name: my benchmarks
 
 benchmarks:
   - name: help output
@@ -74,8 +73,7 @@ A budget is an upper or lower limit for a chosen statistic of one command. Laten
 ```yaml
 version: "1"
 
-suite:
-  name: my benchmarks
+name: my benchmarks
 
 benchmarks:
   - name: help output
@@ -85,11 +83,10 @@ benchmarks:
     commands:
       mytool:
         command: [mytool, --help]
-    budget:
-      mytool:
-        latency: {p95: "<= 50ms"}
-        cpu: {total: {median: "<= 30ms"}}
-        memory: {peak_rss: {max: "<= 32MiB"}}
+        budget:
+          latency: {p95: "<= 50ms"}
+          cpu_total: {median: "<= 30ms"}
+          peak_rss: {max: "<= 32MiB"}
 ```
 
 ```console
