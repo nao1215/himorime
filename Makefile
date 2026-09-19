@@ -45,9 +45,8 @@ test-race: ## Run unit tests with the race detector
 	go test -race -timeout 15m $(PKGS)
 
 .PHONY: coverage
-coverage: test ## Write cover.html and print the total coverage
-	go tool cover -html=cover.out -o cover.html
-	go tool cover -func=cover.out | tail -1
+coverage: ## Combine unit-test and real CLI E2E coverage (needs atago)
+	./scripts/coverage.sh
 
 .PHONY: e2e
 e2e: ## Build himorime and run the atago end-to-end suite (needs atago on PATH)

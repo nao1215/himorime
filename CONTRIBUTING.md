@@ -16,6 +16,7 @@ Go 1.26 or later, `git`, and for the end-to-end suite [atago](https://github.com
 make tools     # golangci-lint, atago, goreleaser, actionlint, govulncheck
 make build     # ./himorime
 make test      # unit tests with coverage
+make coverage  # combined unit and CLI E2E coverage (needs atago)
 make test-race # unit tests with the race detector
 make lint      # golangci-lint for every target OS
 make e2e       # builds himorime and runs test/e2e/atago
