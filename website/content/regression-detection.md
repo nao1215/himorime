@@ -53,6 +53,7 @@ In order:
 |---|---|
 | `inconclusive` | Either side has fewer than `min_samples` samples. |
 | `inconclusive` | Either side's spread exceeds `max_cv` and the observed ranges overlap or touch: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (stddev / mean) when the statistic is `mean`. |
+| `inconclusive` | A bootstrap draw has a zero base statistic, so its relative change is undefined; confidence and interval estimates are unavailable (their numeric fields remain zero). |
 | `pass` | `min_difference` is set and the absolute difference is smaller. |
 | `regression` | The observed degradation exceeds `max_percent` and `probability_regression` ≥ `confidence`. |
 | `improved` | The observed degradation is below `-max_percent` and `probability_improvement` ≥ `confidence`. |
