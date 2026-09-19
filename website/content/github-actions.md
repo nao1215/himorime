@@ -65,7 +65,7 @@ The same suite file and the same command work on a laptop: `himorime compare --a
 
 ## A pull request comment
 
-The first workflow keeps the pull request job read-only, saves its JSON report as `himorime-report`, and can run for forks. Add this second workflow to put that report in one updated pull request comment:
+The first workflow keeps the pull request job read-only, saves its JSON report as `himorime-report`, and can run for forks. Add this second workflow to put that report in one updated pull request comment. It must be merged into the default branch before GitHub can trigger it; then run Benchmark on an open pull request and check for the bot's comment. Re-running Benchmark should replace the previous result, leaving one report comment:
 
 <!-- example: examples/github-actions/comment.yml -->
 ```yaml

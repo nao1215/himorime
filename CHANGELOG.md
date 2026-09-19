@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Fixed
 
+- The PR comment workflow example installs the required helper alongside himorime; this repository now runs the reporter automatically after Benchmark completes.
 - Suite report outputs cannot follow symbolic links outside the suite directory, and conflicting report destinations are rejected before measuring.
 - Failed builds and hooks include a redacted stdout tail in their error message as well as the existing stderr diagnostics.
 - Revision comparisons enforce head-side budgets even for commands excluded by `regression.commands`.
