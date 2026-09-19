@@ -3,6 +3,8 @@ package report
 import (
 	"bytes"
 	"encoding/csv"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -506,6 +508,103 @@ func TestSkippedChecksAreCounted(t *testing.T) {
 	if !strings.Contains(out.String(), "2 checks skipped") || !strings.Contains(out.String(), "SKIPPED") {
 		t.Errorf("terminal:\n%s", out.String())
 	}
+}
+
+// Execute the documented policy against real judgement output so a skipped
+// comparison cannot accidentally stand in for an undecidable budget.
+func TestDocumentedRequiredBudgetPolicy(t *testing.T) {
+	t.Parallel()
+	page, err := os.ReadFile("../../website/content/github-actions.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, ok := strings.Cut(string(page), "## Require every budget to pass\n")
+	if !ok {
+		t.Fatal("required-budget workflow recipe is missing")
+	}
+	_, script, ok := strings.Cut(section, "jq -e '")
+	if !ok {
+		t.Fatal("recipe has no jq policy")
+	}
+	policy, _, ok := strings.Cut(script, "' \"$RUNNER_TEMP/himorime.json\"")
+	if !ok {
+		t.Fatal("recipe must read the report saved by the measurement step")
+	}
+	jq, err := exec.LookPath("jq")
+	if err != nil {
+		t.Skip("jq is needed to execute the optional workflow recipe")
+	}
+	floorBudget := func(limit string) runner.BenchmarkResult {
+		b := floorResult("memory", 3<<20, repeat(5<<20, 20)...)
+		b.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.PeakRSS, metric.AggMax, limit)}
+		return b
+	}
+	pass, skipped := floorBudget("<= 8MiB"), floorBudget("<= 4MiB")
+	unsupported := floorBudget("<= 8MiB")
+	unsupported.Benchmark.Metrics.Unsupported = config.UnsupportedSkip
+	unsupported.Commands[0].Sides[runner.SideHead].Unsupported = map[metric.Group]string{metric.GroupMemory: "not supported"}
+	mixed := floorBudget("<= 4MiB")
+	mixed.Benchmark.Budgets = append(mixed.Benchmark.Budgets, latencyBudget(t, "tool", metric.AggMedian, "<= 1s"))
+	comparison := pairSides("both at floor", pass, pass)
+	failed := metricsResult("over budget", 20, time.Second, time.Millisecond, time.Millisecond, 64<<20, 1000)
+	failed.Benchmark.Budgets = []config.Budget{latencyBudget(t, "tool", metric.AggMedian, "<= 1ms")}
+	noData := floorBudget("<= 8MiB")
+	noData.Commands[0].Sides[runner.SideHead] = &runner.Measurement{Failure: &runner.Failure{Kind: runner.FailExitCode, ExitCode: 1, Message: "exited"}}
+	buildFailure := runner.BenchmarkResult{Benchmark: config.Benchmark{Name: "broken"}, Failure: &runner.Failure{Kind: runner.FailBuild, Message: "build failed"}}
+	for _, tt := range []struct {
+		name string
+		rep  *Report
+		want bool
+	}{
+		{"floor proves pass", judge(ModeRun, false, pass), true},
+		{"floor cannot decide", judge(ModeRun, false, skipped), false},
+		{"unsupported skip", judge(ModeRun, false, unsupported), false},
+		{"mixed pass and skip", judge(ModeRun, false, mixed), false},
+		{"comparison skip only", judge(ModeCompare, true, comparison), true},
+		{"exceeded budget", judge(ModeRun, false, failed), false},
+		{"no data", judge(ModeRun, false, noData), false},
+		{"no budgets", judge(ModeRun, false, metricsResult("plain", 10, time.Second, time.Millisecond, time.Millisecond, 32<<20, 1000)), false},
+		{"failure elsewhere with passing budget", judge(ModeRun, false, pass, buildFailure), false},
+		{"later benchmark skipped", judge(ModeRun, false, pass, skipped), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var input bytes.Buffer
+			if err := WriteJSON(&input, tt.rep); err != nil {
+				t.Fatal(err)
+			}
+			if tt.name == "comparison skip only" && tt.rep.Summary.Skipped != 1 {
+				t.Fatalf("fixture must include a skipped comparison: %+v", tt.rep.Summary)
+			}
+			command := exec.CommandContext(t.Context(), jq, "-e", policy)
+			command.Stdin = &input
+			out, err := command.CombinedOutput()
+			wantOutput := "false\n"
+			if tt.want {
+				wantOutput = "true\n"
+			}
+			if (err == nil) != tt.want || strings.ReplaceAll(string(out), "\r\n", "\n") != wantOutput {
+				t.Fatalf("policy = %q, error %v; want %q", out, err, wantOutput)
+			}
+		})
+	}
+	for _, input := range []string{"", "{", "null", "{}", `{"schema_version":"2","summary":{"exit_code":0},"suites":[]}`} {
+		t.Run("invalid report "+input, func(t *testing.T) {
+			t.Parallel()
+			command := exec.CommandContext(t.Context(), jq, "-e", policy)
+			command.Stdin = strings.NewReader(input)
+			if out, err := command.CombinedOutput(); err == nil {
+				t.Fatalf("invalid report passed the policy: %s", out)
+			}
+		})
+	}
+	t.Run("missing report", func(t *testing.T) {
+		t.Parallel()
+		command := exec.CommandContext(t.Context(), jq, "-e", policy, t.TempDir()+"/missing.json")
+		if out, err := command.CombinedOutput(); err == nil {
+			t.Fatalf("missing report passed the policy: %s", out)
+		}
+	})
 }
 
 // TestMetricCollectionIsRecorded: every metric says where its values come
