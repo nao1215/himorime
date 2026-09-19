@@ -80,15 +80,16 @@ name: Benchmark
 on:
   pull_request:
 
-# Read-only: himorime needs no secret and no write token, so pull requests from
-# forks run it safely. Do not use pull_request_target, which would run the
-# pull request's code with the base repository's secrets.
+# Fork PRs run with read-only permissions and receive no comment.
 permissions:
   contents: read
 
 jobs:
   benchmark:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -100,12 +101,11 @@ jobs:
         with:
           go-version: stable
       # Installs a prebuilt, checksum-verified himorime release.
-      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
+      - uses: nao1215/setup-himorime@30710690b8b2dc8c61df8bf289f5bb899af3fbfa # v0.1.2 + automatic comments
       # Compares the pull request base and head, writes a job summary and
-      # annotations, and saves JSON for the separate comment workflow.
+      # annotations, and saves JSON for setup-himorime's automatic comment.
       - run: himorime ci --format json --output "$RUNNER_TEMP/himorime.json"
-      # The separate workflow_run workflow downloads this fixed artifact to
-      # post a comment without giving this pull request write access.
+      # Keep raw samples available from the run page.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -114,7 +114,7 @@ jobs:
           retention-days: 7
 ```
 
-To post the report as one updated pull request comment, add the [separate workflow_run reporter](https://nao1215.github.io/himorime/github-actions/#a-pull-request-comment).
+setup-himorime automatically posts a short [problem-only comment](https://nao1215.github.io/himorime/github-actions/#a-pull-request-comment) on same-repository pull requests.
 
 Shared runners are noisy. himorime interleaves the revisions, needs statistical confidence to call a regression, and reports anything it cannot tell apart from noise as inconclusive.
 

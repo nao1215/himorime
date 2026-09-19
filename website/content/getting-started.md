@@ -121,4 +121,4 @@ himorime checks `main` out into a temporary Git worktree, builds both `main` and
 
 ## 7. Run it on pull requests
 
-See [GitHub Actions](/github-actions/) for a read-only workflow that runs `himorime ci` on every pull request.
+See [GitHub Actions](/github-actions/) for a workflow that runs `himorime ci` on every pull request.
