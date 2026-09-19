@@ -9,7 +9,7 @@ himorime measures how fast and how lean a command-line program is: latency, thro
 
 himorime is the sister project of [atago](https://github.com/nao1215/atago): atago tests what a CLI does, himorime tests how it performs.
 
-Documentation: https://nao1215.github.io/himorime/
+Documentation: https://nao1215.github.io/himorime/ · [Comparison](https://nao1215.github.io/himorime/comparison/)
 
 ## First run
 

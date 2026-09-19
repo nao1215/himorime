@@ -1,6 +1,5 @@
 ---
 description: himorime measures the latency, throughput, CPU time and peak RSS of a command-line program from a YAML suite kept in your repository, checks budgets and fails CI when a change makes it worse.
-aliases: ["/comparison/"]
 ---
 
 himorime measures how fast and how lean a command-line program is. You keep the benchmarks, budgets and tolerances in a `himorime.yaml` next to your code. The same file and the same command run on a laptop and in GitHub Actions, and the exit status tells CI whether performance got worse.
@@ -41,6 +40,7 @@ Each metric can have absolute budgets (`p95 <= 100ms`, `>= 50MiB/s`, `<= 64MiB`)
 | understand PASS, REGRESSION and INCONCLUSIVE | [Regression detection](/regression-detection/) |
 | run it on pull requests | [GitHub Actions](/github-actions/) |
 | copy a working example | [Cookbook](/cookbook/) |
+| compare performance tools | [Comparison](/comparison/) |
 | fix a problem | [Troubleshooting](/troubleshooting/) |
 
 ## What himorime measures, and what it does not
@@ -49,4 +49,4 @@ himorime runs the command exactly as you wrote it, measures the whole process fr
 
 himorime checks performance. To check that a CLI *behaves* correctly, including exit codes, output and files, use [atago](https://github.com/nao1215/atago).
 
-For one-off command measurements, [hyperfine](https://github.com/sharkdp/hyperfine) is a better fit. For stored history and dashboards, use a service such as [Bencher](https://bencher.dev/) or [CodSpeed](https://codspeed.io/). himorime keeps no server or result database; it compares two revisions in the same job.
+See [Comparison](/comparison/) for when to choose himorime, hyperfine, benchstat, Bencher or CodSpeed. himorime keeps no server or result database; it compares two revisions in the same job.

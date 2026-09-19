@@ -69,7 +69,7 @@ Without `runs`, himorime measures adaptively: at least 10 runs and 2 seconds per
 
 ## 5. Add budgets
 
-A budget is a limit the command must stay within on every run. Latency is always measured; switch on the other metrics you care about:
+A budget is an upper or lower limit for a chosen statistic of one command. Latency is always measured; switch on the other metrics you care about:
 
 ```yaml
 version: "1"
@@ -117,7 +117,7 @@ benchmarks:
 $ himorime compare --against main
 ```
 
-himorime checks `main` out into a temporary Git worktree, builds both `main` and your working tree (uncommitted changes included), measures them interleaved on this machine, and exits 1 only when a degradation beyond the tolerance is statistically confirmed, on latency or on any other metric the suite measures. Your working tree, index and branches are not touched, and the worktree is removed even when you press Ctrl+C.
+himorime checks `main` out into a temporary Git worktree, builds both `main` and your working tree (uncommitted changes included), measures them interleaved on this machine, and exits 1 when a gated regression is statistically confirmed or a budget is exceeded. Your working tree, index and branches are not touched, and the worktree is removed even when you press Ctrl+C.
 
 ## 7. Run it on pull requests
 

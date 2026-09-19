@@ -141,6 +141,10 @@ func parseFlags(fs *flag.FlagSet, args []string, stdout, stderr io.Writer) ([]st
 	var operands []string
 	rest := args
 	for {
+		// The flag package consumes `--` and returns only the arguments after
+		// it. Detect it before parsing so those arguments can never be parsed
+		// as flags on a later pass through the loop.
+		delimiter := delimiterIndex(fs, rest)
 		if err := fs.Parse(rest); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
 				WriteHelp(stdout, fs.Name())
@@ -153,18 +157,48 @@ func parseFlags(fs *flag.FlagSet, args []string, stdout, stderr io.Writer) ([]st
 			diag.Print(stderr, exitcode.Usage, "himorime %s: %s\nrun \"himorime %s --help\" for usage", fs.Name(), msg, fs.Name())
 			return nil, exitcode.Usage, false
 		}
-		rest = fs.Args()
-		if len(rest) == 0 {
+		parsed := fs.Args()
+		if delimiter >= 0 {
+			operands = append(operands, parsed...)
 			break
 		}
-		if rest[0] == "--" {
-			operands = append(operands, rest[1:]...)
+		if len(parsed) == 0 {
 			break
 		}
-		operands = append(operands, rest[0])
-		rest = rest[1:]
+		operands = append(operands, parsed[0])
+		rest = parsed[1:]
 	}
 	return operands, 0, true
+}
+
+// delimiterIndex finds a standalone `--` that flag.Parse would consume. A
+// value such as `--filter --` is not a delimiter: the flag package treats the
+// second token as the value of --filter.
+func delimiterIndex(fs *flag.FlagSet, args []string) int {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			return i
+		}
+		if len(arg) < 2 || arg[0] != '-' || arg == "-" {
+			return -1
+		}
+		name := strings.TrimLeft(arg, "-")
+		if eq := strings.IndexByte(name, '='); eq >= 0 {
+			name = name[:eq]
+		}
+		f := fs.Lookup(name)
+		if f == nil {
+			return -1
+		}
+		if strings.IndexByte(arg, '=') < 0 {
+			boolFlag, isBool := f.Value.(interface{ IsBoolFlag() bool })
+			if !isBool || !boolFlag.IsBoolFlag() {
+				i++
+			}
+		}
+	}
+	return -1
 }
 
 // stringList is a repeatable flag that also splits comma-separated values.

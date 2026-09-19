@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- A tool comparison page covering himorime, hyperfine, benchstat, Bencher and CodSpeed, including their different uses and limitations.
+
+### Fixed
+
+- All paths after `--` are treated as operands, including multiple paths beginning with a dash.
+- Inconclusive-only comparison failures no longer claim that a performance threshold was violated.
+- Corrected stale configuration and exit-status documentation and the rendering of metric gate names in the reference.
+
 ## [0.3.0] - 2026-09-19
 
 ### Added

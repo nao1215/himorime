@@ -70,6 +70,11 @@ name = "Reference"
 pageRef = "/reference"
 weight = 55
 
+[[menus.main]]
+name = "Comparison"
+pageRef = "/comparison"
+weight = 60
+
 [module]
 [[module.mounts]]
 source = "content"

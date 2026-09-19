@@ -191,6 +191,33 @@ scenarios:
           exit_code: 2
           stderr: {contains: ["HMR2001", "himorime.yaml: suite file does not exist"]}
 
+  - name: double dash preserves every following path
+    steps:
+      - fixture:
+          file: --first.yaml
+          content: |
+            version: "1"
+            suite: {name: first}
+            benchmarks:
+              - name: check
+                commands:
+                  tool: {command: [e2ehelper, exit, "0"]}
+      - fixture:
+          file: --second.yaml
+          content: |
+            version: "1"
+            suite: {name: second}
+            benchmarks:
+              - name: check
+                commands:
+                  tool: {command: [e2ehelper, exit, "0"]}
+      - run:
+          command: himorime validate -- --first.yaml --second.yaml
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: ["--first.yaml: ok", "--second.yaml: ok"]
+
   - name: a measured command failure is an execution error
     steps:
       - fixture:

@@ -213,6 +213,7 @@ scenarios:
       - assert:
           exit_code: 1
           stdout: {contains: "INCONCLUSIVE"}
+          stderr: {contains: "performance check failed: a comparison was inconclusive"}
 
   - name: an unknown revision is an execution error that leaves nothing behind
     steps:

@@ -252,10 +252,16 @@ func (m *measurement) finish(ctx context.Context, rep *report.Report, suites []l
 		diag.Print(a.Stderr, exitcode.Execution, "himorime: interrupted; cleanup has run")
 		return exitcode.Execution
 	}
-	if outcome := exitcode.Outcome(rep.Summary.ExitCode); outcome != "" {
+	if outcome := outcomeForSummary(rep.Summary); outcome != "" {
 		diag.Print(a.Stderr, rep.Summary.ExitCode, "himorime: exit %d: %s", rep.Summary.ExitCode, outcome)
 	}
 	return rep.Summary.ExitCode
+}
+
+func outcomeForSummary(summary report.Summary) string {
+	inconclusiveOnly := summary.ExitCode == exitcode.Failed &&
+		summary.Inconclusive > 0 && summary.Regression == 0 && summary.OverBudget == 0
+	return exitcode.Outcome(summary.ExitCode, inconclusiveOnly)
 }
 
 // checkMetrics stops before anything is built or run when a benchmark
@@ -276,7 +282,7 @@ func (m *measurement) checkMetrics(suites []loadedSuite) int {
 		}
 	}
 	if code != 0 {
-		diag.Print(m.app.Stderr, code, "himorime: exit %d: %s", code, exitcode.Outcome(code))
+		diag.Print(m.app.Stderr, code, "himorime: exit %d: %s", code, exitcode.Outcome(code, false))
 	}
 	return code
 }
