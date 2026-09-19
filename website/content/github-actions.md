@@ -63,6 +63,25 @@ On the pull request that adds the suite, the base revision has no suite director
 
 The same suite file and the same command work on a laptop: `himorime compare --against main` does steps 1 to 3 and 5 against a branch you name, and `himorime run` checks the budgets without a base revision.
 
+## Require every budget to pass
+
+To reject undecidable budgets as a workflow policy, add this step immediately after the measurement step above. It uses `jq` on the Ubuntu runner and requires at least one budget, all with status `pass`, in a successful report:
+
+```yaml
+      - name: Require every budget to pass
+        shell: bash
+        run: |
+          jq -e '
+            .schema_version == "1" and .summary.exit_code == 0 and
+            ([.suites[].benchmarks[].commands[].budgets[]?] |
+              length > 0 and all(.status == "pass"))
+          ' "$RUNNER_TEMP/himorime.json"
+```
+
+This rejects `skipped`, `fail` and `no_data` budgets; their reasons remain in the full report. A memory budget proven by its measurement floor still passes. Skipped comparisons alone do not fail this policy: `summary.skipped` combines budgets and comparisons, so it is not a budget-policy check. `--fail-on-inconclusive` applies only to gated comparisons.
+
+The check covers budgets in the selected benchmarks, not budgets removed from the suite or excluded by filters. Do not add `continue-on-error` to the measurement step: its existing failures must still fail the job. A missing file, invalid JSON or unsupported schema version also fails this step; no himorime verdict or exit code is changed.
+
 ## A pull request comment
 
 The first workflow keeps the pull request job read-only, saves its JSON report as `himorime-report`, and can run for forks. Add this second workflow to put that report in one updated pull request comment:
