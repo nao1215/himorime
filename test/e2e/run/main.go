@@ -55,8 +55,17 @@ func run(args []string) (int, error) {
 		if err := copyFile(prebuilt, filepath.Join(bin, "himorime"+exe)); err != nil {
 			return 1, fmt.Errorf("copy HIMORIME_BINARY: %w", err)
 		}
+		commentBinary := filepath.Join(filepath.Dir(prebuilt), "himorime-comment"+exe)
+		if err := copyFile(commentBinary, filepath.Join(bin, "himorime-comment"+exe)); err != nil {
+			return 1, fmt.Errorf("copy sibling himorime-comment: %w", err)
+		}
 	} else if err := goBuild(root, filepath.Join(bin, "himorime"+exe), "."); err != nil {
 		return 1, err
+	}
+	if prebuilt := os.Getenv("HIMORIME_BINARY"); prebuilt == "" {
+		if err := goBuild(root, filepath.Join(bin, "himorime-comment"+exe), "./cmd/himorime-comment"); err != nil {
+			return 1, err
+		}
 	}
 	if err := goBuild(root, filepath.Join(bin, "e2ehelper"+exe), "./test/e2e/helper"); err != nil {
 		return 1, err

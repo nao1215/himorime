@@ -55,7 +55,7 @@ jobs:
         with:
           go-version: stable
       - name: actionlint
-        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml examples/github-actions/benchmark.yml
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml examples/github-actions/benchmark.yml examples/github-actions/comment.yml
 
   misspell:
     runs-on: ubuntu-latest
@@ -70,4 +70,4 @@ jobs:
       - name: misspell
         run: |
           git ls-files '*.go' '*.md' '*.yml' '*.yaml' '*.json' \
-            | xargs go run github.com/golangci/misspell/cmd/misspell@v0.8.0 -locale US -error
+            | xargs go run github.com/golangci/misspell/cmd/misspell@v0.8.0 -locale US -error -i cancelled

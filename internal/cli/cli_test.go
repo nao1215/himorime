@@ -701,7 +701,7 @@ func TestBashCompletionLoads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bash rejected the completion script: %v", err)
 	}
-	if got := strings.TrimSpace(string(out)); got != "compare completion" {
+	if got := strings.TrimSpace(string(out)); got != "compare comment completion" {
 		t.Fatalf("completing 'com' = %q", got)
 	}
 }

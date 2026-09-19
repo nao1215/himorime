@@ -100,14 +100,21 @@ jobs:
         with:
           go-version: stable
       # Installs a prebuilt, checksum-verified himorime release.
-      - uses: nao1215/setup-himorime@b2896dee554ef31ea979f0388d9be22779ce73a2 # v0.1.1
-      # Finds the pull request's base commit from the event, compares it with
-      # the checked-out head on every metric the suite measures, writes a
-      # summary to the job page and annotations to the pull request, and
-      # exits 1 on a missed budget or a confirmed regression. Exit 4 or 6
-      # means the measurement itself failed, not the performance.
-      - run: himorime ci
+      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
+      # Compares the pull request base and head, writes a job summary and
+      # annotations, and saves JSON for the separate comment workflow.
+      - run: himorime ci --format json --output "$RUNNER_TEMP/himorime.json"
+      # The separate workflow_run workflow downloads this fixed artifact to
+      # post a comment without giving this pull request write access.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: himorime-report
+          path: ${{ runner.temp }}/himorime.json
+          retention-days: 7
 ```
+
+To post the report as one updated pull request comment, add the [separate workflow_run reporter](https://nao1215.github.io/himorime/github-actions/#a-pull-request-comment).
 
 Shared runners are noisy. himorime interleaves the revisions, needs statistical confidence to call a regression, and reports anything it cannot tell apart from noise as inconclusive.
 

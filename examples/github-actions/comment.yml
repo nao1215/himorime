@@ -1,0 +1,30 @@
+# Copy this file to .github/workflows/comment-benchmark.yml.
+# Posts the artifact from the Benchmark workflow without checking out or
+# executing pull request code.
+name: Comment benchmark result
+
+on:
+  workflow_run:
+    workflows: [Benchmark]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: himorime-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}
+      - run: himorime comment "$RUNNER_TEMP/himorime.json"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

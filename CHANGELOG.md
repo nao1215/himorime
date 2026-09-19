@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 
+- `himorime comment REPORT.json` creates or updates a compact benchmark report on the source pull request after a trusted `workflow_run`. The documented two-workflow setup keeps benchmark commands read-only, preserves the JSON report as `himorime-report`, and can comment on fork pull requests without checking out their code. Comments include a small himorime footer by default; `--hide-footer` omits it.
 - `bench/thirdparty/compression` measures gzip, bzip2 and xz over the same generated input, verifying decompressed output before measuring.
 
 ## [0.2.1] - 2026-09-19
