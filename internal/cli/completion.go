@@ -23,11 +23,11 @@ func runCompletion(_ context.Context, a *App, args []string) int {
 		return status
 	}
 	if len(operands) != 1 {
-		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime completion: name one shell: %s", strings.Join(Shells(), ", "))
+		diag.Print(a.Stderr, exitcode.Usage, "himorime completion: name one shell: %s", strings.Join(Shells(), ", "))
 		return exitcode.Usage
 	}
 	if err := WriteCompletion(a.Stdout, operands[0]); err != nil {
-		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime completion: %v", err)
+		diag.Print(a.Stderr, exitcode.Usage, "himorime completion: %v", err)
 		return exitcode.Usage
 	}
 	return exitcode.OK

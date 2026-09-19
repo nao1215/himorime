@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/nao1215/himorime/internal/diag"
 	"github.com/nao1215/himorime/internal/exitcode"
 )
 
@@ -20,7 +21,7 @@ func runComment(ctx context.Context, a *App, args []string) int {
 	}
 	code, err := runner(ctx, args, a.Stdin, a.Stdout, a.Stderr, a.Environ())
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "himorime comment: %v\n", err)
+		diag.Print(a.Stderr, exitcode.Execution, "himorime comment: %v", err)
 		return exitcode.Execution
 	}
 	return code

@@ -94,12 +94,12 @@ func isTerminal(w io.Writer) bool {
 func (a *App) Run(ctx context.Context, args []string) (code int) {
 	defer func() {
 		if r := recover(); r != nil {
-			diagnosticf(a.Stderr, diag.Code{Number: 5001}, "himorime: internal error: %v\nplease report this at https://github.com/nao1215/himorime/issues", r)
+			diag.Print(a.Stderr, exitcode.Internal, "himorime: internal error: %v\nplease report this at https://github.com/nao1215/himorime/issues", r)
 			code = exitcode.Internal
 		}
 	}()
 	if len(args) == 0 {
-		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime: no command given")
+		diag.Print(a.Stderr, exitcode.Usage, "himorime: no command given")
 		fmt.Fprint(a.Stderr, "\n")
 		usage(a.Stderr)
 		return exitcode.Usage
@@ -116,7 +116,7 @@ func (a *App) Run(ctx context.Context, args []string) (code int) {
 			return c.run(ctx, a, rest)
 		}
 	}
-	diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime: unknown command %q", name)
+	diag.Print(a.Stderr, exitcode.Usage, "himorime: unknown command %q", name)
 	fmt.Fprint(a.Stderr, "\n")
 	usage(a.Stderr)
 	return exitcode.Usage
@@ -154,7 +154,7 @@ func parseFlags(fs *flag.FlagSet, args []string, stdout, stderr io.Writer) ([]st
 			if msg == "" {
 				msg = err.Error()
 			}
-			diagnosticf(stderr, diag.Code{Number: 3001}, "himorime %s: %s\nrun \"himorime %s --help\" for usage", fs.Name(), msg, fs.Name())
+			diag.Print(stderr, exitcode.Usage, "himorime %s: %s\nrun \"himorime %s --help\" for usage", fs.Name(), msg, fs.Name())
 			return nil, exitcode.Usage, false
 		}
 		rest = fs.Args()

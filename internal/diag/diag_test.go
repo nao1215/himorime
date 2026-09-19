@@ -1,6 +1,10 @@
 package diag
 
-import "testing"
+import (
+	"bytes"
+	"fmt"
+	"testing"
+)
 
 func TestCodes(t *testing.T) {
 	all := All()
@@ -11,16 +15,19 @@ func TestCodes(t *testing.T) {
 		if c.String() == "" || c.Name == "" || c.Meaning == "" {
 			t.Fatalf("code %d is incomplete: %#v", i, c)
 		}
-		if got, ok := Lookup(c.String()); !ok || got.Number != c.Number {
-			t.Fatalf("Lookup(%q) failed", c.String())
+		if c.String() != fmt.Sprintf("HMR%d001", i+2) {
+			t.Fatalf("unstable diagnostic code: %s", c)
 		}
 	}
-	if _, ok := ForExit(1); ok {
-		t.Fatal("exit 1 must not have an error code")
-	}
-	for _, exit := range []int{2, 3, 4, 5, 6} {
-		if _, ok := ForExit(exit); !ok {
-			t.Fatalf("exit %d has no code", exit)
+	for _, exit := range []int{0, 1, 2, 3, 4, 5, 6, 7} {
+		var out bytes.Buffer
+		Print(&out, exit, "detail: %s (%d%%)", "example", 50)
+		want := "detail: example (50%)\n"
+		if exit >= 2 && exit <= 6 {
+			want = fmt.Sprintf("HMR%d001: %s", exit, want)
+		}
+		if out.String() != want {
+			t.Fatalf("exit %d: got %q, want %q", exit, out.String(), want)
 		}
 	}
 }

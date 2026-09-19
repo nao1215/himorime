@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/nao1215/himorime/internal/diag"
+	"github.com/nao1215/himorime/internal/exitcode"
 )
 
 // Command describes one subcommand. The table returned by Commands is the
@@ -220,7 +221,7 @@ func runHelp(_ context.Context, a *App, args []string) int {
 		return 0
 	}
 	if _, ok := findCommand(args[0]); !ok {
-		diagnosticf(a.Stderr, diag.Code{Number: 3001}, "himorime help: unknown command %q", args[0])
+		diag.Print(a.Stderr, exitcode.Usage, "himorime help: unknown command %q", args[0])
 		return 3
 	}
 	WriteHelp(a.Stdout, args[0])

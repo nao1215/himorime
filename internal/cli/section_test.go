@@ -53,7 +53,7 @@ func TestReportDestinationsConflictBeforeMeasuring(t *testing.T) {
 	for _, flags := range [][]string{{"--output", "./out.json"}, {"--summary", "out.json"}} {
 		args := append([]string{"run"}, flags...)
 		r := run(t, dir, nil, args...)
-		if r.code != exitcode.Usage || strings.Contains(r.stderr, "finished after") || !strings.Contains(r.stderr, "conflict") {
+		if r.code != exitcode.Usage || !strings.HasPrefix(r.stderr, "HMR3001: ") || strings.Contains(r.stderr, "finished after") || !strings.Contains(r.stderr, "conflict") {
 			t.Errorf("%v: %+v", flags, r)
 		}
 		if data, _ := os.ReadFile(filepath.Join(dir, "out.json")); string(data) != "keep me" {

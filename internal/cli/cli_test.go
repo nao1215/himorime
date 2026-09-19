@@ -167,7 +167,7 @@ func TestHelpVersionAndUsageErrors(t *testing.T) {
 	if r := run(t, dir, nil, "compare"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "--against is required") {
 		t.Fatalf("compare without --against: %+v", r)
 	}
-	if r := run(t, dir, nil, "run", "--filter", "("); r.code != exitcode.Usage || !strings.Contains(r.stderr, "invalid --filter") {
+	if r := run(t, dir, nil, "run", "--filter", "("); r.code != exitcode.Usage || !strings.HasPrefix(r.stderr, "HMR3001: ") || !strings.Contains(r.stderr, "invalid --filter") {
 		t.Fatalf("bad filter: %+v", r)
 	}
 }
@@ -293,6 +293,9 @@ func TestListAndSelection(t *testing.T) {
 	}
 	if r := run(t, dir, nil, "run", "--tag", "nothing"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "no benchmark matches") {
 		t.Fatalf("empty selection: %+v", r)
+	}
+	if r := run(t, dir, nil, "list", "--tag", "nothing"); r.code != exitcode.OK || strings.Contains(r.stderr, "HMR") {
+		t.Fatalf("empty list is not a tool error: %+v", r)
 	}
 }
 

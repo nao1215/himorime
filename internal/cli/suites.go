@@ -76,7 +76,7 @@ func suitePaths(args []string) ([]string, error) {
 func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 	paths, err := suitePaths(args)
 	if err != nil {
-		diagnosticf(stderr, diag.Code{Number: 2001}, "himorime: %v", err)
+		diag.Print(stderr, exitcode.Config, "himorime: %v", err)
 		return nil, exitcode.Config
 	}
 	var suites []loadedSuite
@@ -92,7 +92,7 @@ func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 				status = exitcode.Config
 				continue
 			}
-			diagnosticf(stderr, diag.Code{Number: 4001}, "himorime: %v", err)
+			diag.Print(stderr, exitcode.Execution, "himorime: %v", err)
 			if status == 0 {
 				status = exitcode.Execution
 			}
@@ -101,7 +101,7 @@ func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 		suites = append(suites, loadedSuite{display: filepath.ToSlash(p), suite: s})
 	}
 	if status == exitcode.Config {
-		diagnosticf(stderr, diag.Code{Number: 2001}, "himorime: the suite is invalid; nothing was run")
+		diag.Print(stderr, exitcode.Config, "himorime: the suite is invalid; nothing was run")
 	}
 	return suites, status
 }
@@ -111,7 +111,7 @@ func (s *selectFlags) selection(stderr io.Writer, cmd string) (runner.Selection,
 	if s.filter != "" {
 		re, err := regexp.Compile(s.filter)
 		if err != nil {
-			fmt.Fprintf(stderr, "himorime %s: invalid --filter: %v\n", cmd, err)
+			diag.Print(stderr, exitcode.Usage, "himorime %s: invalid --filter: %v", cmd, err)
 			return sel, false
 		}
 		sel.Filter = re

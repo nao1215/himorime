@@ -56,6 +56,18 @@ scenarios:
       - assert:
           exit_code: 3
           stderr: {contains: "unsupported shell"}
+      - run:
+          command: himorime run --filter '('
+      - assert:
+          exit_code: 3
+          stdout: {empty: true}
+          stderr: {contains: ["HMR3001", "invalid --filter"]}
+      - run:
+          command: himorime comment
+      - assert:
+          exit_code: 3
+          stdout: {empty: true}
+          stderr: {contains: ["HMR3001", "exactly one REPORT.json is required"]}
 
   - name: init writes a runnable suite and never overwrites silently
     steps:
@@ -242,6 +254,13 @@ scenarios:
             json:
               - {path: "$", length: 2}
               - {path: "$[1].shell", equals: true}
+      - run:
+          command: himorime list --tag nonexistent
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "no benchmark matches"
+            not_contains: "HMR"
 
   - name: completion scripts name every command
     steps:
