@@ -92,12 +92,15 @@ func runMeasure(ctx context.Context, a *App, cmd string, args []string) int {
 	if status != 0 {
 		return status
 	}
-	selected := 0
-	for i := range suites {
-		suites[i].suite.Benchmarks = sel.Select(suites[i].suite.Benchmarks)
-		selected += len(suites[i].suite.Benchmarks)
+	selected := suites[:0]
+	for _, ls := range suites {
+		ls.suite.Benchmarks = sel.Select(ls.suite.Benchmarks)
+		if len(ls.suite.Benchmarks) > 0 {
+			selected = append(selected, ls)
+		}
 	}
-	if selected == 0 {
+	suites = selected
+	if len(suites) == 0 {
 		fmt.Fprintf(a.Stderr, "himorime %s: no benchmark matches the selection (--filter, --tag, --skip-tag); run \"himorime list\" to see the benchmarks\n", cmd)
 		return exitcode.Usage
 	}
@@ -151,13 +154,6 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 	if code != 0 {
 		return code
 	}
-	if compare {
-		for _, ls := range suites {
-			if code := checkComparable(ls, f.runs, a.Stderr); code != 0 {
-				return code
-			}
-		}
-	}
 	if code := m.checkMetrics(suites); code != 0 {
 		return code
 	}
@@ -195,6 +191,9 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 				code = cleanupFailed(code)
 			}
 		}()
+		if code := git.checkComparable(suites, f.runs, a.Stderr); code != 0 {
+			return code
+		}
 	}
 
 	r := m.newRunner(seed)
@@ -387,6 +386,23 @@ func (g *gitState) checkout(ctx context.Context, m *measurement, ref, source str
 	return 0
 }
 
+func (g *gitState) checkComparable(suites []loadedSuite, runs int, stderr io.Writer) int {
+	for _, ls := range suites {
+		root, err := ls.baseRoot(g.repo, g.worktree)
+		if err != nil {
+			fmt.Fprintf(stderr, "himorime: %v\n", err)
+			return exitcode.Execution
+		}
+		if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if code := checkComparable(ls, runs, stderr); code != 0 {
+			return code
+		}
+	}
+	return 0
+}
+
 // checkComparable rejects settings that could only ever be inconclusive in a
 // revision comparison.
 func checkComparable(ls loadedSuite, runsOverride int, stderr io.Writer) int {
@@ -430,12 +446,12 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 	r.ProjectRoot = head.ProjectRoot
 	sides := []runner.Side{head}
 	if wt != nil {
-		rel, err := filepath.Rel(repo.Top, realDir(s.Dir))
-		if err != nil || strings.HasPrefix(rel, "..") {
-			in.BuildFailure = &runner.Failure{Kind: runner.FailPath, Message: fmt.Sprintf("%s is outside the Git repository %s", s.Dir, repo.Top)}
+		root, err := ls.baseRoot(repo, wt)
+		if err != nil {
+			in.BuildFailure = &runner.Failure{Kind: runner.FailPath, Message: err.Error()}
 			return in
 		}
-		base := runner.Side{Name: runner.SideBase, Root: filepath.Join(wt.Dir, rel), HeadRoot: s.Dir, ProjectRoot: wt.Dir}
+		base := runner.Side{Name: runner.SideBase, Root: root, HeadRoot: s.Dir, ProjectRoot: wt.Dir}
 		sides = []runner.Side{base, head}
 	}
 	for i := range sides {
@@ -494,6 +510,14 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		in.Benchmarks = append(in.Benchmarks, r.Measure(ctx, b, sides))
 	}
 	return in
+}
+
+func (ls loadedSuite) baseRoot(repo *gitwt.Repo, wt *gitwt.Worktree) (string, error) {
+	rel, err := filepath.Rel(repo.Top, realDir(ls.suite.Dir))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("%s is outside the Git repository %s", ls.suite.Dir, repo.Top)
+	}
+	return filepath.Join(wt.Dir, rel), nil
 }
 
 func (ls loadedSuite) suiteKey() string {

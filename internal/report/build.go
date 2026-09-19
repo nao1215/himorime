@@ -120,7 +120,7 @@ func judgeBenchmark(br runner.BenchmarkResult, o Options) Benchmark {
 	}
 
 	for _, cr := range br.Commands {
-		if o.Mode == ModeCompare && cr.Sides[runner.SideBase] == nil {
+		if o.Mode == ModeCompare && len(cr.Sides) == 0 {
 			continue
 		}
 		c := Command{Name: cr.Command.Name, Command: cr.Command.Display(), Result: ResultPass, Budgets: []BudgetCheck{}}
@@ -137,14 +137,18 @@ func judgeBenchmark(br runner.BenchmarkResult, o Options) Benchmark {
 	}
 	for i := range b.Commands {
 		c := &b.Commands[i]
+		mode := o.Mode
+		if !cfg.Regression.Compares(c.Name) {
+			mode = ModeRun
+		}
 		// A benchmark that did not complete (a hook failed, the run was
 		// interrupted) judges none of its commands: partial samples are kept
 		// in the report but never presented as a pass.
-		if r, failed := commandFailure(b, c, o.Mode); failed {
+		if r, failed := commandFailure(b, c, mode); failed {
 			c.Result = r
 		}
 		budgets(c, cfg)
-		if o.Mode == ModeCompare && !c.Result.isError() {
+		if mode == ModeCompare && !c.Result.isError() {
 			compareMetrics(c, br, cfg, o.Seed)
 		}
 		b.Result = worst(b.Result, c.Result)
@@ -824,6 +828,9 @@ func compareGeoMean(s Suite) (*GeometricMean, string) {
 			return nil, fmt.Sprintf("benchmark %q did not complete", b.Name)
 		}
 		for _, c := range b.Commands {
+			if c.Base == nil && c.Head != nil && !c.Result.isError() {
+				continue // A head-only budget contributes no revision ratio.
+			}
 			base, head := latencyStats(c.Base), latencyStats(c.Head)
 			if c.Result.isError() || base == nil || head == nil {
 				return nil, fmt.Sprintf("command %q did not complete benchmark %q on both revisions", c.Name, b.Name)

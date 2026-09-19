@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -194,8 +195,8 @@ type sideState struct {
 }
 
 // Measure runs one benchmark across the given sides. With more than one side
-// (a revision comparison) only the commands the benchmark's regression
-// settings compare are measured. The result is a named return so the deferred
+// (a revision comparison), excluded commands with budgets still run on the
+// head side. The result is a named return so the deferred
 // teardown can record a cleanup failure.
 func (r *Runner) Measure(ctx context.Context, b config.Benchmark, sides []Side) (res BenchmarkResult) {
 	res.Benchmark = b
@@ -283,8 +284,9 @@ func commandUnits(b config.Benchmark, sides []Side, res *BenchmarkResult) []*uni
 	var units []*unit
 	for ci, c := range b.Commands {
 		cr := CommandResult{Command: c, Sides: map[string]*Measurement{}}
+		budgeted := slices.ContainsFunc(b.Budgets, func(bud config.Budget) bool { return bud.Command == c.Name })
 		for si, side := range sides {
-			if len(sides) > 1 && !b.Regression.Compares(c.Name) {
+			if len(sides) > 1 && !b.Regression.Compares(c.Name) && (side.Name != SideHead || !budgeted) {
 				continue
 			}
 			m := &Measurement{}

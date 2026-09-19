@@ -723,6 +723,12 @@ func TestCompareSidesOnlyMeasureComparedCommands(t *testing.T) {
 	if len(res.Commands[0].Sides) != 2 || len(res.Commands[1].Sides) != 0 {
 		t.Fatalf("sides = %v / %v", res.Commands[0].Sides, res.Commands[1].Sides)
 	}
+	b.Budgets = []config.Budget{{Command: "theirs"}}
+	res = f.runner.Measure(context.Background(), b, []Side{base, f.side})
+	m := res.Commands[1].Sides[SideHead]
+	if len(res.Commands[1].Sides) != 1 || m == nil || len(m.Samples) != 2 || m.Failure != nil {
+		t.Fatalf("excluded command's head budget must still be measured: %+v", res.Commands[1])
+	}
 }
 
 func TestSelection(t *testing.T) {

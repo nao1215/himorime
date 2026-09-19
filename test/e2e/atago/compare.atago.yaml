@@ -19,6 +19,48 @@ defaults:
       GIT_CONFIG_NOSYSTEM: "1"
 
 scenarios:
+  - name: regression selection preserves head-only absolute budgets
+    steps:
+      - fixture:
+          file: repo/himorime.yaml
+          content: |
+            version: "1"
+            suite: {name: selected comparisons}
+            defaults: {warmup: 0, runs: 10}
+            benchmarks:
+              - name: budget
+                commands:
+                  compared: {command: [e2ehelper, sleep, 1ms]}
+                  budgeted: {command: [e2ehelper, sleep, 40ms]}
+                regression:
+                  commands: [compared]
+                  latency: {gate: false}
+                budget:
+                  budgeted: {median: "< 1ms"}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - run:
+          command: himorime compare --against main --format json --quiet
+          cwd: repo
+      - assert:
+          exit_code: 1
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands", length: 2}
+              - {path: "$.suites[0].benchmarks[0].commands[1].name", equals: budgeted}
+              - {path: "$.suites[0].benchmarks[0].commands[1].base", equals: null}
+              - {path: "$.suites[0].benchmarks[0].commands[1].comparisons", equals: null}
+              - {path: "$.suites[0].benchmarks[0].commands[1].head.count", equals: 10}
+              - {path: "$.suites[0].benchmarks[0].commands[1].budgets[0].status", equals: fail}
+              - {path: "$.summary.over_budget", equals: 1}
+      - run:
+          command: himorime compare --against main --format markdown --quiet
+          cwd: repo
+      - assert:
+          exit_code: 1
+          stdout: {contains: [budgeted, FAIL, "Budgets (head)"]}
+
   - name: an unchanged working tree passes
     steps:
       - fixture: {file: repo/delay.txt, content: "40ms\n"}

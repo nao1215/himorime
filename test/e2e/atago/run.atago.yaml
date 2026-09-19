@@ -9,6 +9,37 @@ suite:
 # a result depends on time, and the assertions check classifications, table
 # structure, report schemas and exit codes.
 scenarios:
+  - name: selection does not run or write reports for excluded suites
+    steps:
+      - fixture:
+          file: selected.yaml
+          content: |
+            version: "1"
+            suite: {name: selected}
+            defaults: {runs: 1, warmup: 0}
+            benchmarks:
+              - name: selected
+                commands:
+                  app: {command: [e2ehelper, exit, "0"]}
+      - fixture:
+          file: excluded.yaml
+          content: |
+            version: "1"
+            suite: {name: excluded}
+            build: {command: [e2ehelper, exit, "3"]}
+            benchmarks:
+              - name: excluded
+                commands:
+                  app: {command: ["$${artifact}"]}
+            report:
+              versions: {excluded: [e2ehelper, exit, "3"]}
+              outputs: [{format: json, path: excluded.json}]
+      - run: {command: "himorime run --quiet --filter ^selected$ selected.yaml excluded.yaml"}
+      - assert:
+          exit_code: 0
+          stdout: {contains: "1 passed", not_contains: excluded}
+          file: {path: excluded.json, exists: false}
+
   - name: several commands form a table with a baseline-relative column
     steps:
       - fixture:

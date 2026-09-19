@@ -580,7 +580,7 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 		t.Errorf("nothing is built in the base revision:\n%s", r.stderr)
 	}
 
-	write(t, filepath.Join(dir, "bench", "himorime.yaml"), suite(t, newSuite))
+	write(t, filepath.Join(dir, "bench", "himorime.yaml"), strings.Replace(suite(t, newSuite), "runs: 10", "runs: 1", 1))
 	write(t, filepath.Join(dir, "bench", "delay.txt"), "1ms\n")
 	type reportJSON struct {
 		Suites []struct {
@@ -606,6 +606,9 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 		rep.Summary.NewSuites != 1 || rep.Summary.Commands != 1 || rep.Summary.ExitCode != exitcode.OK {
 		t.Fatalf("report = %+v\n%s", rep, r.stdout)
 	}
+	if r := run(t, dir, nil, "compare", "--against", "main", "--runs", "1", "--quiet", "bench"); r.code != exitcode.OK {
+		t.Fatalf("new suites need no comparison samples: %+v", r)
+	}
 
 	// The suite that exists on both revisions is still compared.
 	r = run(t, dir, nil, "compare", "--against", "main", "--format", "json", "--quiet", "himorime.yaml", "bench")
@@ -626,6 +629,41 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 	write(t, filepath.Join(dir, "bench", "himorime.yaml"), suite(t, brokenNewSuite))
 	if r := run(t, dir, nil, "run", "--quiet", "bench"); r.code != exitcode.Execution || strings.Contains(r.stdout, "new in this revision") {
 		t.Fatalf("run: %+v", r)
+	}
+}
+
+func TestSelectionSkipsEmptySuites(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "selected.yaml"), suite(t, `version: "1"
+suite: {name: selected}
+defaults: {runs: 1, warmup: 0}
+benchmarks:
+  - name: selected
+    tags: [selected]
+    commands:
+      app: {command: [@EXE@, exit, "0"]}
+`))
+	write(t, filepath.Join(dir, "excluded.yaml"), suite(t, `version: "1"
+suite: {name: excluded}
+build: {command: [@EXE@, exit, "3"]}
+benchmarks:
+  - name: excluded
+    tags: [excluded]
+    commands:
+      app: {command: ["${artifact}"]}
+report:
+  versions: {excluded: [@EXE@, exit, "3"]}
+  outputs: [{format: json, path: excluded.json}]
+`))
+	for _, flags := range [][]string{{"--filter", "^selected$"}, {"--tag", "selected"}, {"--skip-tag", "excluded"}} {
+		args := append([]string{"run", "--quiet"}, flags...)
+		args = append(args, "selected.yaml", "excluded.yaml")
+		if r := run(t, dir, nil, args...); r.code != exitcode.OK || strings.Contains(r.stdout, "excluded") {
+			t.Errorf("%v: excluded suite ran: %+v", flags, r)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "excluded.json")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("excluded suite output was written: %v", err)
+		}
 	}
 }
 
