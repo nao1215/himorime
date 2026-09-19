@@ -1,7 +1,23 @@
+| Target | Metric | Value | Result | Reason |
+|---|---|---|---|---|
+| CLI performance / version / himorime (head) | execution | - | ERROR | exit code: command exited before producing samples |
+| integration / integration | suite | - | ERROR | build: compiler failed |
+| CLI performance / validate / himorime | CPU time (median) | 12.00ms → 12.10ms (+0.8%) | PASS | the difference is smaller than min\_difference |
+| CLI performance / validate / himorime | Latency (median) | 10.00ms → 10.10ms (+1.0%) | PASS | the difference is smaller than min\_difference |
+| CLI performance / validate / himorime | Peak RSS (median) | 32.00MiB → 33.00MiB (+3.1%) | PASS | the difference is smaller than min\_difference |
+
+<details>
+<summary>Failures and execution details</summary>
+
 | Benchmark | Stage | Error | Exit code | Reason | Stderr |
 |---|---|---|---|---|---|
 | CLI performance / version / himorime | head | exit\_code | - | command exited before producing samples | - |
 | integration | suite | build | - | compiler failed | - |
+
+</details>
+
+<details>
+<summary>Detailed statistics and decision rules</summary>
 
 | Benchmark | Metric | Base | Head | Difference | Change | Interval | Confidence | Tolerance | Result | Reason | Rule | P(regression) | P(improvement) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -25,6 +41,11 @@
 |---|---|---|---|---|---|
 | R1 | median | 1.00ms | 95.0% | 10 | 0.5 |
 | R2 | median | 2.00MiB | 95.0% | 10 | 0.5 |
+
+</details>
+
+<details>
+<summary>Collection and environment</summary>
 
 | Collection | Metric | Source | Scope | Process aggregation |
 |---|---|---|---|---|
@@ -58,3 +79,5 @@
 | Working tree dirty | false |
 | Suite | CLI performance |
 | Suite | integration |
+
+</details>

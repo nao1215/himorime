@@ -50,7 +50,7 @@ func TestWriteReportDestinations(t *testing.T) {
 			}
 			body := strings.Join(lines[1:len(lines)-1], "\n") + "\n"
 			for _, line := range strings.Split(body, "\n") {
-				if line != "" && (!strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|")) {
+				if line != "" && line != "<details>" && line != "</details>" && !strings.HasPrefix(line, "<summary>") && (!strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|")) {
 					t.Fatalf("not a table: %s", line)
 				}
 			}

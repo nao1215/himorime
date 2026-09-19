@@ -70,12 +70,11 @@ func TestRenderPeakRSSAtTheFloor(t *testing.T) {
 		t.Fatal(err)
 	}
 	term := out.String()
-	_, memory, _ := strings.Cut(term, "\nmemory\n")
-	tiny := lineWith(t, memory, "tiny")
-	if !strings.Contains(tiny, "≤ 5.00MiB  ≤ 5.00MiB") {
+	tiny := lineWith(t, term, "tiny")
+	if !strings.Contains(tiny, "≤ 5.00MiB") {
 		t.Errorf("a peak at the floor is not shown as <= the floor: %q", tiny)
 	}
-	if large := lineWith(t, memory, "large"); strings.Contains(large, "<=") || !strings.Contains(large, "64.00MiB") {
+	if large := lineWith(t, term, "large"); strings.Contains(large, "<=") || !strings.Contains(large, "64.00MiB") {
 		t.Errorf("a peak above the floor is shown as %q", large)
 	}
 	if strings.Count(term, floorNote) != 1 {
@@ -99,7 +98,7 @@ func TestRenderPeakRSSAtTheFloor(t *testing.T) {
 func lineWith(t *testing.T, text, word string) string {
 	t.Helper()
 	for _, line := range strings.Split(text, "\n") {
-		if fields := strings.Fields(line); len(fields) > 0 && fields[0] == word {
+		if strings.Contains(line, word) && strings.Contains(strings.ToLower(line), "peak rss") {
 			return line
 		}
 	}
@@ -146,7 +145,7 @@ func TestComparePeakRSSAtTheFloor(t *testing.T) {
 				}
 				var out bytes.Buffer
 				_ = WriteTerminal(&out, r, TerminalOptions{})
-				if !strings.Contains(out.String(), "peak rss inconclusive: the peak RSS is at or below the measurement floor") {
+				if !strings.Contains(out.String(), "the peak RSS is at or below the measurement floor") {
 					t.Errorf("terminal does not say why:\n%s", out.String())
 				}
 			}
@@ -203,7 +202,7 @@ func TestBudgetOnPeakRSSAtTheFloor(t *testing.T) {
 			if !strings.Contains(out.String(), "≤ 5.00MiB") {
 				t.Errorf("budget table does not show the floor:\n%s", out.String())
 			}
-			if tt.status == BudgetSkipped && (!strings.Contains(out.String(), "COULD NOT BE ASSESSED") || !strings.Contains(out.String(), "could not be assessed: the peak RSS is at or below the measurement floor")) {
+			if tt.status == BudgetSkipped && (!strings.Contains(out.String(), "COULD NOT BE ASSESSED") || !strings.Contains(out.String(), "the peak RSS is at or below the measurement floor")) {
 				t.Errorf("terminal does not say why the budget was skipped:\n%s", out.String())
 			}
 			if tt.status == BudgetSkipped {

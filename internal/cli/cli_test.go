@@ -87,12 +87,12 @@ func TestActionsReportDoesNotCorruptJSONOrChangeVerdict(t *testing.T) {
 			if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil || decoded.Summary.ExitCode != exitcode.Failed {
 				t.Fatalf("JSON=%s, err=%v", stdout.String(), err)
 			}
-			if strings.Contains(stderr.String(), "| himorime | test |") != gh.Actions {
+			if strings.Contains(stderr.String(), "| Target | Metric | Value | Result | Reason |") != gh.Actions {
 				t.Fatalf("log=%s", stderr.String())
 			}
 			if mode == "summary" || mode == "explicit summary" {
 				data, err := os.ReadFile(path)
-				if err != nil || strings.Count(string(data), "| himorime | test |") != 1 {
+				if err != nil || strings.Count(string(data), "| Target | Metric | Value | Result | Reason |") != 1 {
 					t.Fatalf("summary=%s, err=%v", data, err)
 				}
 			}
@@ -352,7 +352,7 @@ func TestRunTableJSONAndOutputs(t *testing.T) {
 	if r.code != 0 {
 		t.Fatalf("run: %+v", r)
 	}
-	for _, want := range []string{"BENCHMARK", "fast one", "quick", "slower", "PASS", "seed 99"} {
+	for _, want := range []string{"TARGET", "fast one / quick", "fast one / slower", "PASS", "seed 99"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("stdout lacks %q:\n%s", want, r.stdout)
 		}
@@ -408,7 +408,7 @@ benchmarks:
         budget: {latency: {median: "< 5ms"}}
 `))
 	r := run(t, dir, nil, "run", "budget.himorime.yaml", "--quiet")
-	if r.code != exitcode.Failed || !strings.Contains(r.stdout, "OVER BUDGET") || !strings.Contains(r.stdout, "budget median < 5.00ms not met") {
+	if r.code != exitcode.Failed || !strings.Contains(r.stdout, "OVER BUDGET") || !strings.Contains(r.stdout, "latency median") || !strings.Contains(r.stdout, "5.00ms") || !strings.Contains(r.stdout, "budget not met") {
 		t.Fatalf("budget: %+v", r)
 	}
 
@@ -514,7 +514,7 @@ func TestCompare(t *testing.T) {
 	r := run(t, dir, nil, "compare", "--against", "main", "--quiet")
 	// An unchanged program passes, or is inconclusive when a shared runner is
 	// too noisy to tell; it is never a regression.
-	if r.code != 0 || !regexp.MustCompile(`\b(PASS|INCONCLUSIVE)\b`).MatchString(r.stdout) || !strings.Contains(r.stdout, "CHANGE") {
+	if r.code != 0 || !regexp.MustCompile(`\b(PASS|INCONCLUSIVE)\b`).MatchString(r.stdout) || !strings.Contains(r.stdout, "Latency (median)") || !strings.Contains(r.stdout, "→") {
 		t.Fatalf("unchanged compare: %+v", r)
 	}
 
@@ -614,7 +614,8 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 	for _, want := range []string{
 		"suite: added (bench/himorime.yaml)",
 		"new in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked",
-		"error: build failed",
+		"ERROR",
+		"build failed",
 		"1 suite new in this revision",
 		"exit 4",
 	} {
@@ -732,7 +733,7 @@ func TestCIGitHubActions(t *testing.T) {
 		t.Fatal("ci output must not be colored")
 	}
 	data, err := os.ReadFile(summary)
-	if err != nil || !strings.HasPrefix(string(data), "previous step\n| Benchmark |") || !strings.Contains(string(data), "| sleepy / app |") {
+	if err != nil || !strings.HasPrefix(string(data), "previous step\n| Target | Metric | Value | Result | Reason |") || !strings.Contains(string(data), "| sleepy / app |") {
 		t.Fatalf("summary = %q, %v", data, err)
 	}
 	if !strings.Contains(r.stderr, "comparing base "+base[:12]) {
