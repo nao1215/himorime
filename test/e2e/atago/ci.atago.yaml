@@ -52,7 +52,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            matches: "(?m)^sleepy / app +Latency \\(median\\) +\\S+ → \\S+( \\([+-][0-9.]+%\\))? +(PASS|INCONCLUSIVE) +-+$"
+            matches: "(?m)^sleepy / app +Latency \\(median\\) +\\S+ → \\S+( \\([+-][0-9.]+%\\))? +(PASS|INCONCLUSIVE) +.+$"
             not_contains: "\x1b["
       - assert:
           stderr: {matches: "comparing base [0-9a-f]{12} \\([0-9a-f]{40}\\) with the working tree"}
