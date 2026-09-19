@@ -180,3 +180,17 @@ Shows the command list, or the usage and flags of one command.
 <!-- END GENERATED: exit-codes -->
 
 Execution failures take precedence over metric failures, which take precedence over performance failures. An inconclusive comparison exits 0 unless `--fail-on-inconclusive` is set. JSON reports record the chosen status in `summary.exit_code`.
+
+## Diagnostic codes
+
+Tool errors printed to standard error carry an `HMR` code whose first digit identifies the corresponding error category (exit statuses 2–6). Use the exit status for scripts and the diagnostic code when reporting a problem. Measurement-result lines for success and performance-result exit `1`, including `--fail-on-inconclusive`, have no diagnostic prefix; an auxiliary operation such as writing an annotation can still report a separate error. Detailed messages explain the cause within each category.
+
+<!-- BEGIN GENERATED: error-codes -->
+| Code | Name | Meaning |
+|---|---|---|
+| `HMR2001` | invalid input | A suite or saved report is missing, malformed, or invalid. |
+| `HMR3001` | invalid command line | The command name, flag, or command-line argument is invalid. |
+| `HMR4001` | execution failed | A command, hook, build, Git operation, report write, comment publication, or cleanup step failed. |
+| `HMR5001` | internal error | himorime encountered an unexpected internal error. |
+| `HMR6001` | metric unavailable | A requested metric is unsupported or could not be collected. |
+<!-- END GENERATED: error-codes -->
