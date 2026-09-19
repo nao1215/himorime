@@ -380,7 +380,8 @@ func TestBenchmarkCommentWorkflow(t *testing.T) {
 			t.Fatal("reporter must not check out pull-request code")
 		}
 		if strings.Contains(step.Run, "go install") {
-			installed = strings.Contains(step.Run, "github.com/nao1215/himorime@v0.2.2") && strings.Contains(step.Run, "github.com/nao1215/himorime/cmd/himorime-comment@v0.2.2")
+			const revision = "8628acca22c123fdf3bbcfb98f14f5745a350d16"
+			installed = strings.Contains(step.Run, "github.com/nao1215/himorime@"+revision) && strings.Contains(step.Run, "github.com/nao1215/himorime/cmd/himorime-comment@"+revision)
 		}
 		if strings.HasPrefix(step.Uses, "actions/download-artifact@") {
 			downloaded = step.With["name"] == "himorime-report" && step.With["run-id"] == "${{ github.event.workflow_run.id }}" && step.With["path"] == "${{ runner.temp }}"
