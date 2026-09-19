@@ -14,7 +14,7 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            contains: [init, validate, list, run, compare, ci, version, completion, "Documentation: https://nao1215.github.io/himorime/", "GitHub Sponsors: https://github.com/sponsors/nao1215"]
+            contains: [init, validate, list, run, compare, ci, report, version, completion, "Documentation: https://nao1215.github.io/himorime/", "GitHub Sponsors: https://github.com/sponsors/nao1215"]
       - run:
           command: himorime version
       - assert:
@@ -68,6 +68,101 @@ scenarios:
           exit_code: 3
           stdout: {empty: true}
           stderr: {contains: ["HMR3001", "unknown command"]}
+
+  - name: saved reports render without rerunning and preserve stored failure status
+    steps:
+      - fixture:
+          file: passing.yaml
+          content: |
+            version: "1"
+            suite: {name: saved report}
+            defaults: {warmup: 0, runs: 2}
+            benchmarks:
+              - name: pass
+                commands:
+                  tool: {command: [e2ehelper, counter, calls.txt]}
+      - run:
+          command: himorime run --quiet --format json --output pass.json passing.yaml
+      - assert:
+          exit_code: 0
+          file:
+            path: pass.json
+            contains: ['"schema_version": "1"', '"status": "measured"']
+      - assert:
+          file:
+            path: calls.txt
+            equals: "2"
+      - run:
+          command: e2ehelper remove passing.yaml
+      - assert:
+          file:
+            path: passing.yaml
+            exists: false
+      - run:
+          command: himorime report pass.json
+      - assert:
+          exit_code: 0
+          stdout: {contains: ["saved report", "PASS", "exit 0"]}
+      - assert:
+          file:
+            path: calls.txt
+            equals: "2"
+      - run:
+          command: himorime report pass.json --format markdown --output pass.md
+      - assert:
+          exit_code: 0
+          file:
+            path: pass.md
+            contains: ["## saved report", "| pass | tool |", "PASS"]
+      - fixture:
+          file: failing.yaml
+          content: |
+            version: "1"
+            suite: {name: saved failure}
+            defaults: {warmup: 0, runs: 1}
+            benchmarks:
+              - name: fail
+                commands:
+                  tool: {command: [e2ehelper, exit, "7"]}
+      - run:
+          command: himorime run --quiet --format json --output failure.json failing.yaml
+      - assert:
+          exit_code: 4
+          file:
+            path: failure.json
+            contains: ['"schema_version": "1"', '"exit_code": 7']
+      - run:
+          command: himorime report failure.json
+      - assert:
+          exit_code: 0
+          stdout: {contains: ["saved failure", "ERROR", "exit 4"]}
+      - fixture: {file: malformed.json, content: "{\n"}
+      - run:
+          command: himorime report malformed.json
+      - assert:
+          exit_code: 2
+          stdout: {empty: true}
+          stderr: {contains: ["HMR2001", "invalid JSON"]}
+      - fixture: {file: unknown.json, content: '{"schema_version":"9"}'}
+      - run:
+          command: himorime report unknown.json
+      - assert:
+          exit_code: 2
+          stderr: {contains: ["unsupported report schema version"]}
+      - run:
+          command: himorime report pass.json --format csv
+      - assert:
+          exit_code: 3
+          stderr: {contains: ["HMR3001", "unknown --format"]}
+      - run:
+          command: himorime report pass.json --output pass.json/child
+      - assert:
+          exit_code: 4
+          stderr: {contains: ["HMR4003", "check output path"]}
+      - assert:
+          file:
+            path: pass.json
+            contains: ['"schema_version": "1"', '"status": "measured"']
 
   - name: init writes a runnable suite and never overwrites silently
     steps:

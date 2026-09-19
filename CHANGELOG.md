@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Added
 
 - A tool comparison page covering himorime, hyperfine, benchstat, Bencher and CodSpeed, including their different uses and limitations.
+- A `himorime report` command renders a saved JSON report with the current schema validation without rerunning measurements.
 
 ### Fixed
 
