@@ -3,6 +3,7 @@ package ghactions
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,38 @@ import (
 
 	"github.com/nao1215/himorime/internal/report"
 )
+
+type failBodyWriter struct{ writes []string }
+
+func (w *failBodyWriter) Write(p []byte) (int, error) {
+	w.writes = append(w.writes, string(p))
+	if len(w.writes) == 2 {
+		return 0, io.ErrClosedPipe
+	}
+	return len(p), nil
+}
+
+func TestWriteReportRestoresCommandsAfterLogFailure(t *testing.T) {
+	t.Parallel()
+	var log failBodyWriter
+	err := (Env{Actions: true}).WriteReport(&log, &report.Report{})
+	if !errors.Is(err, io.ErrClosedPipe) || len(log.writes) != 3 {
+		t.Fatalf("log failure: %v, writes = %q", err, log.writes)
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(log.writes[0], "::stop-commands::"))
+	if token == "" || log.writes[2] != "::"+token+"::\n" {
+		t.Fatalf("workflow commands were not restored: %q", log.writes)
+	}
+}
+
+func TestResolveBaseRejectsNonHexCommit(t *testing.T) {
+	t.Parallel()
+	e := Env{Actions: true, EventName: "push", EventPath: "event.json"}
+	_, err := e.ResolveBase(files(`{"before":"` + strings.Repeat("z", 40) + `"}`))
+	if !errors.Is(err, ErrNoBase) {
+		t.Fatalf("non-hex commit accepted: %v", err)
+	}
+}
 
 func TestWriteReportDestinations(t *testing.T) {
 	for _, mode := range []string{"local", "summary", "no summary", "unwritable summary"} {

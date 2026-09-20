@@ -410,6 +410,39 @@ func TestTerminalColorDoesNotColorResultLikeTarget(t *testing.T) {
 	}
 }
 
+func TestTerminalColorAndGeometricMeanLabels(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		result Result
+		prefix string
+	}{
+		{ResultPass, ansiGreen},
+		{ResultImproved, ansiGreen + ansiBold},
+		{ResultInconclusive, ansiYellow},
+		{ResultOverBudget, ansiRed + ansiBold},
+		{ResultRegression, ansiRed + ansiBold},
+		{ResultMetricError, ansiRed + ansiBold},
+		{ResultError, ansiRed + ansiBold},
+	} {
+		got := colorLabel("RESULT", tt.result)
+		if !strings.HasPrefix(got, tt.prefix) || !strings.HasSuffix(got, ansiReset) {
+			t.Errorf("colorLabel(%s) = %q", tt.result, got)
+		}
+	}
+	if got := colorLabel("RESULT", Result("unknown")); got != "RESULT" {
+		t.Fatalf("unknown result was colored: %q", got)
+	}
+	for ref, want := range map[string]string{
+		"baseline": "relative to the baseline",
+		"fastest":  "relative to the fastest",
+		"other":    "head relative to base",
+	} {
+		if got := geoLabel(ref); got != want {
+			t.Errorf("geoLabel(%q) = %q, want %q", ref, got, want)
+		}
+	}
+}
+
 func TestCompactReportPreservesBothSideErrors(t *testing.T) {
 	t.Parallel()
 	r := &Report{Mode: ModeCompare, Suites: []Suite{{Name: "suite", Benchmarks: []Benchmark{{Name: "case", Commands: []Command{{Name: "tool", Result: ResultError, Base: &Measurement{Error: &Error{Kind: "exit_code", Message: "base failed"}}, Head: &Measurement{Error: &Error{Kind: "timeout", Message: "head timed out"}}}}}}}}}
@@ -542,6 +575,40 @@ func TestCSV(t *testing.T) {
 	cmp := find(rows, map[string]string{"record": "comparison", "metric": "latency"})
 	if cmp[csvCol("base")] != "1000000" || cmp[csvCol("difference")] != "0" || cmp[csvCol("change_percent")] == "" || cmp[csvCol("verdict")] != "pass" {
 		t.Fatalf("comparison row = %q", cmp)
+	}
+}
+
+func TestCSVIncludesSuiteBenchmarkAndSideErrors(t *testing.T) {
+	t.Parallel()
+	r := &Report{Mode: ModeCompare, Suites: []Suite{
+		{Name: "new", NewInHead: true, Result: ResultError, Benchmarks: []Benchmark{
+			{Name: "empty", Result: ResultError, Error: &Error{Kind: "setup_failed", Message: "setup failed"}},
+			{Name: "benchmark failed", Result: ResultError, Error: &Error{Kind: "prepare_each_failed", Message: "benchmark failed"}, Commands: []Command{{Name: "tool"}}},
+			{Name: "broken", Result: ResultError, Commands: []Command{
+				{Name: "tool", Result: ResultError, Base: nil, Head: &Measurement{Error: &Error{Kind: "exit_code", Message: "head failed"}}},
+				{Name: "missing", Result: ResultError},
+			}},
+		}},
+		{Name: "failed suite", Result: ResultError, Error: &Error{Kind: "build_failed", Message: "build failed"}},
+	}}
+	var out bytes.Buffer
+	if err := WriteCSV(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(&out).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	find := func(record, bench, side, kind string) bool {
+		for _, row := range rows[1:] {
+			if row[csvCol("record")] == record && row[csvCol("benchmark")] == bench && row[csvCol("side")] == side && row[csvCol("error_kind")] == kind {
+				return true
+			}
+		}
+		return false
+	}
+	if !find(recordNewInHead, "", "", "") || !find(recordError, "empty", "", "setup_failed") || !find(recordError, "benchmark failed", "", "prepare_each_failed") || !find(recordError, "broken", "head", "exit_code") || !find(recordError, "", "", "build_failed") {
+		t.Fatalf("CSV error rows missing:\n%q", rows)
 	}
 }
 
@@ -740,11 +807,36 @@ func TestWriteDispatch(t *testing.T) {
 	if err := WriteCSV(failingWriter{}, r); err == nil {
 		t.Error("a CSV write error was swallowed")
 	}
+	if err := WriteSamplesCSV(failingWriter{}, r); err == nil {
+		t.Error("a samples CSV write error was swallowed")
+	}
+	if err := WriteMarkdown(failingWriter{}, r); err == nil {
+		t.Error("a Markdown write error was swallowed")
+	}
 	if err := WriteTerminal(failingWriter{}, r, TerminalOptions{}); err == nil {
 		t.Error("a terminal write error was swallowed")
 	}
 	if err := WriteGitHubSummary(failingWriter{}, r); err == nil {
 		t.Error("a GitHub summary write error was swallowed")
+	}
+}
+
+func TestCSVWritersPropagateMidRecordErrors(t *testing.T) {
+	t.Parallel()
+	name := strings.Repeat("suite-name-", 1024)
+	measurement := &Measurement{Metrics: map[string]*MetricSummary{
+		string(metric.Latency): {
+			Name: string(metric.Latency), Unit: "ns", Status: StatusMeasured,
+			Stats:   &MetricStats{Count: 1, Min: 1, Median: 1, Mean: 1, Max: 1, Percentiles: map[string]float64{}},
+			Samples: []float64{1},
+		},
+	}}
+	r := &Report{Mode: ModeRun, Suites: []Suite{{Name: name, Benchmarks: []Benchmark{{Name: "case", Commands: []Command{{Name: "tool", Head: measurement}}}}}}}
+	if err := WriteCSV(failingWriter{}, r); err == nil {
+		t.Fatal("CSV row write failure was swallowed")
+	}
+	if err := WriteSamplesCSV(failingWriter{}, r); err == nil {
+		t.Fatal("samples CSV row write failure was swallowed")
 	}
 }
 
@@ -761,6 +853,128 @@ func TestResultOrder(t *testing.T) {
 	}
 	if verdictLabel(ResultOverBudget) != "OVER BUDGET" {
 		t.Fatal("label")
+	}
+}
+
+func TestReportSmallHelpersHandleMissingAndVariableValues(t *testing.T) {
+	t.Parallel()
+	value := func(v float64) *float64 { return &v }
+	constant := &Work{MeasuredMin: value(10), MeasuredMax: value(10), Unit: "records"}
+	if !constant.sameWork(constant) || constant.sameWork(nil) {
+		t.Fatal("sameWork did not recognize a constant work amount")
+	}
+	for _, w := range []*Work{
+		nil,
+		{},
+		{MeasuredMin: value(10)},
+		{MeasuredMin: value(10), MeasuredMax: value(11), Unit: "records"},
+		{MeasuredMin: value(0), MeasuredMax: value(0), Unit: "records"},
+	} {
+		if constant.sameWork(w) {
+			t.Errorf("sameWork accepted invalid work: %+v", w)
+		}
+	}
+	if got := workAmount(nil); got != "unavailable work" {
+		t.Errorf("workAmount(nil) = %q", got)
+	}
+	if got := workAmount(&Work{MeasuredMin: value(3), MeasuredMax: value(3), Unit: "records"}); got != "3 records" {
+		t.Errorf("constant workAmount = %q", got)
+	}
+	if got := workAmount(&Work{MeasuredMin: value(3), MeasuredMax: value(4), Unit: "records"}); got != "3 to 4 records" {
+		t.Errorf("variable workAmount = %q", got)
+	}
+	metricStats := &MetricStats{Median: 2, Mean: 3}
+	if statOf(&MetricSummary{Stats: metricStats}, stats.Mean) != 3 || statOf(&MetricSummary{Stats: metricStats}, stats.Median) != 2 || statOf(&MetricSummary{}, stats.Mean) != 0 {
+		t.Fatal("statOf did not select the requested statistic")
+	}
+	if GeometricMeanNote(Suite{GeometricMeanUnavailable: "custom reason"}) != "custom reason" || GeometricMeanNote(Suite{GeometricMeanUnavailable: reasonTooFewCases}) != "" {
+		t.Fatal("GeometricMeanNote classification changed")
+	}
+	if worst(ResultPass, Result("future")) != Result("future") {
+		t.Fatal("unknown result should retain worst severity")
+	}
+}
+
+func TestBuildErrorAndComparisonEdgeCases(t *testing.T) {
+	t.Parallel()
+	command := &Command{Name: "tool"}
+	if got, failed := commandFailure(Benchmark{}, command, ModeRun); got != ResultError || !failed {
+		t.Fatalf("missing head measurement = %s, %v", got, failed)
+	}
+	command.Head = &Measurement{}
+	if got, failed := commandFailure(Benchmark{}, command, ModeRun); got != ResultPass || failed {
+		t.Fatalf("empty measurement = %s, %v", got, failed)
+	}
+	command.Head.Error = &Error{Kind: string(runner.FailMetricCollection)}
+	if got, failed := commandFailure(Benchmark{}, command, ModeRun); got != ResultMetricError || !failed {
+		t.Fatalf("metric measurement error = %s, %v", got, failed)
+	}
+	if got := latencyStats(nil); got != nil {
+		t.Fatal("nil measurement has latency statistics")
+	}
+	if got := latencyStats(&Measurement{Count: 1}); got != nil {
+		t.Fatal("measurement without latency has statistics")
+	}
+	unsupported := &Measurement{Count: 1, Metrics: map[string]*MetricSummary{string(metric.Latency): {Status: StatusUnsupported}}}
+	if got := latencyStats(unsupported); got != nil {
+		t.Fatal("unsupported latency has statistics")
+	}
+
+	latency := &MetricComparison{Metric: string(metric.Latency), MaxPercent: 10, ChangePercent: 2, CILowPercent: -1, CIHighPercent: 3, Base: floatPtr(1), Head: floatPtr(1)}
+	cfg := config.Benchmark{Metrics: config.Metrics{Throughput: &config.Work{Unit: "records"}}}
+	c := &Command{Comparisons: map[string]*MetricComparison{string(metric.Latency): latency}, Base: &Measurement{Metrics: map[string]*MetricSummary{string(metric.Throughput): {Status: StatusUnsupported}}}, Head: &Measurement{Metrics: map[string]*MetricSummary{string(metric.Throughput): {Status: StatusMeasured}}}}
+	if got := deriveThroughput(c, cfg); got.Verdict != VerdictSkipped || got.Reason != "throughput was not measured on both revisions" {
+		t.Fatalf("unsupported throughput = %+v", got)
+	}
+	c.Base.Metrics[string(metric.Throughput)] = &MetricSummary{Status: StatusMeasured, Work: &Work{MeasuredMin: floatPtr(2), MeasuredMax: floatPtr(3), Unit: "records"}}
+	c.Head.Metrics[string(metric.Throughput)] = &MetricSummary{Status: StatusMeasured, Work: &Work{MeasuredMin: floatPtr(2), MeasuredMax: floatPtr(2), Unit: "records"}}
+	if got := deriveThroughput(c, cfg); got.Verdict != VerdictSkipped || got.Reason == "" {
+		t.Fatalf("different throughput work = %+v", got)
+	}
+	c.Base.Metrics[string(metric.Throughput)].Work = &Work{MeasuredMin: floatPtr(2), MeasuredMax: floatPtr(2), Unit: "records"}
+	latency.Base, latency.Head = floatPtr(0), floatPtr(1)
+	if got := deriveThroughput(c, cfg); got.Verdict != VerdictSkipped || got.Reason == "" {
+		t.Fatalf("zero latency throughput = %+v", got)
+	}
+}
+
+func floatPtr(v float64) *float64 { return &v }
+
+func TestGeometricMeanEdgeCases(t *testing.T) {
+	t.Parallel()
+	cmd := func(name string) Command {
+		return Command{Name: name, Relative: &Relative{VsFastest: floatPtr(1), VsBaseline: floatPtr(1)}}
+	}
+	if _, reason := runGeoMean(Suite{Benchmarks: []Benchmark{{Name: "one"}}}); reason != reasonTooFewCases {
+		t.Fatalf("one benchmark reason = %q", reason)
+	}
+	if _, reason := runGeoMean(Suite{Benchmarks: []Benchmark{{Commands: []Command{cmd("tool")}}, {Commands: []Command{cmd("tool")}}}}); reason != reasonTooFewCommands {
+		t.Fatalf("one command reason = %q", reason)
+	}
+	if _, reason := runGeoMean(Suite{Benchmarks: []Benchmark{{Commands: []Command{cmd("a")}}, {Commands: []Command{cmd("b")}}}}); reason != reasonNoSharedCommand {
+		t.Fatalf("unshared command reason = %q", reason)
+	}
+	if _, reason := runGeoMean(Suite{Benchmarks: []Benchmark{{Name: "broken", Error: &Error{Message: "failed"}, Commands: []Command{cmd("a"), cmd("b")}}, {Commands: []Command{cmd("a"), cmd("b")}}}}); !strings.Contains(reason, "broken") {
+		t.Fatalf("benchmark error reason = %q", reason)
+	}
+	if _, reason := runGeoMean(Suite{Benchmarks: []Benchmark{{Commands: []Command{cmd("a"), cmd("b")}}, {Commands: []Command{cmd("a")}}}}); !strings.Contains(reason, "missing") {
+		t.Fatalf("missing command reason = %q", reason)
+	}
+	bad := cmd("a")
+	bad.Result = ResultError
+	if _, reason := runGeoMean(Suite{Benchmarks: []Benchmark{{Commands: []Command{cmd("a"), cmd("b")}}, {Commands: []Command{bad, cmd("b")}}}}); !strings.Contains(reason, "did not complete") {
+		t.Fatalf("incomplete command reason = %q", reason)
+	}
+	missingRatio := cmd("a")
+	missingRatio.Relative = &Relative{}
+	if _, reason := commandRatios([]Benchmark{{Name: "one", Commands: []Command{missingRatio}}}, "a", "fastest"); !strings.Contains(reason, "no ratio") {
+		t.Fatalf("missing ratio reason = %q", reason)
+	}
+	if got := geoReference([]Benchmark{{Baseline: ""}, {Baseline: "tool"}}); got != "fastest" {
+		t.Fatalf("empty baseline reference = %q", got)
+	}
+	if got := geoReference([]Benchmark{{Baseline: "a"}, {Baseline: "b"}}); got != "fastest" {
+		t.Fatalf("different baseline reference = %q", got)
 	}
 }
 

@@ -22,11 +22,11 @@ func TestDefinitionsAreComplete(t *testing.T) {
 			t.Errorf("%s is neutral but comparable; a neutral metric has no regression direction", d.Name)
 		}
 		if got := MustLookup(d.Name); got != d {
-			t.Errorf("Lookup(%s) = %+v", d.Name, got)
+			t.Errorf("lookup(%s) = %+v", d.Name, got)
 		}
 	}
-	if _, ok := Lookup("heap"); ok {
-		t.Fatal("Lookup found an unknown metric")
+	if _, ok := lookup("heap"); ok {
+		t.Fatal("lookup found an unknown metric")
 	}
 	var grouped int
 	for _, g := range Groups() {
@@ -34,6 +34,46 @@ func TestDefinitionsAreComplete(t *testing.T) {
 	}
 	if grouped != len(Defs()) {
 		t.Fatalf("groups cover %d of %d metrics", grouped, len(Defs()))
+	}
+}
+
+func TestUnknownMetricDefinition(t *testing.T) {
+	t.Parallel()
+	defer func() {
+		if r := recover(); r != `metric: unknown metric "unknown"` {
+			t.Fatalf("unknown metric panic = %v", r)
+		}
+	}()
+	MustLookup("unknown")
+}
+
+func TestUnknownQuantityKind(t *testing.T) {
+	t.Parallel()
+	kind := Kind(99)
+	if kind.String() != "kind(99)" || (Def{Kind: kind}).Unit("") != "" {
+		t.Fatal("unknown kind acquired a name or unit")
+	}
+	if _, _, err := ParseQuantity(kind, "1"); err == nil {
+		t.Fatal("unknown quantity kind accepted")
+	}
+	if _, err := ParseThreshold(kind, Neutral, "<= 1"); err == nil {
+		t.Fatal("unknown budget kind accepted")
+	}
+	if (Threshold{Op: "invalid", Limit: 1}).Allows(0) {
+		t.Fatal("unknown comparison operator passed a budget")
+	}
+	if got := Format(kind, 1.5, ""); got != "1.5" {
+		t.Fatalf("unknown kind fallback = %q", got)
+	}
+}
+
+func TestPercentileRoundingAndStableOrder(t *testing.T) {
+	t.Parallel()
+	if _, ok := Aggregation("p99." + strings.Repeat("9", 30)).Percentile(); ok {
+		t.Fatal("percentile rounded to 100 was accepted")
+	}
+	if !Aggregation("p50").Less("p50.0") || Aggregation("p50.0").Less("p50") {
+		t.Fatal("equal percentiles are not ordered by spelling")
 	}
 }
 
@@ -68,15 +108,45 @@ func TestParseBytes(t *testing.T) {
 		"1B": 1, "512bytes": 512, "1KB": 1000, "1KiB": 1024, "64MiB": 64 << 20, "1.5GiB": 1.5 * (1 << 30),
 		"2 MB": 2e6, "1TiB": 1 << 40, "0B": 0,
 	} {
-		got, err := ParseBytes(in)
+		got, err := parseBytes(in)
 		if err != nil || got != want {
-			t.Errorf("ParseBytes(%q) = %v, %v; want %v", in, got, err, want)
+			t.Errorf("parseBytes(%q) = %v, %v; want %v", in, got, err, want)
 		}
 	}
 	for _, in := range []string{"", "64", "64mib", "-1MiB", "MiB", "1e3B", "1.MiB", "64 MiB/s", "1 PiB"} {
-		if _, err := ParseBytes(in); err == nil {
-			t.Errorf("ParseBytes(%q) accepted an invalid size", in)
+		if _, err := parseBytes(in); err == nil {
+			t.Errorf("parseBytes(%q) accepted an invalid size", in)
 		}
+	}
+}
+
+func TestQuantityOverflow(t *testing.T) {
+	t.Parallel()
+	for _, number := range []string{strings.Repeat("9", 400), "1" + strings.Repeat("0", 300)} {
+		for _, tc := range []struct {
+			kind   Kind
+			value  string
+			op     string
+			better Direction
+		}{
+			{KindBytes, number + "TiB", "<=", LowerIsBetter},
+			{KindRate, number + "TiB/s", ">=", HigherIsBetter},
+		} {
+			if _, _, err := ParseQuantity(tc.kind, tc.value); err == nil {
+				t.Errorf("accepted overflowing quantity %q", tc.value)
+			}
+			if _, err := ParseThreshold(tc.kind, tc.better, tc.op+tc.value); err == nil {
+				t.Errorf("accepted overflowing budget %q", tc.value)
+			}
+		}
+	}
+	for _, value := range []string{"999999999999999999999h", "25h"} {
+		if _, err := ParseThreshold(KindDuration, LowerIsBetter, "<="+value); err == nil {
+			t.Errorf("accepted excessive duration budget %q", value)
+		}
+	}
+	if _, err := ParseThreshold(KindPercent, Neutral, "<="+strings.Repeat("9", 400)+"%"); err == nil {
+		t.Fatal("accepted overflowing percentage")
 	}
 }
 
@@ -94,14 +164,14 @@ func TestParseRate(t *testing.T) {
 		{"3 lines_out/s", 3, "lines_out"},
 	}
 	for _, tt := range tests {
-		v, unit, err := ParseRate(tt.in)
+		v, unit, err := parseRate(tt.in)
 		if err != nil || v != tt.v || unit != tt.unit {
-			t.Errorf("ParseRate(%q) = %v %q %v; want %v %q", tt.in, v, unit, err, tt.v, tt.unit)
+			t.Errorf("parseRate(%q) = %v %q %v; want %v %q", tt.in, v, unit, err, tt.v, tt.unit)
 		}
 	}
 	for _, in := range []string{"50MiB", "records/s", "1000 records", "-1 records/s", "1 2records/s", "1 records/min"} {
-		if _, _, err := ParseRate(in); err == nil {
-			t.Errorf("ParseRate(%q) accepted an invalid rate", in)
+		if _, _, err := parseRate(in); err == nil {
+			t.Errorf("parseRate(%q) accepted an invalid rate", in)
 		}
 	}
 }
@@ -272,13 +342,13 @@ func TestAggregations(t *testing.T) {
 		}
 	}
 	for _, u := range []string{"records", "bytes", "ops_1", "x-y"} {
-		if _, _, err := ParseRate("1 " + u + "/s"); err != nil {
-			t.Errorf("ParseRate unit %q: %v", u, err)
+		if _, _, err := parseRate("1 " + u + "/s"); err != nil {
+			t.Errorf("parseRate unit %q: %v", u, err)
 		}
 	}
 	for _, u := range []string{"", "1x", "records/s", "a b"} {
-		if _, _, err := ParseRate("1 " + u + "/s"); err == nil {
-			t.Errorf("ParseRate accepted invalid unit %q", u)
+		if _, _, err := parseRate("1 " + u + "/s"); err == nil {
+			t.Errorf("parseRate accepted invalid unit %q", u)
 		}
 	}
 	if !IsByteUnit("MiB") || IsByteUnit("records") {

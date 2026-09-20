@@ -70,7 +70,7 @@ func lookPathIn(name, pathList, workdir string) (string, error) {
 			continue
 		}
 		p := filepath.Join(pathEntry(dir, workdir), name)
-		if info, err := os.Stat(p); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+		if info, err := os.Stat(p); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 { //nolint:gosec // G703: a benchmark's PATH may name executables outside the suite.
 			return p, nil
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nao1215/himorime/internal/metric"
 	"github.com/nao1215/himorime/internal/runner"
 )
 
@@ -100,6 +101,122 @@ func TestMarkdownResultColumn(t *testing.T) {
 	}
 }
 
+func TestMarkdownEmptyBenchmarkUsesErrorCell(t *testing.T) {
+	t.Parallel()
+	r := &Report{Suites: []Suite{{Name: "suite", Benchmarks: []Benchmark{
+		{Name: "no commands"},
+		{Name: "failed setup", Error: &Error{Kind: string(runner.FailSetup), Message: "setup failed"}},
+	}}}}
+	md := markdownOf(t, r)
+	for _, name := range []string{"no commands", "failed setup"} {
+		if !strings.Contains(md, "| "+name+" | - | - | - | - | - | - | - | - | - | ERROR |") {
+			t.Errorf("empty benchmark %q is not rendered as an error row:\n%s", name, md)
+		}
+	}
+	r.Mode = ModeCompare
+	md = markdownOf(t, r)
+	for _, name := range []string{"no commands", "failed setup"} {
+		if !strings.Contains(md, "| "+name+" | - | - | - | - | - | - | - | - | ERROR |") {
+			t.Errorf("empty comparison benchmark %q is not rendered as an error row:\n%s", name, md)
+		}
+	}
+}
+
+func TestMarkdownSuiteErrorsAndCompareRows(t *testing.T) {
+	t.Parallel()
+	comparison := &MetricComparison{Metric: string(metric.Latency), Better: "lower", Base: floatPtr(1), Head: floatPtr(2), Difference: floatPtr(1), Verdict: string(ResultRegression), Gate: true}
+	r := &Report{
+		Mode: ModeCompare,
+		Suites: []Suite{
+			{Name: "failed", Error: &Error{Kind: "build_failed", Message: "compiler failed"}},
+			{
+				Name: "compare",
+				Benchmarks: []Benchmark{
+					{Name: "empty"},
+					{
+						Name: "partial",
+						Commands: []Command{{
+							Name: "tool", Result: ResultRegression,
+							Comparisons: map[string]*MetricComparison{string(metric.Latency): comparison},
+							Budgets:     []BudgetCheck{{Metric: string(metric.Latency), Aggregation: "median", Status: BudgetFail, Operator: "<=", Limit: 1, Actual: floatPtr(2)}},
+						}},
+					},
+				},
+			},
+		},
+	}
+	md := markdownOf(t, r)
+	for _, want := range []string{"**Error:** build failed: compiler failed", "| empty | - | - | - | - | - | - | - | - | ERROR |", "| Benchmark | Command | Base | Head", "## Budgets (head)", "| partial | tool |"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown lacks %q:\n%s", want, md)
+		}
+	}
+}
+
+func TestMarkdownNotesIncludeBenchmarkAndMeasurementStderr(t *testing.T) {
+	t.Parallel()
+	r := judge(ModeRun, false, runResult("tool", "", map[string][]time.Duration{"tool": samples(time.Millisecond, 3, 0)}, "tool"))
+	b := &r.Suites[0].Benchmarks[0]
+	b.Error = &Error{Kind: "setup_failed", Message: "benchmark failed", Stderr: "benchmark-1\nbenchmark-2\nbenchmark-3\nbenchmark-4"}
+	b.Commands[0].Head.Error = &Error{Kind: "exit_code", Message: "command failed", Stderr: "command-1\ncommand-2\ncommand-3\ncommand-4"}
+	r.Environment.Tools = []Tool{{Name: "tool", Version: "tool 1.0"}}
+	md := markdownOf(t, r)
+	for _, want := range []string{`stderr: benchmark-2 \| benchmark-3 \| benchmark-4`, `stderr: command-2 \| command-3 \| command-4`, "- tool: tool 1.0"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown notes lack %q:\n%s", want, md)
+		}
+	}
+}
+
+func TestMarkdownExplainsComparisonBoundaryStates(t *testing.T) {
+	t.Parallel()
+	base, head, difference, actual := 10.0, 12.0, 2.0, 20.0
+	r := &Report{
+		Mode: ModeCompare,
+		Suites: []Suite{
+			{
+				Name: "boundaries",
+				Benchmarks: []Benchmark{
+					{
+						Name: "case",
+						Commands: []Command{
+							{
+								Name:   "tool",
+								Result: ResultRegression,
+								Comparisons: map[string]*MetricComparison{
+									string(metric.Throughput): {Metric: string(metric.Throughput), Unit: "records/s", Verdict: string(ResultRegression), DerivedFrom: string(metric.Latency), Gate: false, Base: &base, Head: &head, Difference: &difference},
+									string(metric.CPUTotal):   {Metric: string(metric.CPUTotal), Unit: "ns", Verdict: VerdictSkipped, Gate: true, Reason: "unsupported on base"},
+									string(metric.CPUUser):    {Metric: string(metric.CPUUser), Unit: "ns", Verdict: string(ResultRegression), Gate: false, Base: &base, Head: &head, Difference: &difference},
+									string(metric.PeakRSS):    {Metric: string(metric.PeakRSS), Unit: "bytes", Verdict: string(ResultInconclusive), Gate: true, Reason: "too noisy", Base: &base, Head: &head, Difference: &difference},
+								},
+								Budgets: []BudgetCheck{
+									{Metric: string(metric.Latency), Aggregation: "median", Unit: "ns", Operator: "<=", Limit: 10, Actual: &actual, Status: BudgetFail},
+									{Metric: string(metric.PeakRSS), Aggregation: "max", Unit: "bytes", Status: BudgetSkipped, Reason: ReasonAtFloor},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Summary: Summary{Regression: 1, Benchmarks: 1, Commands: 1, ExitCode: 1},
+	}
+	md := markdownOf(t, r)
+	for _, want := range []string{
+		"REGRESSION (FROM LATENCY)",
+		"cpu total skipped: unsupported on base",
+		"cpu user regressed beyond its tolerance, but gate: false keeps it from failing the run",
+		"peak rss inconclusive: too noisy",
+		"budget median &lt;= 10ns not met (measured 20ns)",
+		"budget peak rss max could not be assessed: the peak RSS is at or below the measurement floor",
+		"(NOT GATED) marks a metric with gate: false",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown lacks %q:\n%s", want, md)
+		}
+	}
+}
+
 func TestMarkdownHasNoGeometricMeanNote(t *testing.T) {
 	t.Parallel()
 	r := mixedReport(t, nil)
@@ -133,9 +250,13 @@ func TestMarkdownTools(t *testing.T) {
 		t.Errorf("without tools the footer and summary are present:\n%s", md)
 	}
 	r.Environment.Tools = []Tool{{Name: "jc", Version: "jc version 1.25.7"}, {Name: "jo", Version: "1.9"}}
+	r.Git = &Git{BaseSHA: "0123456789abcdef", HeadSHA: "fedcba9876543210", Dirty: true}
 	md = markdownOf(t, r)
 	if !strings.Contains(md, ", seed 42.\n\n- jc: jc version 1.25.7\n- jo: 1.9\n\n") || !strings.HasSuffix(md, "exit 0\n") {
 		t.Errorf("tools footer:\n%s", md)
+	}
+	if !strings.Contains(md, "base 0123456789ab, head fedcba987654 with uncommitted changes") {
+		t.Errorf("git revisions were not shortened in markdown:\n%s", md)
 	}
 	var term bytes.Buffer
 	if err := WriteTerminal(&term, r, TerminalOptions{}); err != nil {

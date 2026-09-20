@@ -766,3 +766,135 @@ func TestRunReportsAFloorWithUsage(t *testing.T) {
 		})
 	}
 }
+
+func TestWatchStopsOnTimeoutCancellationAndDone(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		ctx       func() context.Context
+		timeout   time.Duration
+		closeDone bool
+		want      killReason
+	}{
+		{name: "timeout", ctx: context.Background, timeout: time.Millisecond, want: killTimeout},
+		{name: "cancellation", ctx: func() context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx
+		}, want: killCancel},
+		{name: "finished", ctx: context.Background, timeout: time.Hour, closeDone: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			done := make(chan struct{})
+			if tt.closeDone {
+				close(done)
+			}
+			killed := make(chan killReason, 1)
+			called := make(chan struct{}, 1)
+			watch(tt.ctx(), tt.timeout, done, killed, func() { called <- struct{}{} })
+			select {
+			case got := <-killed:
+				if got != tt.want {
+					t.Fatalf("kill reason = %d, want %d", got, tt.want)
+				}
+				select {
+				case <-called:
+				case <-time.After(time.Second):
+					t.Fatal("kill callback was not called")
+				}
+			default:
+				if tt.want != 0 {
+					t.Fatalf("watch did not report kill reason %d", tt.want)
+				}
+				select {
+				case <-called:
+					t.Fatal("finished command was killed")
+				default:
+				}
+			}
+		})
+	}
+}
+
+func TestPathAndCommandHelpers(t *testing.T) {
+	t.Parallel()
+	if got, want := pathEntry("bin/tool", "/work"), filepath.Join("/work", "bin/tool"); got != want {
+		t.Fatalf("pathEntry relative = %q", got)
+	}
+	absolute, err := filepath.Abs(filepath.Join("work", "tool"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.IsAbs(absolute) && pathEntry(absolute, "/other") != absolute {
+		t.Fatal("pathEntry changed an absolute path")
+	}
+	for _, tt := range []struct {
+		input string
+		key   string
+		value string
+		ok    bool
+	}{
+		{input: "PATH=/bin", key: "PATH", value: "/bin", ok: true},
+		{input: "PATH", ok: false},
+		{input: "=value", ok: false},
+	} {
+		key, value, ok := cutEnv(tt.input)
+		if key != tt.key || value != tt.value || ok != tt.ok {
+			t.Errorf("cutEnv(%q) = %q, %q, %v", tt.input, key, value, ok)
+		}
+	}
+	if _, err := command(Spec{}); err == nil {
+		t.Fatal("command accepted an empty program")
+	}
+	cmd, err := command(Spec{Path: absolute, Args: []string{"ok"}})
+	if err != nil || cmd.Path != absolute {
+		t.Fatalf("command with path = %v, %v", cmd, err)
+	}
+	cmd, err = command(Spec{Script: "echo ok"})
+	if err != nil || cmd.Path == "" {
+		t.Fatalf("command with script = %v, %v", cmd, err)
+	}
+}
+
+func TestLookPathHonorsAndIgnoresChildPATHAsNeeded(t *testing.T) {
+	t.Parallel()
+	name, absolute := "sh", "/bin/sh"
+	if runtime.GOOS == "windows" {
+		name, absolute = "cmd.exe", os.Getenv("ComSpec")
+		if absolute == "" {
+			t.Skip("ComSpec is empty")
+		}
+	}
+	if _, err := lookPath(name, []string{"PATH=/definitely/missing"}, ""); err == nil {
+		t.Fatal("lookPath found a command in a missing child PATH")
+	}
+	path := os.Getenv("PATH")
+	if path == "" {
+		t.Skip("PATH is empty")
+	}
+	if got, err := lookPath(name, []string{"PATH=" + path}, ""); err != nil || got == "" {
+		t.Fatalf("lookPath with inherited PATH = %q, %v", got, err)
+	}
+	if got, err := lookPath(absolute, nil, ""); err != nil || got != absolute {
+		t.Fatalf("lookPath with separator = %q, %v", got, err)
+	}
+}
+
+func TestExitCodeAndFinishedHelpers(t *testing.T) {
+	t.Parallel()
+	if !finished(func() <-chan struct{} { c := make(chan struct{}); close(c); return c }()) {
+		t.Fatal("finished did not recognize a closed channel")
+	}
+	if finished(make(chan struct{})) {
+		t.Fatal("finished recognized an open channel")
+	}
+	cmd := &exec.Cmd{}
+	if got := exitCode(cmd, errors.New("wait")); got != -1 {
+		t.Fatalf("exitCode without process state = %d", got)
+	}
+	if got := exitCode(cmd, nil); got != 0 {
+		t.Fatalf("exitCode without state and error = %d", got)
+	}
+}

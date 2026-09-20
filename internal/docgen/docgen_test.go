@@ -19,6 +19,28 @@ import (
 
 const root = "../.."
 
+func TestSyncRejectsBrokenSources(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "page.md")
+	if _, err := Sync(dir, path); err == nil {
+		t.Fatal("missing document accepted")
+	}
+	for _, tc := range []struct{ text, want string }{
+		{"<!-- BEGIN GENERATED: commands -->\nold\n<!-- END GENERATED: defaults -->", "ends with"},
+		{"<!-- BEGIN GENERATED: unknown -->\nold\n<!-- END GENERATED: unknown -->", "unknown generated section"},
+		{"<!-- example: missing.yaml -->\n```yaml\nold\n```\n", "example missing.yaml"},
+	} {
+		if err := os.WriteFile(path, []byte(tc.text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Sync(dir, path)
+		if err == nil || !strings.Contains(err.Error(), tc.want) || got != tc.text {
+			t.Fatalf("Sync = %q, %v; want original with %q error", got, err, tc.want)
+		}
+	}
+}
+
 // docFiles are the Markdown files that may hold generated sections, example
 // blocks, and himorime command lines.
 func docFiles(t *testing.T) []string {
@@ -158,15 +180,10 @@ func commandLines(text string, isYAML bool) []string {
 	return out
 }
 
-// TestCookbookRecipesAreRun ties nested Cookbook recipes to the E2E suite:
-// every recipe page title has a scenario of the same name, every example is
-// shown, and legacy links from examples still resolve through index headings.
-func TestCookbookRecipesAreRun(t *testing.T) {
-	t.Parallel()
-	index := read(t, filepath.Join(root, "website", "content", "cookbook.md"))
-	recipeRoot := filepath.Join(root, "website", "content", "cookbook")
+func cookbookFiles(t *testing.T) []string {
+	t.Helper()
 	var recipeFiles []string
-	err := filepath.WalkDir(recipeRoot, func(path string, entry os.DirEntry, err error) error {
+	err := filepath.WalkDir(filepath.Join(root, "website", "content", "cookbook"), func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -178,6 +195,15 @@ func TestCookbookRecipesAreRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return recipeFiles
+}
+
+// TestCookbookRecipesAreRun ties recipes to E2E scenarios and preserves legacy anchors.
+func TestCookbookRecipesAreRun(t *testing.T) {
+	t.Parallel()
+	index := read(t, filepath.Join(root, "website", "content", "cookbook.md"))
+	recipeRoot := filepath.Join(root, "website", "content", "cookbook")
+	recipeFiles := cookbookFiles(t)
 	if len(recipeFiles) < 10 {
 		t.Fatalf("found only %d nested recipe pages", len(recipeFiles))
 	}
@@ -282,19 +308,7 @@ func TestCookbookRecipesAreRun(t *testing.T) {
 // produced by a heading in that page. External links are outside this check.
 func TestNestedCookbookLinks(t *testing.T) {
 	t.Parallel()
-	recipeRoot := filepath.Join(root, "website", "content", "cookbook")
-	var files []string
-	if err := filepath.WalkDir(recipeRoot, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !entry.IsDir() && entry.Name() == "index.md" {
-			files = append(files, path)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	files := cookbookFiles(t)
 	linkRE := regexp.MustCompile(`\[[^]]+\]\(([^)]+)\)`)
 	for _, from := range files {
 		text := read(t, from)

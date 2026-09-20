@@ -236,8 +236,6 @@ func metricOf(buf []float64, m Metric) float64 {
 	case Max:
 		return slices.Max(buf)
 	case Median:
-		slices.Sort(buf)
-		return medianSorted(buf)
 	}
 	slices.Sort(buf)
 	return medianSorted(buf)

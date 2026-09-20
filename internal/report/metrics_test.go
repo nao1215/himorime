@@ -395,6 +395,24 @@ func TestAnnotations(t *testing.T) {
 	}
 }
 
+func TestAnnotationsSuiteNoticeAndInconclusiveComparison(t *testing.T) {
+	t.Parallel()
+	base, head, diff := 1.0, 2.0, 1.0
+	r := &Report{Suites: []Suite{{Name: "new", File: "suite.yaml", NewInHead: true, Error: &Error{Kind: "build_failed", Message: "compiler failed"}, Benchmarks: []Benchmark{{Name: "case", Commands: []Command{{Name: "tool", Comparisons: map[string]*MetricComparison{
+		string(metric.Latency): {Metric: string(metric.Latency), Base: &base, Head: &head, Difference: &diff, ChangePercent: 100, MaxPercent: 10, Verdict: string(ResultInconclusive), Gate: true, Reason: "too noisy"},
+	}}}}}}}}
+	var out bytes.Buffer
+	if err := WriteAnnotations(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{"::error file=suite.yaml,title=himorime%3A benchmark could not run", "::notice file=suite.yaml,title=himorime%3A suite new in this revision", "::warning file=suite.yaml,title=himorime%3A inconclusive comparison", "too noisy"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("annotation output lacks %q:\n%s", want, text)
+		}
+	}
+}
+
 // TestJudgeCompareGate: a metric with gate: false is compared and reported,
 // but its regression or inconclusive verdict never decides the result, is
 // never shown as a plain PASS or REGRESSION, and is counted apart.

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,8 +13,10 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 
 	"github.com/nao1215/himorime/internal/metric"
 )
@@ -283,6 +287,120 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func TestSchemaValueConversionAndPaths(t *testing.T) {
+	t.Parallel()
+	if _, err := yamlInstance([]byte("[")); err == nil {
+		t.Fatal("invalid YAML was accepted")
+	}
+	when := time.Date(2026, time.September, 20, 1, 2, 3, 4, time.UTC)
+	got := jsonValue(map[any]any{
+		"int": int(2), "int64": int64(3), "uint": uint64(4), "float": 1.25,
+		"nan": math.NaN(), "time": when, "list": []any{true}, "raw": struct{ A int }{A: 1},
+	})
+	m, ok := got.(map[string]any)
+	if !ok || m["int"] != json.Number("2") || m["int64"] != json.Number("3") || m["uint"] != json.Number("4") || m["float"] != json.Number("1.25") || m["nan"] != "NaN" || m["time"] != when.Format(time.RFC3339Nano) || m["list"].([]any)[0] != true || m["raw"] != "{1}" {
+		t.Fatalf("jsonValue = %#v", got)
+	}
+	for _, tt := range []struct {
+		url  string
+		want string
+		ok   bool
+	}{
+		{"https://example.test#/properties/report/properties/versions/propertyNames", "report.versions", true},
+		{"#/properties/report/properties", "", false},
+		{"#/properties/report/items/name", "", false},
+		{"not-a-fragment", "", false},
+	} {
+		p, ok := propertiesPath(tt.url)
+		if ok != tt.ok || (ok && p.String() != tt.want) {
+			t.Errorf("propertiesPath(%q) = %q, %t; want %q, %t", tt.url, p, ok, tt.want, tt.ok)
+		}
+	}
+	for _, tt := range []struct {
+		url, want string
+	}{
+		{"#/definitions/env", "invalid environment variable name"},
+		{"#/definitions/Budgets", "unknown aggregation"},
+		{"#/definitions/other", "invalid name"},
+	} {
+		if got := propertyNameMessage(tt.url, "bad"); !strings.Contains(got, tt.want) {
+			t.Errorf("propertyNameMessage(%q) = %q", tt.url, got)
+		}
+	}
+	for _, tt := range []struct {
+		in, want string
+	}{
+		{"benchmarks.0.tags.1", "benchmarks[0].tags[1]"},
+		{"report.versions.jc.2", "report.versions.jc[2]"},
+		{"commands.1", "commands.1"},
+		{"commands.x", "commands.x"},
+	} {
+		if got := instancePath(strings.Split(tt.in, ".")).String(); got != tt.want {
+			t.Errorf("instancePath(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+	for _, name := range []string{"benchmarks", "tags", "setup", "prepare_each", "cleanup", "outputs", "exit_codes", "command", "commands_list"} {
+		if !isArrayKey(name) {
+			t.Errorf("isArrayKey(%q) = false", name)
+		}
+	}
+	if isArrayKey("commands") {
+		t.Error("commands is a mapping, not an array")
+	}
+}
+
+func TestSchemaMessageHelpers(t *testing.T) {
+	t.Parallel()
+	patterns := []struct{ want, got string }{
+		{`invalid name`, patternMessage(&kind.Pattern{Want: `^[A-Za-z0-9][A-Za-z0-9_.-]*$`, Got: "bad!"})},
+		{"must not be blank", patternMessage(&kind.Pattern{Want: `\S`, Got: ""})},
+		{"invalid section name", patternMessage(&kind.Pattern{Want: `^[a-z0-9][a-z0-9-]*$`, Got: "Bad"})},
+		{"does not match", patternMessage(&kind.Pattern{Want: `custom`, Got: "bad"})},
+	}
+	for _, tt := range patterns {
+		if !strings.Contains(tt.got, tt.want) {
+			t.Errorf("pattern message %q lacks %q", tt.got, tt.want)
+		}
+	}
+	for _, tt := range []struct {
+		kind jsonschema.ErrorKind
+		want string
+	}{
+		{&kind.Enum{Want: []any{"a", "b"}}, "must be one of: a, b"},
+		{&kind.Const{Want: "x"}, "must be x"},
+		{&kind.MinItems{Want: 1}, "must contain at least 1 item"},
+		{&kind.MinItems{Want: 2}, "must contain at least 2 items"},
+		{&kind.MinProperties{Want: 1}, "must contain at least 1 entry"},
+		{&kind.MaxProperties{Want: 2}, "must contain at most 2 entries"},
+		{&kind.MinLength{Want: 1}, "must not be empty"},
+		{&kind.Minimum{Want: big.NewRat(2, 1), Got: big.NewRat(1, 1)}, "must be at least 2, got 1"},
+		{&kind.Maximum{Want: big.NewRat(2, 1), Got: big.NewRat(3, 1)}, "must be at most 2, got 3"},
+		{&kind.ExclusiveMinimum{Want: big.NewRat(2, 1), Got: big.NewRat(3, 1)}, "must be greater than 2, got 3"},
+	} {
+		if got := rangeMessage(tt.kind); got != tt.want {
+			t.Errorf("rangeMessage(%T) = %q, want %q", tt.kind, got, tt.want)
+		}
+	}
+	for _, tt := range []struct {
+		in   string
+		want int
+		ok   bool
+	}{{"", 0, false}, {"1", 1, true}, {"123456789", 123456789, true}, {"1234567890", 0, false}, {"x", 0, false}} {
+		if got, ok := atoiStrict(tt.in); got != tt.want || ok != tt.ok {
+			t.Errorf("atoiStrict(%q) = %d, %t", tt.in, got, ok)
+		}
+	}
+	if got := ratString(nil); got != "?" || ratString(big.NewRat(2, 1)) != "2" || ratString(big.NewRat(1, 2)) != "0.5" {
+		t.Errorf("ratString results = %q", got)
+	}
+	if got := jsonTypeWords([]string{"string", "array", "null", "unknown"}); got != "a string or a list or an empty value or unknown" {
+		t.Errorf("jsonTypeWords = %q", got)
+	}
+	if got := plural(1, "item"); got != "1 item" || plural(2, "item") != "2 items" || plural(2, "category") != "2 categories" {
+		t.Errorf("plural results = %q", got)
+	}
 }
 
 func TestFlatBudgetKeysMatchMetricDefinitions(t *testing.T) {

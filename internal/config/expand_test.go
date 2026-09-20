@@ -56,6 +56,9 @@ func TestExpandErrors(t *testing.T) {
 			t.Errorf("Expand(%q) error = %v, want it to mention %q", in, err, want)
 		}
 	}
+	if _, err := Expand("${env:HOME}", Vars{}, nil); err == nil || !strings.Contains(err.Error(), "environment variable HOME is not set") {
+		t.Fatalf("nil environment lookup error = %v", err)
+	}
 }
 
 func TestExpandQuotesEverySubstitution(t *testing.T) {

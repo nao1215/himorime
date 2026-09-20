@@ -159,7 +159,6 @@ func (s Summary) Value(m Metric) float64 {
 	case Max:
 		return s.Max
 	case Median:
-		return s.Median
 	}
 	return s.Median
 }

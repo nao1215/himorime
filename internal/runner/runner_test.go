@@ -730,6 +730,268 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+func TestRunnerValidationAndVersionFailurePaths(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	if got, ok := f.runner.lookupEnv("X"); ok || got != "" {
+		t.Fatalf("lookupEnv missing = %q, %t", got, ok)
+	}
+	f.runner.Environ = func() []string { return []string{"NO_EQUALS", "X=value", "X=second"} }
+	if got, ok := f.runner.lookupEnv("X"); !ok || got != "value" {
+		t.Fatalf("lookupEnv = %q, %t", got, ok)
+	}
+
+	blocker := filepath.Join(f.runner.TempDir, "artifact-parent")
+	if err := os.WriteFile(blocker, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	badArtifact := f.side
+	badArtifact.Artifact = filepath.Join(blocker, "artifact")
+	if fail := f.runner.Build(context.Background(), &config.Suite{Build: ptr(f.helper("ok"))}, badArtifact); fail == nil || fail.Kind != FailInternal {
+		t.Fatalf("artifact directory failure = %+v", fail)
+	}
+	badCwd := f.side
+	badCwd.Artifact = filepath.Join(f.runner.TempDir, "artifact")
+	s := &config.Suite{Build: ptr(f.helper("ok"))}
+	s.Build.Cwd = "../outside"
+	if fail := f.runner.Build(context.Background(), s, badCwd); fail == nil || fail.Kind != FailPath {
+		t.Fatalf("build cwd failure = %+v", fail)
+	}
+
+	dir := filepath.Join(f.dir, "fixture-dir")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	b := bench("stdin-dir", 1, f.command("ok", "ok"))
+	b.Stdin = config.Stdin{Kind: config.StdinFile, File: "fixture-dir"}
+	if res := f.runner.Measure(context.Background(), b, []Side{f.side}); res.Failure == nil || !strings.Contains(res.Failure.Message, "is a directory") {
+		t.Fatalf("directory stdin failure = %+v", res.Failure)
+	}
+	inline := bench("stdin-expand", 1, f.command("ok", "ok"))
+	inline.Stdin = config.Stdin{Kind: config.StdinContent, Content: "${artifact}"}
+	if res := f.runner.Measure(context.Background(), inline, []Side{f.side}); res.Failure == nil || !strings.Contains(res.Failure.Message, "only available when the suite has a build section") {
+		t.Fatalf("invalid inline stdin failure = %+v", res.Failure)
+	}
+	base := f.side
+	base.Name = SideBase
+	missing := bench("stdin-base", 1, f.command("ok", "ok"))
+	missing.Stdin = config.Stdin{Kind: config.StdinFile, File: "missing.txt"}
+	if res := f.runner.Measure(context.Background(), missing, []Side{base}); res.Failure == nil || !strings.Contains(res.Failure.Message, "${head_root}") {
+		t.Fatalf("base stdin hint = %+v", res.Failure)
+	}
+
+	var mode string
+	f.runner.Exec = func(_ context.Context, spec proc.Spec, _ proc.Clock) (proc.Result, error) {
+		switch mode {
+		case "stdout":
+			_, _ = io.WriteString(spec.Stdout, "\n  tool 1.2\n")
+		case "stderr":
+			_, _ = io.WriteString(spec.Stderr, "tool 1.3\n")
+		case "cancel":
+			return proc.Result{Canceled: true}, nil
+		case "timeout":
+			return proc.Result{TimedOut: true}, nil
+		case "exit":
+			return proc.Result{ExitCode: 4}, nil
+		case "error":
+			return proc.Result{}, errors.New("cannot start")
+		}
+		return proc.Result{}, nil
+	}
+	tool := config.ToolVersion{Name: "tool", Argv: []string{"tool", "--version"}}
+	for _, tt := range []struct {
+		name, want string
+	}{
+		{"stdout", "tool 1.2"}, {"stderr", "tool 1.3"},
+	} {
+		mode = tt.name
+		if got, fail := f.runner.Version(context.Background(), tool, f.side); fail != nil || got != tt.want {
+			t.Fatalf("Version(%s) = %q, %+v", tt.name, got, fail)
+		}
+	}
+	for _, tt := range []struct {
+		name string
+		kind FailureKind
+	}{
+		{"cancel", FailInterrupted}, {"timeout", FailSetup}, {"exit", FailSetup}, {"error", FailSetup},
+	} {
+		mode = tt.name
+		if _, fail := f.runner.Version(context.Background(), tool, f.side); fail == nil || fail.Kind != tt.kind {
+			t.Fatalf("Version(%s) failure = %+v", tt.name, fail)
+		}
+	}
+	mode = ""
+	if _, fail := f.runner.Version(context.Background(), tool, f.side); fail == nil || !strings.Contains(fail.Message, "printed nothing") {
+		t.Fatalf("empty Version failure = %+v", fail)
+	}
+	if firstLine(filepath.Join(f.dir, "missing-output")) != "" {
+		t.Fatal("firstLine read a missing file")
+	}
+	empty := filepath.Join(f.dir, "empty-output")
+	if err := os.WriteFile(empty, []byte(" \n\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if firstLine(empty) != "" {
+		t.Fatal("firstLine accepted blank output")
+	}
+}
+
+func TestRunnerPathAndIOHelpers(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	if within("", f.dir) || within(f.dir, filepath.Join(f.dir, "..", "outside")) || !within(f.dir, f.dir) {
+		t.Fatal("within path checks are incorrect")
+	}
+	if _, err := confine(f.dir, filepath.Join(f.dir, "missing-root")); err == nil {
+		t.Fatal("confine accepted a path with no valid roots")
+	}
+	if _, err := realPath(filepath.Join(f.dir, "new", "file")); err != nil {
+		t.Fatalf("realPath missing tail: %v", err)
+	}
+	if got := sanitize(`a/b\\c:d`); got != "a_b__c_d" {
+		t.Fatalf("sanitize = %q", got)
+	}
+	if got := missingWorkingDirectory(filepath.Join(f.dir, "missing"), "", false); !strings.Contains(got, "cwd ${root}") {
+		t.Fatalf("missing cwd hint = %q", got)
+	}
+	if isBenchmarkHook("build (head)") || !isBenchmarkHook("cleanup[0]") || !isBenchmarkHook("setup[1]") || !isBenchmarkHook("prepare_each[2]") {
+		t.Fatal("hook labels")
+	}
+	if got := sharedHint(f.side, "x", fs.ErrNotExist); got != "" {
+		t.Fatalf("head shared hint = %q", got)
+	}
+
+	st := &sideState{side: f.side, workdir: filepath.Join(f.runner.TempDir, "work")}
+	if err := os.MkdirAll(st.workdir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	spec := &proc.Spec{}
+	c := config.Command{Name: "io", Stdout: "out/file.txt", Stderr: config.OutputDiscard}
+	stderr, term, closeAll, fail := f.runner.openIO(spec, c, st, false)
+	if fail != nil || stderr == nil || term != nil || spec.Stdout == nil || spec.Stderr == nil {
+		t.Fatalf("openIO success = %v, %v, %+v", stderr, term, fail)
+	}
+	closeAll()
+	closeAll()
+	if _, err := os.Stat(filepath.Join(st.workdir, "out/file.txt")); err != nil {
+		t.Fatalf("stdout output was not created: %v", err)
+	}
+	bad := c
+	bad.Stdout = "../escape.txt"
+	if _, _, _, fail := f.runner.openIO(&proc.Spec{}, bad, st, false); fail == nil || fail.Kind != FailPath {
+		t.Fatalf("escaping stdout = %+v", fail)
+	}
+	if err := os.Mkdir(filepath.Join(st.workdir, "directory"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	bad = c
+	bad.Stdout = "directory"
+	if _, _, _, fail := f.runner.openIO(&proc.Spec{}, bad, st, false); fail == nil || fail.Kind != FailPath {
+		t.Fatalf("directory stdout = %+v", fail)
+	}
+	stdin := filepath.Join(f.dir, "stdin")
+	st.stdin = stdin
+	if _, _, _, fail := f.runner.openIO(&proc.Spec{}, c, st, false); fail == nil || fail.Kind != FailSetup {
+		t.Fatalf("missing stdin = %+v", fail)
+	}
+
+	if _, fail := f.runner.spec(config.Exec{Shell: true, Script: "echo ${workdir}"}, config.Vars{}, f.dir); fail == nil || fail.Kind != FailSetup {
+		t.Fatalf("shell expansion failure = %+v", fail)
+	}
+	if _, fail := f.runner.spec(config.Exec{Argv: []string{"echo", "${workdir}"}}, config.Vars{}, f.dir); fail == nil || fail.Kind != FailSetup {
+		t.Fatalf("argv expansion failure = %+v", fail)
+	}
+	if _, fail := f.runner.resolvePath("${missing}", config.Vars{}, f.dir, f.dir); fail == nil || fail.Kind != FailPath {
+		t.Fatalf("path expansion failure = %+v", fail)
+	}
+	if got := f.runner.tail(filepath.Join(f.dir, "missing-tail")); got != "" {
+		t.Fatalf("missing tail = %q", got)
+	}
+}
+
+func TestRunnerDirectFailureEdges(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	if fail := f.runner.runProcess(context.Background(), config.Exec{Argv: []string{"${workdir}"}}, config.Vars{}, f.dir, FailSetup, "invalid", nil, nil); fail == nil || fail.Kind != FailSetup {
+		t.Fatalf("runProcess spec failure = %+v", fail)
+	}
+	f.runner.Exec = func(context.Context, proc.Spec, proc.Clock) (proc.Result, error) {
+		return proc.Result{}, errors.New("start failed")
+	}
+	if fail := f.runner.runProcess(context.Background(), config.Exec{Argv: []string{"true"}}, config.Vars{}, f.dir, FailSetup, "start", nil, nil); fail == nil || !strings.Contains(fail.Message, "start failed") {
+		t.Fatalf("runProcess start failure = %+v", fail)
+	}
+	st := &sideState{side: f.side, workdir: t.TempDir(), vars: config.Vars{}}
+	throughput := config.Benchmark{Metrics: config.Metrics{Throughput: &config.Work{FileSize: "${missing}"}}}
+	if _, fail := f.runner.work(throughput, st); fail == nil || fail.Kind != FailMetricCollection {
+		t.Fatalf("work path failure = %+v", fail)
+	}
+	badHook := config.Exec{Argv: []string{"true"}, Cwd: "../outside"}
+	if fail := f.runner.runBenchmarkHook(context.Background(), badHook, st, FailCleanup, "cleanup[0]"); fail == nil || fail.Kind != FailCleanup {
+		t.Fatalf("hook path failure = %+v", fail)
+	}
+	missingStdin := bench("missing stdin path", 1, f.command("ok", "ok"))
+	missingStdin.Stdin = config.Stdin{Kind: config.StdinFile, File: "${missing}"}
+	if res := f.runner.Measure(context.Background(), missingStdin, []Side{f.side}); res.Failure == nil || res.Failure.Kind != FailPath {
+		t.Fatalf("stdin path failure = %+v", res.Failure)
+	}
+	badSetup := bench("setup path", 1, f.command("ok", "ok"))
+	badSetup.Setup = []config.Exec{{Argv: []string{"true"}, Cwd: "../outside"}}
+	if res := f.runner.Measure(context.Background(), badSetup, []Side{f.side}); res.Failure == nil || res.Failure.Kind != FailSetup {
+		t.Fatalf("setup path failure = %+v", res.Failure)
+	}
+	blocker := filepath.Join(f.runner.TempDir, "output-parent")
+	if err := os.WriteFile(blocker, []byte("file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fileWorkdir := &sideState{side: f.side, workdir: blocker}
+	if _, err := f.runner.outputPath("out.txt", fileWorkdir, "out", false); err == nil {
+		t.Fatal("outputPath accepted a regular-file workdir")
+	}
+	st.workdir = t.TempDir()
+	bad := config.Command{Name: "bad", Stdout: config.OutputDiscard, Stderr: "../escape"}
+	if _, _, _, fail := f.runner.openIO(&proc.Spec{}, bad, st, false); fail == nil || fail.Kind != FailPath {
+		t.Fatalf("escaping stderr = %+v", fail)
+	}
+	if err := os.Mkdir(filepath.Join(st.workdir, "stderr-dir"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	bad.Stderr = "stderr-dir"
+	if _, _, _, fail := f.runner.openIO(&proc.Spec{}, bad, st, false); fail == nil || fail.Kind != FailPath {
+		t.Fatalf("directory stderr = %+v", fail)
+	}
+	st.stdin = filepath.Join(f.dir, "missing-stdin")
+	if _, _, fail := f.runner.openTerminal(&proc.Spec{}, config.Command{Name: "terminal"}, st, &[]io.Closer{}); fail == nil || fail.Kind != FailSetup {
+		t.Fatalf("terminal stdin failure = %+v", fail)
+	}
+	st.stdin = ""
+	if _, _, fail := f.runner.openTerminal(&proc.Spec{}, config.Command{Name: "terminal", Stdout: "../escape"}, st, &[]io.Closer{}); fail == nil || fail.Kind != FailPath {
+		t.Fatalf("terminal output path failure = %+v", fail)
+	}
+	if err := os.Mkdir(filepath.Join(st.workdir, "terminal-dir"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, fail := f.runner.openTerminal(&proc.Spec{}, config.Command{Name: "terminal", Stdout: "terminal-dir"}, st, &[]io.Closer{}); fail == nil || fail.Kind != FailPath {
+		t.Fatalf("terminal output open failure = %+v", fail)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	res := BenchmarkResult{}
+	f.runner.teardown(ctx, config.Benchmark{}, nil, &res)
+	if res.Failure == nil || res.Failure.Kind != FailInterrupted {
+		t.Fatalf("empty cancelled teardown = %+v", res.Failure)
+	}
+	f2 := newFixture(t)
+	f2.runner.Exec = func(context.Context, proc.Spec, proc.Clock) (proc.Result, error) {
+		return proc.Result{Canceled: true}, nil
+	}
+	warmup := bench("warmup interruption", 1, f2.command("ok", "ok"))
+	warmup.Warmup = 1
+	if res := f2.runner.Measure(context.Background(), warmup, []Side{f2.side}); res.Failure == nil || res.Failure.Kind != FailInterrupted {
+		t.Fatalf("warmup interruption = %+v", res.Failure)
+	}
+}
+
 func ptr[T any](v T) *T { return &v }
 
 func TestShellCommand(t *testing.T) {
