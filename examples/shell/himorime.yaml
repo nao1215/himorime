@@ -4,9 +4,8 @@
 # https://nao1215.github.io/himorime/cookbook/#use-a-shell-pipeline
 version: "1"
 
-suite:
-  name: shell
-  description: The same count through argv and through a shell pipeline.
+name: shell
+description: The same count through argv and through a shell pipeline.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]

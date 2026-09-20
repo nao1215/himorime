@@ -92,7 +92,7 @@ func TestReportDestinationAliasesAndSections(t *testing.T) {
 }
 
 const oneBenchmark = `version: "1"
-suite: {name: docs}
+name: docs
 defaults: {warmup: 0, runs: 3}
 benchmarks:
   - name: quick

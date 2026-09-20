@@ -1,6 +1,5 @@
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
-    commands: {a: {command: [a]}}
-    budget: {a: {median: "< 0s"}}
+    commands: {a: {command: [a], budget: {latency: {median: "< 0s"}}}}

@@ -6,9 +6,8 @@
 #   himorime compare --against main examples/gate-cpu-memory
 version: "1"
 
-suite:
-  name: gate cpu and memory
-  description: A program that does a fixed amount of work and then waits, compared on CPU time and peak RSS; its latency is shown but decides nothing.
+name: gate cpu and memory
+description: A program that does a fixed amount of work and then waits, compared on CPU time and peak RSS; its latency is shown but decides nothing.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -38,11 +37,11 @@ benchmarks:
       latency:
         gate: false
       # CPU time and peak RSS decide the result and the exit status.
-      cpu:
+      cpu_total:
         max_percent: 25
         # Two Windows scheduler ticks: a difference smaller than this cannot
         # be told from the accounting on the coarsest platform.
         min_difference: 32ms
-      memory:
+      peak_rss:
         max_percent: 25
         min_difference: 4MiB

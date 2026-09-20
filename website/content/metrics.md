@@ -10,8 +10,7 @@ Every benchmark measures latency. Throughput, CPU and memory are switched on per
 ```yaml
 version: "1"
 
-suite:
-  name: metrics
+name: metrics
 
 benchmarks:
   - name: convert a large file
@@ -26,12 +25,11 @@ benchmarks:
     commands:
       mytool:
         command: [mytool, convert, "${workdir}/large.json"]
-    budget:
-      mytool:
-        latency: {p95: "<= 100ms"}
-        throughput: {median: ">= 50MiB/s"}
-        cpu: {total: {median: "<= 70ms"}}
-        memory: {peak_rss: {max: "<= 64MiB"}}
+        budget:
+          latency: {p95: "<= 100ms"}
+          throughput: {median: ">= 50MiB/s"}
+          cpu_total: {median: "<= 70ms"}
+          peak_rss: {max: "<= 64MiB"}
 ```
 
 ## Platform support

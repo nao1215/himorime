@@ -37,6 +37,7 @@ go.work.sum
 /dist/
 /himorime
 /himorime.exe
+/bench/.ci-release.yaml
 /completions/
 cover.html
 

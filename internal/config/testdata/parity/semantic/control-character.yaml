@@ -1,6 +1,6 @@
 # expect: must not contain control characters
 version: "1"
-suite: {name: "bad\u0007name"}
+name: "bad\u0007name"
 benchmarks:
   - name: a
     commands: {a: {command: [a]}}

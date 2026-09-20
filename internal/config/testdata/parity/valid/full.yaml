@@ -1,7 +1,6 @@
 version: "1"
-suite:
-  name: full
-  description: every key the format has
+name: full
+description: every key the format has
 defaults:
   warmup: 2
   runs: 15
@@ -16,17 +15,16 @@ defaults:
   stderr: logs/err.txt
   exit_codes: [0]
   metrics:
-    latency: true
-    cpu: {scope: process_tree}
+    cpu: true
     memory: false
     unsupported: skip
   regression:
-    latency: {metric: mean, max_percent: "7.5%", min_difference: 1ms, gate: true}
+    latency: {statistic: mean, max_percent: "7.5%", min_difference: 1ms, gate: true}
     confidence: 0.99
     min_samples: 10
     max_cv: 0.25
-    cpu: {metric: mean, max_percent: "12%", min_difference: 2ms}
-    memory: {metric: median, max_percent: 5, min_difference: 1MiB}
+    cpu_total: {statistic: mean, max_percent: "12%", min_difference: 2ms}
+    peak_rss: {statistic: median, max_percent: 5, min_difference: 1MiB}
 build:
   command: [go, build, -o, "${artifact}", ./cmd/tool]
   shell: false
@@ -73,35 +71,42 @@ benchmarks:
         stdout: discard
         stderr: discard
         exit_codes: [0]
+        budget:
+          latency:
+            mean: "< 30ms"
+            median: "<= 20ms"
+            min: "< 1s"
+            max: "< 2s"
+            p90: "<= 25ms"
+            p99.9: "< 1s"
+          throughput:
+            median: ">= 1000 records/s"
+            min: "> 10 records/s"
+          cpu_user:
+            median: "<= 20ms"
+          cpu_system:
+            p95: "<= 5ms"
+          cpu_total:
+            mean: "< 30ms"
+          cpu_utilization:
+            median: "<= 110%"
+            min: ">= 50%"
+          peak_rss:
+            max: "<= 64MiB"
+            median: "< 60000KB"
       other:
         command: "other --parse < ${workdir}/big.txt"
         shell: true
     metrics:
-      latency: true
       throughput:
         work: {value: 1000, unit: records}
       cpu: true
-      memory: {scope: process_tree}
+      memory: true
       unsupported: fail
-    budget:
-      tool:
-        mean: "< 30ms"
-        median: "<= 20ms"
-        min: "< 1s"
-        max: "< 2s"
-        latency: {p90: "<= 25ms", p99.9: "< 1s"}
-        throughput: {median: ">= 1000 records/s", min: "> 10 records/s"}
-        cpu:
-          user: {median: "<= 20ms"}
-          system: {p95: "<= 5ms"}
-          total: {mean: "< 30ms"}
-          utilization: {median: "<= 110%", min: ">= 50%"}
-        memory:
-          peak_rss: {max: "<= 64MiB", median: "< 60000KB"}
     regression:
-      latency: {metric: median, max_percent: 10, min_difference: 500us, gate: false}
-      cpu: {max_percent: 15}
-      memory: {min_difference: 256KiB}
+      latency: {statistic: median, max_percent: 10, min_difference: 500us, gate: false}
+      cpu_total: {max_percent: 15}
+      peak_rss: {min_difference: 256KiB}
       confidence: 0.95
       min_samples: 12
       max_cv: 0
@@ -121,9 +126,9 @@ benchmarks:
     commands:
       cat:
         command: [cat]
-    budget:
-      cat:
-        throughput: {p95: ">= 1.5GiB/s"}
+        budget:
+          throughput:
+            p95: ">= 1.5GiB/s"
 report:
   outputs:
     - format: json

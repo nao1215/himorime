@@ -1,8 +1,10 @@
 # expect: the budget is in bytes/s but the declared work unit is records
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     metrics: {throughput: {work: {value: 100, unit: records}}}
-    commands: {a: {command: [a]}}
-    budget: {a: {throughput: {median: ">= 1MiB/s"}}}
+    commands:
+      a:
+        command: [a]
+        budget: {throughput: {median: ">= 1MiB/s"}}

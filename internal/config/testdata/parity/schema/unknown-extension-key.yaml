@@ -1,5 +1,5 @@
 version: "1"
-suite: {name: x}
+name: x
 x-cmd: &cmd
   command: [a]
 benchmarks:

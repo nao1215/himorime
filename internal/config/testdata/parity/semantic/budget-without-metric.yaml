@@ -1,7 +1,9 @@
 # expect: a budget on peak rss needs the benchmark to measure memory
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
-    commands: {a: {command: [a]}}
-    budget: {a: {memory: {peak_rss: {max: "<= 64MiB"}}}}
+    commands:
+      a:
+        command: [a]
+        budget: {peak_rss: {max: "<= 64MiB"}}

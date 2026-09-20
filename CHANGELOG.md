@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Changed
 
+- The version 1 suite format has a breaking layout change: move `suite` fields to the top level, put budgets under each command, use flat CPU and memory metric names, and rename regression `metric` to `statistic`; migrate existing suites before using the new parser.
 - Terminal reports prioritize results and reasons; GitHub summaries put detailed statistics and metadata in expandable sections. JSON reports are unchanged.
 
 ### Fixed

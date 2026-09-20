@@ -1,6 +1,6 @@
 # Measured by the "collector overhead" benchmark of bench/himorime.yaml.
 version: "1"
-suite: {name: all metrics}
+name: all metrics
 benchmarks:
   - name: git version
     metrics:

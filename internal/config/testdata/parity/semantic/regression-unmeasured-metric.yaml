@@ -1,7 +1,7 @@
-# expect: regression.cpu is set but this benchmark does not measure cpu
+# expect: regression.cpu_total is set but this benchmark does not measure cpu
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     commands: {a: {command: [a]}}
-    regression: {cpu: {max_percent: 5}}
+    regression: {cpu_total: {max_percent: 5}}

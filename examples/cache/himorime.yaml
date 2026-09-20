@@ -5,9 +5,8 @@
 # https://nao1215.github.io/himorime/cookbook/#benchmark-a-warm-cache
 version: "1"
 
-suite:
-  name: cache
-  description: The same count with a primed cache and with a cache wiped before every run.
+name: cache
+description: The same count with a primed cache and with a cache wiped before every run.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]

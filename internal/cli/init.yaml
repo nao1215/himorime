@@ -9,9 +9,8 @@
 # Reference: https://nao1215.github.io/himorime/configuration/
 version: "1"
 
-suite:
-  name: my benchmarks
-  description: Startup time of the tools this project depends on.
+name: my benchmarks
+description: Startup time of the tools this project depends on.
 
 defaults:
   warmup: 2
@@ -31,12 +30,11 @@ benchmarks:
     # metrics:
     #   cpu: true
     #   memory: true
-    budget:
-      git:
-        median: "< 1s"
-        # latency: {p95: "<= 2s"}
-        # cpu: {total: {median: "<= 1s"}}
-        # memory: {peak_rss: {max: "<= 256MiB"}}
+        budget:
+          latency: {median: "< 1s"}
+          # latency: {p95: "<= 2s"}
+          # cpu_total: {median: "<= 1s"}
+          # peak_rss: {max: "<= 256MiB"}
 
 # To compare the working tree with a Git revision (himorime compare --against
 # main), add a build that writes ${artifact} and measure that artifact:

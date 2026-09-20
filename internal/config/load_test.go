@@ -71,7 +71,7 @@ func TestDogfoodSuiteKeepsMemoryForNonVersionBenchmarks(t *testing.T) {
 func TestLoadInheritanceOrder(t *testing.T) {
 	t.Parallel()
 	src := `version: "1"
-suite: {name: inherit}
+name: inherit
 defaults:
   warmup: 3
   runs: 20
@@ -81,7 +81,7 @@ defaults:
   stdout: default.out
   exit_codes: [0, 1]
   regression:
-    latency: {metric: mean, max_percent: "5%", gate: false}
+    latency: {statistic: mean, max_percent: "5%", gate: false}
     confidence: 0.9
     min_samples: 12
     max_cv: 0
@@ -145,7 +145,7 @@ benchmarks:
 func TestLoadKeepsCommandOrderAndForms(t *testing.T) {
 	t.Parallel()
 	src := `version: "1"
-suite: {name: order}
+name: order
 build:
   command: [go, build, -o, "${artifact}", .]
 benchmarks:
@@ -163,14 +163,13 @@ benchmarks:
     commands:
       zeta:
         command: ["${artifact}", --fast]
+        budget: {latency: {median: "< 20ms", mean: "< 30ms"}}
       alpha:
         command: "cat ${workdir}/in.txt | wc -l"
         shell: true
+        budget: {latency: {max: "<= 1s"}}
       mid:
         command: [mid]
-    budget:
-      alpha: {max: "<= 1s"}
-      zeta: {median: "< 20ms", mean: "< 30ms"}
 `
 	s := mustParse(t, src)
 	b := s.Benchmarks[0]
@@ -253,30 +252,35 @@ func TestLoadRejects(t *testing.T) {
 		field string
 	}{
 		{"unknown top-level key", `version: "1"
-suite: {name: x}
+name: x
 benchmark: []
 `, `unknown key "benchmark"`, "benchmark"},
-		{"missing version", "suite: {name: x}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\n", "version is required", "version"},
-		{"unsupported version", "version: \"2\"\nsuite: {name: x}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\n", "must be one of: 1", "version"},
-		{"blank suite name", "version: \"1\"\nsuite: {name: \" \"}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\n", "must not be blank", "suite.name"},
-		{"no benchmarks", "version: \"1\"\nsuite: {name: x}\nbenchmarks: []\n", "must contain at least 1 item", "benchmarks"},
+		{"removed suite object", `version: "1"
+name: x
+suite: {name: x}
+benchmarks: [{name: a, commands: {a: {command: [a]}}}]
+`, `unknown key "suite"`, "suite"},
+		{"missing version", "name: x\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\n", "version is required", "version"},
+		{"unsupported version", "version: \"2\"\nname: x\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\n", "must be one of: 1", "version"},
+		{"blank suite name", "version: \"1\"\nname: \" \"\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\n", "must not be blank", "name"},
+		{"no benchmarks", "version: \"1\"\nname: x\nbenchmarks: []\n", "must contain at least 1 item", "benchmarks"},
 		{"typo in command key", minimal("") + "        shel: true\n", `unknown key "shel"`, "benchmarks[0].commands.tool.shel"},
 		{"string command without shell", `version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     commands:
       t: {command: "echo hi"}
 `, "a string command requires shell: true", "benchmarks[0].commands.t"},
 		{"list command with shell", `version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     commands:
       t: {command: [echo, hi], shell: true}
 `, "a string command requires shell: true", "benchmarks[0].commands.t"},
 		{"empty program", `version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     commands:
@@ -287,24 +291,25 @@ benchmarks:
 		{"negative runs", minimal("runs: 0"), "must be at least 1, got 0", "benchmarks[0].runs"},
 		{"number as name", minimal("") + "  - name: 42\n    commands: {x: {command: [x]}}\n", "expected a string, got a number", "benchmarks[1].name"},
 		{"bad tag", minimal("tags: [\"has space\"]"), "invalid name", "benchmarks[0].tags[0]"},
-		{"bad budget", minimal("budget: {tool: {median: \"20ms\"}}"), "invalid budget", "benchmarks[0].budget.tool.median"},
-		{"unknown budget metric", minimal("budget: {tool: {p99: \"< 20ms\"}}"), `unknown key "p99"`, "benchmarks[0].budget.tool.p99"},
-		{"empty budget", minimal("budget: {tool: {}}"), "must contain at least 1 entry", "benchmarks[0].budget.tool"},
+		{"removed benchmark budget", minimal("budget: {tool: {median: \"< 20ms\"}}"), `unknown key "budget"`, "benchmarks[0].budget"},
+		{"bad budget", minimalCommandBudget("{latency: {median: \"20ms\"}}"), "invalid budget", "benchmarks[0].commands.tool.budget.latency.median"},
+		{"unknown budget metric", minimalCommandBudget("{bogus: {median: \"< 20ms\"}}"), `unknown key "bogus"`, "benchmarks[0].commands.tool.budget.bogus"},
+		{"empty budget", minimalCommandBudget("{}"), "must contain at least 1 entry", "benchmarks[0].commands.tool.budget"},
 		{"absolute stdin", minimal("stdin: /etc/passwd"), "absolute paths are not allowed", "benchmarks[0].stdin"},
 		{"windows absolute stdin", minimal(`stdin: 'C:\data.txt'`), "absolute paths are not allowed", "benchmarks[0].stdin"},
 		{"escaping stdout", minimal("stdout: ../escape.txt"), "relative path inside ${workdir}", "benchmarks[0].stdout"},
-		{"bad metric", minimal("regression: {latency: {metric: p95}}"), "must be one of: median, mean", "benchmarks[0].regression.latency.metric"},
+		{"bad statistic", minimal("regression: {latency: {statistic: p95}}"), "must be one of: median, mean", "benchmarks[0].regression.latency.statistic"},
 		{"zero max_percent", minimal("regression: {latency: {max_percent: 0}}"), "percentage greater than 0", "benchmarks[0].regression.latency.max_percent"},
 		{"latency tolerance at the top level", minimal("regression: {max_percent: 10}"), `unknown key "max_percent"`, "benchmarks[0].regression.max_percent"},
-		{"gate is a boolean", minimal("regression: {cpu: {gate: \"no\"}}"), "expected true or false", "benchmarks[0].regression.cpu.gate"},
+		{"gate is a boolean", minimal("regression: {cpu_total: {gate: \"no\"}}"), "expected true or false", "benchmarks[0].regression.cpu_total.gate"},
 		{"low confidence", minimal("regression: {confidence: 0.3}"), "must be at least 0.5, got 0.3", "benchmarks[0].regression.confidence"},
 		{"bad env name", minimal("env: {\"1X\": y}"), "invalid environment variable name", "benchmarks[0].env.1X"},
-		{"bad report format", "version: \"1\"\nsuite: {name: x}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\nreport: {outputs: [{format: table, path: x.txt}]}\n", "must be one of", "report.outputs[0].format"},
+		{"bad report format", "version: \"1\"\nname: x\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\nreport: {outputs: [{format: table, path: x.txt}]}\n", "must be one of", "report.outputs[0].format"},
 		{"stderr on a terminal benchmark", minimal("terminal: true\nstderr: err.txt"), "stderr cannot be set with terminal: true", "benchmarks[0].stderr"},
 		{"stderr on a terminal command", minimal("") + "        stderr: err.txt\n    terminal: true\n", "stderr cannot be set with terminal: true", "benchmarks[0].commands.tool.stderr"},
 		{"defaults stderr on a terminal benchmark", strings.Replace(minimal("terminal: true"), "benchmarks:", "defaults: {stderr: err.txt}\nbenchmarks:", 1), "stderr cannot be set with terminal: true", "benchmarks[0].terminal"},
 		{"terminal is a boolean", minimal("terminal: \"on\""), "expected true or false", "benchmarks[0].terminal"},
-		{"yaml syntax", "version: \"1\"\nsuite: {name: x\n", "", ""},
+		{"yaml syntax", "version: \"1\"\nname: x\nbenchmarks: [", "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -338,7 +343,6 @@ func TestLoadSemanticRules(t *testing.T) {
 		want  string
 	}{
 		{"unknown baseline", "baseline: nope", `baseline "nope" is not a command of this benchmark`},
-		{"budget for unknown command", "budget: {ghost: {median: \"< 1s\"}}", `budget refers to unknown command "ghost"`},
 		{"regression command unknown", "regression: {commands: [ghost]}", `"ghost" is not a command of this benchmark`},
 		{"max below min runs", "min_runs: 20\nmax_runs: 10", "max_runs (10) is lower than min_runs (20)"},
 		{"artifact without build", "setup:\n  - command: [\"${artifact}\"]", "${artifact} is used but the suite has no build section"},
@@ -357,7 +361,7 @@ func TestLoadSemanticRules(t *testing.T) {
 			src := minimal(tt.extra)
 			if tt.name == "control character" {
 				src = `version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: "a\u0001b"
     commands: {t: {command: [t]}}
@@ -374,7 +378,7 @@ benchmarks:
 func TestLoadDuplicateNames(t *testing.T) {
 	t.Parallel()
 	src := `version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: same
     commands: {a: {command: [a]}}
@@ -386,7 +390,7 @@ benchmarks:
 		t.Fatalf("error = %v", err)
 	}
 	dupKey := `version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     commands:
@@ -407,10 +411,10 @@ func TestIssuePositions(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	is := verr.Issues[0]
-	if is.Line != 9 || is.Column != 15 || is.Field != "benchmarks[0].baseline" || is.Hint == "" {
+	if is.Line != 8 || is.Column != 15 || is.Field != "benchmarks[0].baseline" || is.Hint == "" {
 		t.Fatalf("issue = %+v", is)
 	}
-	if !strings.HasPrefix(is.String(), filepath.Join(filepath.Dir(is.File), "himorime.yaml")+":9:15: benchmarks[0].baseline:") {
+	if !strings.HasPrefix(is.String(), filepath.Join(filepath.Dir(is.File), "himorime.yaml")+":8:15: benchmarks[0].baseline:") {
 		t.Fatalf("String() = %q", is.String())
 	}
 }
@@ -464,46 +468,42 @@ func TestFormatsAndHelpers(t *testing.T) {
 func TestLoadMetrics(t *testing.T) {
 	t.Parallel()
 	src := `version: "1"
-suite: {name: metrics}
+name: metrics
 defaults:
   metrics:
     cpu: true
     unsupported: skip
   regression:
-    cpu: {max_percent: 12}
+    cpu_total: {max_percent: 12}
 benchmarks:
   - name: large json
     metrics:
-      latency: true
       throughput:
         work: {file_size: "testdata/large file.json"}
-      memory: {scope: process_tree}
+      memory: true
     commands:
-      tool: {command: [tool]}
-      other: {command: [other]}
-    budget:
       tool:
-        median: "< 100ms"
-        latency: {p95: "<= 120ms", p99.9: "<= 1s"}
-        throughput: {median: ">= 50MiB/s", p5: "> 10MiB/s"}
-        cpu:
-          total: {median: "<= 70ms"}
-          utilization: {max: "<= 180%"}
-        memory:
+        command: [tool]
+        budget:
+          latency: {median: "< 100ms", p95: "<= 120ms", p99.9: "<= 1s"}
+          throughput: {median: ">= 50MiB/s", p5: "> 10MiB/s"}
+          cpu_total: {median: "<= 70ms"}
+          cpu_utilization: {max: "<= 180%"}
           peak_rss: {max: "<= 64MiB"}
+      other: {command: [other]}
     regression:
       latency: {min_difference: 2ms}
-      memory: {max_percent: 5, min_difference: 512KiB}
+      peak_rss: {max_percent: 5, min_difference: 512KiB}
   - name: records
     metrics:
       cpu: false
       throughput:
         work: {value: 100000, unit: records}
     commands:
-      tool: {command: [tool]}
-    budget:
       tool:
-        throughput: {median: ">= 1000 records/s"}
+        command: [tool]
+        budget:
+          throughput: {median: ">= 1000 records/s"}
   - name: plain
     commands:
       tool: {command: [tool]}
@@ -570,7 +570,7 @@ func TestLoadRejectsMetrics(t *testing.T) {
 			src += "    metrics:\n" + indent(metrics, "      ")
 		}
 		if budget != "" {
-			src += "    budget:\n      tool:\n" + indent(budget, "        ")
+			src = strings.Replace(src, "        command: [tool, --version]\n", "        command: [tool, --version]\n        budget:\n"+indent(budget, "          "), 1)
 		}
 		if regression != "" {
 			src += "    regression:\n" + indent(regression, "      ")
@@ -584,9 +584,12 @@ func TestLoadRejectsMetrics(t *testing.T) {
 		field string
 	}{
 		{"unknown metric", withMetrics("gpu: true", "", ""), `unknown key "gpu"`, "benchmarks[0].metrics.gpu"},
-		{"latency cannot be disabled", withMetrics("latency: false", "", ""), "must be true", "benchmarks[0].metrics.latency"},
-		{"unknown scope", withMetrics("cpu: {scope: process}", "", ""), "must be one of: process_tree", "benchmarks[0].metrics.cpu.scope"},
-		{"collector type", withMetrics("memory: yes-please", "", ""), "expected true, false or a mapping with scope", "benchmarks[0].metrics.memory"},
+		{"latency true is removed", withMetrics("latency: true", "", ""), `unknown key "latency"`, "benchmarks[0].metrics.latency"},
+		{"latency is removed", withMetrics("latency: false", "", ""), `unknown key "latency"`, "benchmarks[0].metrics.latency"},
+		{"scope is removed", withMetrics("cpu: {scope: process}", "", ""), "expected true or false", "benchmarks[0].metrics.cpu"},
+		{"cpu process tree scope is removed", withMetrics("cpu: {scope: process_tree}", "", ""), "expected true or false", "benchmarks[0].metrics.cpu"},
+		{"memory process tree scope is removed", withMetrics("memory: {scope: process_tree}", "", ""), "expected true or false", "benchmarks[0].metrics.memory"},
+		{"collector type", withMetrics("memory: yes-please", "", ""), "expected true or false", "benchmarks[0].metrics.memory"},
 		{"unsupported policy", withMetrics("unsupported: ignore", "", ""), "must be one of: fail, skip", "benchmarks[0].metrics.unsupported"},
 		{"zero work", withMetrics("throughput: {work: {value: 0, unit: records}}", "", ""), "must be greater than 0, got 0", "benchmarks[0].metrics.throughput.work.value"},
 		{"negative work", withMetrics("throughput: {work: {value: -5}}", "", ""), "must be greater than 0, got -5", "benchmarks[0].metrics.throughput.work.value"},
@@ -598,33 +601,43 @@ func TestLoadRejectsMetrics(t *testing.T) {
 		{"invalid work unit", withMetrics("throughput: {work: {value: 2, unit: \"records/s\"}}", "", ""), "does not match the expected format", "benchmarks[0].metrics.throughput.work.unit"},
 		{"absolute file size", withMetrics("throughput: {work: {file_size: /etc/passwd}}", "", ""), "absolute paths are not allowed", "benchmarks[0].metrics.throughput.work.file_size"},
 		{"throughput without work", withMetrics("throughput: {}", "", ""), "work is required", "benchmarks[0].metrics.throughput.work"},
-		{"throughput in defaults", "version: \"1\"\nsuite: {name: x}\ndefaults: {metrics: {throughput: {work: {value: 1}}}}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\n", `unknown key "throughput"`, "defaults.metrics.throughput"},
-		{"budget without metric", withMetrics("", "cpu: {total: {median: \"< 1s\"}}", ""), "a budget on cpu total needs the benchmark to measure cpu", "benchmarks[0].budget.tool.cpu.total.median"},
-		{"throughput budget without work", withMetrics("", "throughput: {median: \">= 1 ops/s\"}", ""), "needs the benchmark to measure throughput", "benchmarks[0].budget.tool.throughput.median"},
-		{"latency budget as upper bound", withMetrics("", "latency: {p95: \">= 10ms\"}", ""), `write "<" or "<="`, "benchmarks[0].budget.tool.latency.p95"},
-		{"throughput budget as upper bound", withMetrics("throughput: {work: {value: 10}}", "throughput: {median: \"<= 5 operations/s\"}", ""), `write ">" or ">="`, "benchmarks[0].budget.tool.throughput.median"},
-		{"memory budget as lower bound", withMetrics("memory: true", "memory: {peak_rss: {max: \">= 1MiB\"}}", ""), `write "<" or "<="`, "benchmarks[0].budget.tool.memory.peak_rss.max"},
-		{"memory budget with a duration", withMetrics("memory: true", "memory: {peak_rss: {max: \"<= 10ms\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.memory.peak_rss.max"},
-		{"cpu budget with bytes", withMetrics("cpu: true", "cpu: {total: {median: \"<= 1MiB\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.cpu.total.median"},
-		{"utilization without percent", withMetrics("cpu: true", "cpu: {utilization: {median: \"<= 150\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.cpu.utilization.median"},
-		{"invalid unit", withMetrics("memory: true", "memory: {peak_rss: {max: \"<= 64MB/s\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.memory.peak_rss.max"},
-		{"lowercase unit", withMetrics("memory: true", "memory: {peak_rss: {max: \"<= 64mib\"}}", ""), "invalid budget", "benchmarks[0].budget.tool.memory.peak_rss.max"},
-		{"zero byte budget", withMetrics("memory: true", "memory: {peak_rss: {max: \"<= 0MiB\"}}", ""), "greater than zero", "benchmarks[0].budget.tool.memory.peak_rss.max"},
-		{"rate unit mismatch", withMetrics("throughput: {work: {value: 10, unit: records}}", "throughput: {median: \">= 5MiB/s\"}", ""), "the budget is in bytes/s but the declared work unit is records", "benchmarks[0].budget.tool.throughput.median"},
-		{"rate unit mismatch the other way", withMetrics("throughput: {work: {file_size: in.json}}", "throughput: {median: \">= 5 records/s\"}", ""), "the budget is in records/s but the declared work unit is bytes", "benchmarks[0].budget.tool.throughput.median"},
-		{"unsupported aggregation", withMetrics("", "latency: {stddev: \"< 1ms\"}", ""), `unknown aggregation "stddev"`, "benchmarks[0].budget.tool.latency.stddev"},
-		{"percentile 100", withMetrics("", "latency: {p100: \"< 1ms\"}", ""), `unknown aggregation "p100"`, "benchmarks[0].budget.tool.latency.p100"},
-		{"percentile 0", withMetrics("", "latency: {p0: \"< 1ms\"}", ""), `unknown aggregation "p0"`, "benchmarks[0].budget.tool.latency.p0"},
-		{"shorthand and latency", withMetrics("", "median: \"< 1s\"\nlatency: {median: \"< 2s\"}", ""), "the latency median budget is declared twice", "benchmarks[0].budget.tool.latency.median"},
-		{"empty cpu budget", withMetrics("cpu: true", "cpu: {}", ""), "must contain at least 1 entry", "benchmarks[0].budget.tool.cpu"},
-		{"regression for an unmeasured metric", withMetrics("", "", "memory: {max_percent: 5}"), "regression.memory is set but this benchmark does not measure memory", "benchmarks[0].regression.memory"},
-		{"regression percent threshold", withMetrics("cpu: true", "", "cpu: {max_percent: 0}"), "percentage greater than 0", "benchmarks[0].regression.cpu.max_percent"},
-		{"regression min_difference type", withMetrics("memory: true", "", "memory: {min_difference: 5ms}"), "invalid byte size", "benchmarks[0].regression.memory.min_difference"},
+		{"throughput in defaults", "version: \"1\"\nname: x\ndefaults: {metrics: {throughput: {work: {value: 1}}}}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\n", `unknown key "throughput"`, "defaults.metrics.throughput"},
+		{"budget without metric", withMetrics("", "cpu_total: {median: \"< 1s\"}", ""), "a budget on cpu total needs the benchmark to measure cpu", "benchmarks[0].commands.tool.budget.cpu_total.median"},
+		{"throughput budget without work", withMetrics("", "throughput: {median: \">= 1 ops/s\"}", ""), "needs the benchmark to measure throughput", "benchmarks[0].commands.tool.budget.throughput.median"},
+		{"latency budget as upper bound", withMetrics("", "latency: {p95: \">= 10ms\"}", ""), `write "<" or "<="`, "benchmarks[0].commands.tool.budget.latency.p95"},
+		{"throughput budget as upper bound", withMetrics("throughput: {work: {value: 10}}", "throughput: {median: \"<= 5 operations/s\"}", ""), `write ">" or ">="`, "benchmarks[0].commands.tool.budget.throughput.median"},
+		{"memory budget as lower bound", withMetrics("memory: true", "peak_rss: {max: \">= 1MiB\"}", ""), `write "<" or "<="`, "benchmarks[0].commands.tool.budget.peak_rss.max"},
+		{"memory budget with a duration", withMetrics("memory: true", "peak_rss: {max: \"<= 10ms\"}", ""), "invalid budget", "benchmarks[0].commands.tool.budget.peak_rss.max"},
+		{"cpu budget with bytes", withMetrics("cpu: true", "cpu_total: {median: \"<= 1MiB\"}", ""), "invalid budget", "benchmarks[0].commands.tool.budget.cpu_total.median"},
+		{"utilization without percent", withMetrics("cpu: true", "cpu_utilization: {median: \"<= 150\"}", ""), "invalid budget", "benchmarks[0].commands.tool.budget.cpu_utilization.median"},
+		{"invalid unit", withMetrics("memory: true", "peak_rss: {max: \"<= 64MB/s\"}", ""), "invalid budget", "benchmarks[0].commands.tool.budget.peak_rss.max"},
+		{"lowercase unit", withMetrics("memory: true", "peak_rss: {max: \"<= 64mib\"}", ""), "invalid budget", "benchmarks[0].commands.tool.budget.peak_rss.max"},
+		{"zero byte budget", withMetrics("memory: true", "peak_rss: {max: \"<= 0MiB\"}", ""), "greater than zero", "benchmarks[0].commands.tool.budget.peak_rss.max"},
+		{"rate unit mismatch", withMetrics("throughput: {work: {value: 10, unit: records}}", "throughput: {median: \">= 5MiB/s\"}", ""), "the budget is in bytes/s but the declared work unit is records", "benchmarks[0].commands.tool.budget.throughput.median"},
+		{"rate unit mismatch the other way", withMetrics("throughput: {work: {file_size: in.json}}", "throughput: {median: \">= 5 records/s\"}", ""), "the budget is in records/s but the declared work unit is bytes", "benchmarks[0].commands.tool.budget.throughput.median"},
+		{"unsupported aggregation", withMetrics("", "latency: {stddev: \"< 1ms\"}", ""), `unknown aggregation "stddev"`, "benchmarks[0].commands.tool.budget.latency.stddev"},
+		{"percentile 100", withMetrics("", "latency: {p100: \"< 1ms\"}", ""), `unknown aggregation "p100"`, "benchmarks[0].commands.tool.budget.latency.p100"},
+		{"percentile 0", withMetrics("", "latency: {p0: \"< 1ms\"}", ""), `unknown aggregation "p0"`, "benchmarks[0].commands.tool.budget.latency.p0"},
+		{"latency shorthand is removed", withMetrics("", "median: \"< 1s\"", ""), `unknown key "median"`, "benchmarks[0].commands.tool.budget.median"},
+		{"mean shorthand is removed", withMetrics("", "mean: \"< 1s\"", ""), `unknown key "mean"`, "benchmarks[0].commands.tool.budget.mean"},
+		{"min shorthand is removed", withMetrics("", "min: \"< 1s\"", ""), `unknown key "min"`, "benchmarks[0].commands.tool.budget.min"},
+		{"max shorthand is removed", withMetrics("", "max: \"< 1s\"", ""), `unknown key "max"`, "benchmarks[0].commands.tool.budget.max"},
+		{"nested cpu budget is removed", withMetrics("cpu: true", "cpu: {total: {median: \"<= 1s\"}}", ""), `unknown key "cpu"`, "benchmarks[0].commands.tool.budget.cpu"},
+		{"nested memory budget is removed", withMetrics("memory: true", "memory: {peak_rss: {max: \"<= 1MiB\"}}", ""), `unknown key "memory"`, "benchmarks[0].commands.tool.budget.memory"},
+		{"empty cpu budget", withMetrics("cpu: true", "cpu_total: {}", ""), "must contain at least 1 entry", "benchmarks[0].commands.tool.budget.cpu_total"},
+		{"regression for an unmeasured metric", withMetrics("", "", "peak_rss: {max_percent: 5}"), "regression.peak_rss is set but this benchmark does not measure memory", "benchmarks[0].regression.peak_rss"},
+		{"regression percent threshold", withMetrics("cpu: true", "", "cpu_total: {max_percent: 0}"), "percentage greater than 0", "benchmarks[0].regression.cpu_total.max_percent"},
+		{"regression min_difference type", withMetrics("memory: true", "", "peak_rss: {min_difference: 5ms}"), "invalid byte size", "benchmarks[0].regression.peak_rss.min_difference"},
 		{"latency min_difference type", withMetrics("", "", "latency: {min_difference: 1MiB}"), "invalid duration", "benchmarks[0].regression.latency.min_difference"},
-		{"gate for an unmeasured metric", withMetrics("", "", "cpu: {gate: false}"), "regression.cpu is set but this benchmark does not measure cpu", "benchmarks[0].regression.cpu"},
+		{"gate for an unmeasured metric", withMetrics("", "", "cpu_total: {gate: false}"), "regression.cpu_total is set but this benchmark does not measure cpu", "benchmarks[0].regression.cpu_total"},
+		{"cpu regression name is removed", withMetrics("cpu: true", "", "cpu: {max_percent: 5}"), `unknown key "cpu"`, "benchmarks[0].regression.cpu"},
+		{"memory regression name is removed", withMetrics("memory: true", "", "memory: {max_percent: 5}"), `unknown key "memory"`, "benchmarks[0].regression.memory"},
 		{"independent throughput regression is rejected", withMetrics("throughput: {work: {value: 5, unit: records}}", "", "throughput: {max_percent: 10}"), `unknown key "throughput"`, "benchmarks[0].regression.throughput"},
-		{"regression metric p95", withMetrics("cpu: true", "", "cpu: {metric: p95}"), "must be one of: median, mean", "benchmarks[0].regression.cpu.metric"},
-		{"samples format in report", "version: \"1\"\nsuite: {name: x}\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\nreport: {outputs: [{format: samples, path: x.csv}]}\n", "must be one of", "report.outputs[0].format"},
+		{"regression statistic p95", withMetrics("cpu: true", "", "cpu_total: {statistic: p95}"), "must be one of: median, mean", "benchmarks[0].regression.cpu_total.statistic"},
+		{"latency metric key is removed", withMetrics("", "", "latency: {metric: mean}"), `unknown key "metric"`, "benchmarks[0].regression.latency.metric"},
+		{"cpu metric key is removed", withMetrics("cpu: true", "", "cpu_total: {metric: mean}"), `unknown key "metric"`, "benchmarks[0].regression.cpu_total.metric"},
+		{"memory metric key is removed", withMetrics("memory: true", "", "peak_rss: {metric: mean}"), `unknown key "metric"`, "benchmarks[0].regression.peak_rss.metric"},
+		{"samples format in report", "version: \"1\"\nname: x\nbenchmarks: [{name: a, commands: {a: {command: [a]}}}]\nreport: {outputs: [{format: samples, path: x.csv}]}\n", "must be one of", "report.outputs[0].format"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -660,34 +673,25 @@ func TestLoadReportsAWrongWorkUnitOnce(t *testing.T) {
 	}{
 		{
 			name: "byte multiple with a byte rate everywhere",
-			src: minimal("") + `    metrics:
+			src: addCommandBudget(minimal(`metrics:
       throughput: {work: {value: 1000, unit: KB}}
-    budget:
-      tool:
-        throughput: {median: ">= 1KB/s"}
-`,
+`), `{throughput: {median: ">= 1KB/s"}}`),
 			want:  []string{`work unit "KB" is a byte size multiple`},
 			field: "benchmarks[0].metrics.throughput.work.unit",
 		},
 		{
 			name: "file size in records with a byte rate budget",
-			src: minimal("") + `    metrics:
+			src: addCommandBudget(minimal(`metrics:
       throughput: {work: {file_size: in.json, unit: records}}
-    budget:
-      tool:
-        throughput: {median: ">= 1MiB/s"}
-`,
+`), `{throughput: {median: ">= 1MiB/s"}}`),
 			want:  []string{"its unit must be bytes"},
 			field: "benchmarks[0].metrics.throughput.work.unit",
 		},
 		{
 			name: "byte multiple with a budget in another unit",
-			src: minimal("") + `    metrics:
+			src: addCommandBudget(minimal(`metrics:
       throughput: {work: {value: 1000, unit: KB}}
-    budget:
-      tool:
-        throughput: {median: ">= 1000 records/s"}
-`,
+`), `{throughput: {median: ">= 1000 records/s"}}`),
 			want:  []string{`work unit "KB" is a byte size multiple`, "the budget is in records/s"},
 			field: "benchmarks[0].metrics.throughput.work.unit",
 		},
@@ -733,7 +737,7 @@ func TestLoadRejectsARelativePathThatLeavesTheProject(t *testing.T) {
 		return Load(p)
 	}
 	suite := func(cwd string) string {
-		return "version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    commands:\n      tool: {command: [tool], cwd: " + cwd + "}\n"
+		return "version: \"1\"\nname: x\nbenchmarks:\n  - name: a\n    commands:\n      tool: {command: [tool], cwd: " + cwd + "}\n"
 	}
 
 	t.Run("outside a repository", func(t *testing.T) {
@@ -779,10 +783,10 @@ func TestLoadRejectsARelativePathThatLeavesTheProject(t *testing.T) {
 	t.Run("every path setting", func(t *testing.T) {
 		t.Parallel()
 		for _, src := range []string{
-			"version: \"1\"\nsuite: {name: x}\nbuild: {command: [go, build], cwd: ../..}\nbenchmarks:\n  - name: a\n    commands: {tool: {command: [tool]}}\n",
-			"version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    stdin: ../../in.txt\n    commands: {tool: {command: [tool]}}\n",
-			"version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    metrics: {throughput: {work: {file_size: ../../in.txt}}}\n    commands: {tool: {command: [tool]}}\n",
-			"version: \"1\"\nsuite: {name: x}\nbenchmarks:\n  - name: a\n    commands: {tool: {command: [tool]}}\nreport: {outputs: [{format: json, path: ../../out.json}]}\n",
+			"version: \"1\"\nname: x\nbuild: {command: [go, build], cwd: ../..}\nbenchmarks:\n  - name: a\n    commands: {tool: {command: [tool]}}\n",
+			"version: \"1\"\nname: x\nbenchmarks:\n  - name: a\n    stdin: ../../in.txt\n    commands: {tool: {command: [tool]}}\n",
+			"version: \"1\"\nname: x\nbenchmarks:\n  - name: a\n    metrics: {throughput: {work: {file_size: ../../in.txt}}}\n    commands: {tool: {command: [tool]}}\n",
+			"version: \"1\"\nname: x\nbenchmarks:\n  - name: a\n    commands: {tool: {command: [tool]}}\nreport: {outputs: [{format: json, path: ../../out.json}]}\n",
 		} {
 			if _, err := write(t, t.TempDir(), src); err == nil {
 				t.Errorf("accepted an escaping path:\n%s", src)

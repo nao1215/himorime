@@ -39,9 +39,8 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
-        with:
-          version: v0.2.1
+      - name: Build himorime
+        run: go build -trimpath -o "$RUNNER_TEMP/himorime" .
 
       # The JSON tools are pinned: a go install leg pins a module version,
       # whose integrity comes from the Go checksum database, and downloaded
@@ -73,7 +72,7 @@ jobs:
           go install github.com/itchyny/gojq/cmd/gojq@v0.12.17
       - name: Measure the JSON processors
         run: >
-          himorime run bench/thirdparty/json
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/json
           --format json --output "$RUNNER_TEMP/json.json"
           --summary "$GITHUB_STEP_SUMMARY"
       - name: Check the compression tools
@@ -83,7 +82,7 @@ jobs:
           xz --version
       - name: Measure the compression tools
         run: >
-          himorime run bench/thirdparty/compression
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/compression
           --format json --output "$RUNNER_TEMP/compression.json"
           --summary "$GITHUB_STEP_SUMMARY"
 

@@ -39,8 +39,7 @@ Then point `himorime.yaml` at your own tool. This suite builds it, measures one 
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
 version: "1"
 
-suite:
-  name: mytool
+name: mytool
 
 build:
   command: [go, build, -o, "${artifact}", ./cmd/mytool]
@@ -56,12 +55,11 @@ benchmarks:
     commands:
       mytool:
         command: ["${artifact}", testdata/large.jsonl]
-    budget:
-      mytool:
-        latency: {p95: "<= 100ms"}
-        throughput: {median: ">= 50MiB/s"}
-        cpu: {total: {median: "<= 80ms"}}
-        memory: {peak_rss: {max: "<= 64MiB"}}
+        budget:
+          latency: {p95: "<= 100ms"}
+          throughput: {median: ">= 50MiB/s"}
+          cpu_total: {median: "<= 80ms"}
+          peak_rss: {max: "<= 64MiB"}
 ```
 
 `himorime run` exits 1 when a budget is missed. `himorime compare --against main` builds `main` in a temporary worktree and your working tree side by side, measures both in interleaved rounds, and exits 1 on a regression it is confident about. Reports are also available as JSON with every sample, CSV, Markdown and a GitHub Actions job summary, and a Markdown report can replace a marked section of a documentation page.

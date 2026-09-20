@@ -1,6 +1,6 @@
-# expect: path "../../outside" leaves the project
+# expect: path "../../../outside" leaves the project
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
-    commands: {a: {command: [a], cwd: ../../outside}}
+    commands: {a: {command: [a], cwd: ../../../outside}}
