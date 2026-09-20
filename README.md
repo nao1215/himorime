@@ -1,4 +1,6 @@
 [![UnitTest](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml) [![E2E](https://github.com/nao1215/himorime/actions/workflows/e2e.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/e2e.yml) [![Lint](https://github.com/nao1215/himorime/actions/workflows/lint.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/lint.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/nao1215/himorime.svg)](https://pkg.go.dev/github.com/nao1215/himorime)
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/nao1215/himorime/total)
+
 
 <p align="center">
   <img src="./doc/images/himorime-logo.jpeg" alt="himorime logo" width="600" />
