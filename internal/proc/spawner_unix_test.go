@@ -571,21 +571,24 @@ func TestRunSpawnedRepliesAndReusesEnvironment(t *testing.T) {
 		spawners.idle, spawners.failed = previousIdle, previousFailed
 		spawners.mu.Unlock()
 	}()
+	request := make(chan spawnRequest, 1)
 	go func() {
+		defer server.Close()
 		var req spawnRequest
 		files, recvErr := newSpawnConn(server).recv(&req)
 		closeFiles(files)
-		if recvErr != nil {
-			return
+		request <- req
+		if recvErr == nil {
+			_ = newSpawnConn(server).send(spawnReply{Done: true, Elapsed: int64(time.Millisecond), ExitCode: 4, Usage: &rawUsage{UserCPU: 10, MaxRSS: 2}, Floor: 3}, nil)
 		}
-		if !req.SameEnv || req.Env != nil {
-			return
-		}
-		_ = newSpawnConn(server).send(spawnReply{Done: true, Elapsed: int64(time.Millisecond), ExitCode: 4, Usage: &rawUsage{UserCPU: 10, MaxRSS: 2}, Floor: 3}, nil)
 	}()
 	res, handled, err := runSpawned(context.Background(), Spec{Path: "/bin/true", Env: env, CollectUsage: true})
 	if err != nil || !handled || res.ExitCode != 4 || res.Elapsed != time.Millisecond || res.Usage.UserCPU != 10 || res.Usage.PeakRSS != 2*maxRSSUnit || res.Usage.Floor != 3 {
 		t.Fatalf("runSpawned = %+v, %v, handled=%v", res, err, handled)
+	}
+	req := <-request
+	if !req.SameEnv || req.Env != nil {
+		t.Fatalf("request did not reuse environment: %+v", req)
 	}
 }
 
@@ -602,17 +605,24 @@ func TestRunSpawnedDefaultsDirectoryAndEnvironment(t *testing.T) {
 		spawners.mu.Unlock()
 	}()
 	dir := t.TempDir()
+	request := make(chan spawnRequest, 1)
 	go func() {
+		defer server.Close()
 		var req spawnRequest
 		files, recvErr := newSpawnConn(server).recv(&req)
 		closeFiles(files)
-		if recvErr == nil && req.Dir == dir && len(req.Env) > 0 {
+		request <- req
+		if recvErr == nil {
 			_ = newSpawnConn(server).send(spawnReply{Done: true}, nil)
 		}
 	}()
 	res, handled, err := runSpawned(context.Background(), Spec{Path: "/bin/true", Dir: dir})
 	if err != nil || !handled || res.ExitCode != 0 {
 		t.Fatalf("default environment runSpawned = %+v, %v, handled=%v", res, err, handled)
+	}
+	req := <-request
+	if req.Dir != dir || len(req.Env) == 0 {
+		t.Fatalf("request did not default directory and environment: %+v", req)
 	}
 }
 

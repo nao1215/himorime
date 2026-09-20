@@ -300,7 +300,7 @@ func TestSchemaValueConversionAndPaths(t *testing.T) {
 		"nan": math.NaN(), "time": when, "list": []any{true}, "raw": struct{ A int }{A: 1},
 	})
 	m, ok := got.(map[string]any)
-	if !ok || m["int"] != json.Number("2") || m["int64"] != json.Number("3") || m["uint"] != json.Number("4") || m["float"] != json.Number("1.25") || m["time"] != when.Format(time.RFC3339Nano) || m["list"].([]any)[0] != true || m["raw"] != "{1}" {
+	if !ok || m["int"] != json.Number("2") || m["int64"] != json.Number("3") || m["uint"] != json.Number("4") || m["float"] != json.Number("1.25") || m["nan"] != "NaN" || m["time"] != when.Format(time.RFC3339Nano) || m["list"].([]any)[0] != true || m["raw"] != "{1}" {
 		t.Fatalf("jsonValue = %#v", got)
 	}
 	for _, tt := range []struct {
@@ -329,11 +329,17 @@ func TestSchemaValueConversionAndPaths(t *testing.T) {
 			t.Errorf("propertyNameMessage(%q) = %q", tt.url, got)
 		}
 	}
-	for _, in := range []string{"benchmarks.0.tags.1", "report.versions.jc.2", "commands.1", "commands.x"} {
-		_ = instancePath(strings.Split(in, "."))
-	}
-	if got := instancePath([]string{"report", "versions", "jc", "2"}).String(); got != "report.versions.jc[2]" {
-		t.Errorf("version instance path = %q", got)
+	for _, tt := range []struct {
+		in, want string
+	}{
+		{"benchmarks.0.tags.1", "benchmarks[0].tags[1]"},
+		{"report.versions.jc.2", "report.versions.jc[2]"},
+		{"commands.1", "commands.1"},
+		{"commands.x", "commands.x"},
+	} {
+		if got := instancePath(strings.Split(tt.in, ".")).String(); got != tt.want {
+			t.Errorf("instancePath(%q) = %q, want %q", tt.in, got, tt.want)
+		}
 	}
 	for _, name := range []string{"benchmarks", "tags", "setup", "prepare_each", "cleanup", "outputs", "exit_codes", "command", "commands_list"} {
 		if !isArrayKey(name) {
