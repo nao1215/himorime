@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/nao1215/himorime/internal/config"
+	"github.com/nao1215/himorime/internal/metric"
+	"github.com/nao1215/himorime/internal/runner"
 )
 
 func TestReadValidatesCurrentSavedReport(t *testing.T) {
@@ -96,5 +98,30 @@ func TestReadPreservesWaivedUnassessedAndRSSFloorDetails(t *testing.T) {
 	}
 	if !bytes.Equal(beforeTable.Bytes(), afterTable.Bytes()) || !bytes.Equal(beforeMarkdown.Bytes(), afterMarkdown.Bytes()) {
 		t.Fatal("rendering changed after a validated save/load round trip")
+	}
+}
+
+func TestReadPreservesWaivedRequiredBudgetAndPassingExit(t *testing.T) {
+	b := runResult("waived", "", map[string][]time.Duration{
+		"tool": samples(2*time.Millisecond, 10, 0),
+	}, "tool")
+	b.Benchmark.Metrics = config.Metrics{Memory: true, Unsupported: config.UnsupportedSkip}
+	b.Commands[0].Sides[runner.SideHead].Unsupported = map[metric.Group]string{metric.GroupMemory: "memory collection waived"}
+	b.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.PeakRSS, metric.AggMedian, "<= 1MiB")}
+	r := judge(ModeRun, false, b)
+	if r.Summary.ExitCode != 0 || r.Suites[0].Benchmarks[0].Commands[0].Budgets[0].Status != BudgetSkipped {
+		t.Fatalf("waived budget changed the saved outcome: summary=%+v budget=%+v", r.Summary, r.Suites[0].Benchmarks[0].Commands[0].Budgets[0])
+	}
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Read(data)
+	if err != nil {
+		t.Fatalf("Read waived report: %v", err)
+	}
+	c := got.Suites[0].Benchmarks[0].Commands[0]
+	if got.Summary.ExitCode != 0 || c.Budgets[0].Status != BudgetSkipped || c.Budgets[0].Reason != "memory collection waived" {
+		t.Fatalf("waived budget was not preserved: summary=%+v budget=%+v", got.Summary, c.Budgets[0])
 	}
 }

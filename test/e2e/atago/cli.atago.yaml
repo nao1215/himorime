@@ -113,7 +113,7 @@ scenarios:
           exit_code: 0
           file:
             path: pass.md
-            contains: ["## saved report", "| pass | tool |", "PASS"]
+            contains: ["## saved report", "| pass | tool |", "1 passed", "exit 0"]
       - fixture:
           file: failing.yaml
           content: |
@@ -136,6 +136,13 @@ scenarios:
       - assert:
           exit_code: 0
           stdout: {contains: ["saved failure", "ERROR", "exit 4"]}
+      - run:
+          command: himorime report failure.json --format markdown --output failure.md
+      - assert:
+          exit_code: 0
+          file:
+            path: failure.md
+            contains: ["## saved failure", "exit 4"]
       - fixture: {file: malformed.json, content: "{\n"}
       - run:
           command: himorime report malformed.json
