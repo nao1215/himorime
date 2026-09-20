@@ -50,23 +50,18 @@ func TestReadRejectsMalformedTruncatedAndUnsupportedReports(t *testing.T) {
 	}
 }
 
-func TestReadPreservesWaivedUnassessedAndRSSFloorDetails(t *testing.T) {
-	r := judge(ModeRun, false, runResult("details", "", map[string][]time.Duration{
-		"tool": samples(2*time.Millisecond, 10, 0),
-	}, "tool"))
+func TestReadPreservesUnassessedRSSFloorDetails(t *testing.T) {
+	b := floorResult("details", 3<<20, repeat(5<<20, 10)...)
+	b.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.PeakRSS, metric.AggMedian, "< 5MiB")}
+	r := judge(ModeRun, false, b)
 	c := &r.Suites[0].Benchmarks[0].Commands[0]
-	cpu := c.Head.Metrics["cpu_total"]
-	cpu.Status, cpu.Reason = StatusUnsupported, "waived by platform policy"
+	if c.Result != ResultMetricError || r.Summary.ExitCode != 6 || c.Budgets[0].Status != BudgetSkipped || c.Budgets[0].Reason != ReasonAtFloor {
+		t.Fatalf("floor budget outcome = result %s, summary %+v, budget %+v", c.Result, r.Summary, c.Budgets[0])
+	}
 	rss := c.Head.Metrics["peak_rss"]
-	rss.Status = StatusMeasured
-	rss.Stats = &MetricStats{Count: 1, Min: 16 << 20, Max: 16 << 20, Median: 16 << 20, Mean: 16 << 20, Percentiles: map[string]float64{"p90": 16 << 20}}
-	rss.Samples = []float64{16 << 20}
-	rss.Floor, rss.SamplesAtFloor = 16<<20, 1
-	c.Budgets = []BudgetCheck{{Metric: "peak_rss", Aggregation: "median", Operator: "<=", Limit: 8 << 20, Unit: "bytes", Status: BudgetNoData, Reason: ReasonAtFloor}}
-	c.Result = ResultMetricError
-	r.Suites[0].Benchmarks[0].Result = ResultMetricError
-	r.Suites[0].Result = ResultMetricError
-	r.Summary.Pass, r.Summary.MetricError, r.Summary.ExitCode = 0, 1, 6
+	if rss.Floor != 5<<20 || rss.SamplesAtFloor != 10 {
+		t.Fatalf("floor details = %+v", rss)
+	}
 	var beforeTable, beforeMarkdown bytes.Buffer
 	if err := Write(&beforeTable, config.FormatTable, r, false); err != nil {
 		t.Fatal(err)
@@ -83,10 +78,10 @@ func TestReadPreservesWaivedUnassessedAndRSSFloorDetails(t *testing.T) {
 		t.Fatalf("Read report with stored statuses: %v", err)
 	}
 	gc := &got.Suites[0].Benchmarks[0].Commands[0]
-	if got.Summary.ExitCode != 6 || gc.Head.Metrics["cpu_total"].Status != StatusUnsupported || gc.Budgets[0].Status != BudgetNoData {
-		t.Fatalf("stored status changed: metric=%+v budget=%+v", gc.Head.Metrics["cpu_total"], gc.Budgets[0])
+	if got.Summary.ExitCode != 6 || gc.Budgets[0].Status != BudgetSkipped {
+		t.Fatalf("stored status changed: summary=%+v budget=%+v", got.Summary, gc.Budgets[0])
 	}
-	if gc.Budgets[0].Reason != ReasonAtFloor || gc.Head.Metrics["peak_rss"].Floor != 16<<20 || gc.Head.Metrics["peak_rss"].SamplesAtFloor != 1 {
+	if gc.Budgets[0].Reason != ReasonAtFloor || gc.Head.Metrics["peak_rss"].Floor != 5<<20 || gc.Head.Metrics["peak_rss"].SamplesAtFloor != 10 {
 		t.Fatalf("stored RSS floor changed: %+v", gc.Head.Metrics["peak_rss"])
 	}
 	var afterTable, afterMarkdown bytes.Buffer

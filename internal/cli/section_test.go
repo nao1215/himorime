@@ -121,7 +121,7 @@ func TestRunUpdatesAMarkdownSection(t *testing.T) {
 	if !ok || !ok2 || before != "# Tool\n\n## Benchmarks\n\nWritten by hand.\n\n" || after != "\n\n## License\n\nMIT\n" {
 		t.Fatalf("text outside the section changed:\n%s", doc)
 	}
-	if !strings.HasPrefix(body, "\n### docs\n\n| Benchmark | Command | Median |") || !strings.HasSuffix(body, ", seed 5.\n\n") || strings.Contains(body, "old table") {
+	if !strings.HasPrefix(body, "\n### docs\n\n| Benchmark | Command | Median |") || !strings.HasSuffix(body, ", seed 5.\n\n1 passed · 1 benchmark · seed 5 · exit 0\n\n") || strings.Contains(body, "old table") {
 		t.Fatalf("section:\n%s", body)
 	}
 
@@ -202,8 +202,8 @@ func TestRunRecordsToolVersions(t *testing.T) {
 		t.Fatalf("tools = %v", tools)
 	}
 
-	r = run(t, dir, nil, "run", "--quiet", "--format", "markdown")
-	if !strings.HasSuffix(r.stdout, ".\n\n- stdout-tool: stdout-tool version 1.25.7\n- stderr-tool: stderr-tool 2.0\n- locale: C\n") {
+	r = run(t, dir, nil, "run", "--quiet", "--seed", "5", "--format", "markdown")
+	if !strings.HasSuffix(r.stdout, ".\n\n- stdout-tool: stdout-tool version 1.25.7\n- stderr-tool: stderr-tool 2.0\n- locale: C\n\n1 passed · 1 benchmark · seed 5 · exit 0\n") {
 		t.Fatalf("markdown footer:\n%s", r.stdout)
 	}
 	r = run(t, dir, nil, "run", "--quiet")
