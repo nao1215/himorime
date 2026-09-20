@@ -53,9 +53,8 @@ func TestReadPreservesWaivedUnassessedAndRSSFloorDetails(t *testing.T) {
 		"tool": samples(2*time.Millisecond, 10, 0),
 	}, "tool"))
 	c := &r.Suites[0].Benchmarks[0].Commands[0]
-	c.Head.Metrics["cpu_total"] = &MetricSummary{
-		Name: "cpu_total", Group: "cpu", Unit: "ns", Better: "lower", Status: StatusUnsupported, Reason: "waived by platform policy",
-	}
+	cpu := c.Head.Metrics["cpu_total"]
+	cpu.Status, cpu.Reason = StatusUnsupported, "waived by platform policy"
 	rss := c.Head.Metrics["peak_rss"]
 	rss.Status = StatusMeasured
 	rss.Stats = &MetricStats{Count: 1, Min: 16 << 20, Max: 16 << 20, Median: 16 << 20, Mean: 16 << 20, Percentiles: map[string]float64{"p90": 16 << 20}}

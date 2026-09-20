@@ -200,9 +200,6 @@ func writeSavedReport(a *App, path string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close temporary report: %w", err)
 	}
-	if err := os.Chmod(tmpName, 0o644); err != nil {
-		return fmt.Errorf("set report permissions: %w", err)
-	}
 	if err := os.Rename(tmpName, abs); err != nil {
 		return fmt.Errorf("replace report: %w", err)
 	}

@@ -6,31 +6,32 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/nao1215/himorime/schema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
+	"github.com/nao1215/himorime/schema"
 )
 
 var (
 	savedSchemaOnce sync.Once
 	savedSchema     *jsonschema.Schema
-	savedSchemaErr  error
+	errSavedSchema  error
 )
 
 func savedReportSchema() (*jsonschema.Schema, error) {
 	savedSchemaOnce.Do(func() {
 		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schema.Report))
 		if err != nil {
-			savedSchemaErr = fmt.Errorf("parse embedded report schema: %w", err)
+			errSavedSchema = fmt.Errorf("parse embedded report schema: %w", err)
 			return
 		}
 		compiler := jsonschema.NewCompiler()
 		if err := compiler.AddResource(schema.ReportURL, doc); err != nil {
-			savedSchemaErr = fmt.Errorf("load embedded report schema: %w", err)
+			errSavedSchema = fmt.Errorf("load embedded report schema: %w", err)
 			return
 		}
-		savedSchema, savedSchemaErr = compiler.Compile(schema.ReportURL)
+		savedSchema, errSavedSchema = compiler.Compile(schema.ReportURL)
 	})
-	return savedSchema, savedSchemaErr
+	return savedSchema, errSavedSchema
 }
 
 // Read validates and decodes one saved JSON report. Validation uses the
