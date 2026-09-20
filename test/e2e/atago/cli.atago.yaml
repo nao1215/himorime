@@ -165,7 +165,7 @@ scenarios:
           command: himorime report pass.json --output pass.json/child
       - assert:
           exit_code: 4
-          stderr: {contains: ["HMR4003", "check output path"]}
+          stderr: {contains: ["HMR4003: himorime report:", "pass.json/child"]}
       - assert:
           file:
             path: pass.json
