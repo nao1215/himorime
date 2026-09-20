@@ -48,9 +48,9 @@ jobs:
         run: |
           set -euo pipefail
           git show 1dfc822c8a068b952523d19dd0ce2eed72c6fdb4:bench/himorime.yaml > bench/.ci-release.yaml
-      - uses: nao1215/setup-himorime@30710690b8b2dc8c61df8bf289f5bb899af3fbfa # v0.1.2 + automatic comments
+      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
         with:
-          version: v0.2.0
+          version: v0.4.0
       - name: Compare the base with the head
         if: github.event_name == 'pull_request'
         run: himorime ci --output "$RUNNER_TEMP/himorime.json" --format json bench/.ci-release.yaml
