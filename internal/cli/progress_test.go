@@ -85,7 +85,7 @@ func (w *cancelOnProgressWriter) Write(p []byte) (int, error) {
 func TestTTYProgressClosesOnCancellation(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, `version: "1"
-suite: {name: progress-cancel}
+name: progress-cancel
 defaults: {warmup: 0, runs: 2}
 benchmarks:
   - name: cancellable
@@ -130,7 +130,7 @@ func TestTTYProgressUsesStderrAndRespectsQuietAndJSON(t *testing.T) {
 		t.Fatalf("quiet TTY progress: %+v", r)
 	}
 	failure := suite(t, `version: "1"
-suite: {name: progress-failure}
+name: progress-failure
 defaults: {warmup: 0, runs: 1}
 benchmarks:
   - name: broken
