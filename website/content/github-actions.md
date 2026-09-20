@@ -5,7 +5,7 @@ toc: true
 aliases: ["/security/"]
 ---
 
-These examples require a forthcoming release that supports the simplified version 1 layout; v0.2.x cannot read it. Until then, himorime's own benchmark uses a frozen historical suite with its pinned v0.2.0 observer.
+These examples require himorime v0.4.0 or later; earlier releases cannot read the simplified version 1 layout. This repository currently uses a frozen historical suite with its pinned v0.2.0 observer.
 
 ## A workflow
 

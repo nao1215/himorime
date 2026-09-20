@@ -16,7 +16,7 @@ Put this comment on the first line for completion and validation in editors that
 
 himorime embeds the same schema and validates it before running a suite.
 
-This unreleased layout keeps `version: "1"` but removes the old spellings. See [GitHub Actions](/github-actions/) before copying it into a workflow.
+himorime v0.4.0 keeps `version: "1"` but changes the layout and removes the old spellings. See [GitHub Actions](/github-actions/) before copying it into a workflow.
 
 For a runnable first suite, use [Getting started](/getting-started/). The [Cookbook](/cookbook/) has examples for budgets, regression checks, fixtures and CI.
 
