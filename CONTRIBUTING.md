@@ -29,7 +29,7 @@ make check     # fmt, vet, lint, test, test-race, e2e
 - Every behavior change comes with a test. Unit tests live next to the code; anything a user observes as a process (exit codes, output, files, Git worktrees, interrupts) gets an E2E scenario in `test/e2e/atago`.
 - E2E scenarios never assert on millisecond differences. Use the helper in `test/e2e/helper`, with differences of tens of milliseconds, and assert on classifications, table structure, report schemas and exit codes.
 - The suite schema (`schema/himorime.schema.json`) and the Go loader must agree. When you add a key, add it to both, and extend `internal/config/testdata/parity`.
-- The JSON report is a contract: once released, add fields, never rename or remove them within `schema_version` `"1"`, and update `schema/report.schema.json`. Until the first release the format may still be cleaned up; record such a change under `### Changed` in `CHANGELOG.md`.
+- The JSON report is a contract: once released, add fields, never rename or remove them within `schema_version` `"1"`, and update `schema/report.schema.json`.
 - Changes to the regression classifier come with `make calibration` numbers before and after (`internal/stats/calibration_test.go`).
 - Exit codes (`internal/exitcode`) are a contract too.
 - Documentation sections marked `BEGIN GENERATED` and example blocks are generated. Edit the source (command table, schema, example suites) and run `make docs`.
