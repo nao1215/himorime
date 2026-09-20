@@ -141,7 +141,7 @@ func TestHookFailureRetainsStdout(t *testing.T) {
 			h := f.helper("hook-output", status)
 			h.Env = append(h.Env, config.EnvVar{Name: "SUITE_TOKEN", Value: "secret-output-value"})
 			if status == "timeout" {
-				h.Timeout = 100 * time.Millisecond
+				h.Timeout = time.Second
 			}
 			b := bench("hook diagnostics", 1, f.command("ok", "ok"))
 			b.Setup = []config.Exec{h}
