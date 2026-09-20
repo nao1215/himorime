@@ -385,7 +385,6 @@ scenarios:
                 commands:
                   parent:
                     command: [e2ehelper, tree, "1", "--", alloc, "8"]
-                    budget: {peak_rss: {max: "<= 1MiB"}}
       - fixture:
           file: skip.himorime.yaml
           content: |
@@ -396,7 +395,9 @@ scenarios:
               - name: skip policy
                 metrics: {cpu: true, memory: true, unsupported: skip}
                 commands:
-                  parent: {command: [e2ehelper, tree, "1", "--", alloc, "8"]}
+                  parent:
+                    command: [e2ehelper, tree, "1", "--", alloc, "8"]
+                    budget: {peak_rss: {max: "<= 1MiB"}}
       - run:
           command: himorime run --quiet
       - assert:
