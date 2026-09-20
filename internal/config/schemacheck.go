@@ -374,7 +374,7 @@ func instancePath(loc []string) path {
 	p := path{}
 	for i, seg := range loc {
 		// The value of a report.versions entry is an argument list too.
-		if n, ok := atoiStrict(seg); ok && i > 0 && (isArrayKey(loc[i-1]) || i > 2 && loc[i-2] == "versions" && loc[i-3] == "report") { //nolint:gosec // G602: i > 0 and i > 2 guard every backward index.
+		if n, ok := atoiStrict(seg); ok && i > 0 && (isArrayKey(loc[i-1]) || i > 2 && loc[i-2] == "versions" && loc[i-3] == "report") {
 			p = p.index(n)
 			continue
 		}
