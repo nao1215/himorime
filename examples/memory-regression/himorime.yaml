@@ -6,9 +6,8 @@
 #   himorime compare --against main examples/memory-regression
 version: "1"
 
-suite:
-  name: memory regression
-  description: Peak resident set size of the word counter, compared between two revisions.
+name: memory regression
+description: Peak resident set size of the word counter, compared between two revisions.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -26,14 +25,12 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}", "${workdir}/input.txt"]
-    budget:
-      wordcount:
-        memory:
+        budget:
           peak_rss:
             max: "<= 512MiB"
     regression:
       latency:
         max_percent: 50
-      memory:
+      peak_rss:
         max_percent: 20
         min_difference: 4MiB

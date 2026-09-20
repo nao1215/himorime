@@ -10,9 +10,8 @@
 #   himorime run examples/reports --summary summary.md
 version: "1"
 
-suite:
-  name: reports
-  description: Two ways to count the same file, for report examples.
+name: reports
+description: Two ways to count the same file, for report examples.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]

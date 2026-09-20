@@ -1,6 +1,6 @@
 # expect: max_runs (5) is lower than min_runs (10)
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     max_runs: 5

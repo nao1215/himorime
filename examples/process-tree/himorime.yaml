@@ -4,9 +4,8 @@
 # https://nao1215.github.io/himorime/cookbook/#understand-process-tree-measurement-on-each-os
 version: "1"
 
-suite:
-  name: process tree
-  description: CPU time of a program that does its work itself, and of one that delegates it to two child processes.
+name: process tree
+description: CPU time of a program that does its work itself, and of one that delegates it to two child processes.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -18,9 +17,8 @@ defaults:
 benchmarks:
   - name: spin 100ms
     metrics:
-      cpu:
-        # The started process and its descendants. Only process_tree exists.
-        scope: process_tree
+      # The started process and its descendants. Only process_tree exists.
+      cpu: true
     commands:
       alone:
         command: ["${artifact}", -busy, -ms, "100"]

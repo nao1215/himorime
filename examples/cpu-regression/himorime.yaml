@@ -6,9 +6,8 @@
 #   himorime compare --against main examples/cpu-regression
 version: "1"
 
-suite:
-  name: cpu regression
-  description: CPU time of the word counter, compared between a base revision and the working tree.
+name: cpu regression
+description: CPU time of the word counter, compared between a base revision and the working tree.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -28,17 +27,15 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}", "${workdir}/input.txt"]
-    budget:
-      wordcount:
-        cpu:
-          total:
+        budget:
+          cpu_total:
             median: "<= 5s"
     regression:
       # Latency and CPU time get separate tolerances. CPU time ignores time
       # spent waiting, so it moves less when the runner is busy.
       latency:
         max_percent: 25
-      cpu:
+      cpu_total:
         max_percent: 20
         # A difference smaller than this is never a regression, however large
         # it is in percent.

@@ -56,7 +56,7 @@ func Parse(display, abs string, src []byte) (*Suite, error) {
 		return nil, &ValidationError{Issues: []Issue{{
 			File:    display,
 			Message: "suite file is empty",
-			Hint:    "a suite needs at least version, suite.name and one benchmark; `himorime init` writes a runnable example",
+			Hint:    "a suite needs at least version, name and one benchmark; `himorime init` writes a runnable example",
 		}}}
 	}
 	loc := newLocator(src)

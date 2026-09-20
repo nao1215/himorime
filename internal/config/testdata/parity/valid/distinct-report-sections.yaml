@@ -1,5 +1,5 @@
 version: "1"
-suite: {name: outputs}
+name: outputs
 benchmarks:
   - name: test
     commands: {app: {command: [app]}}

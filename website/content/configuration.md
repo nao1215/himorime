@@ -16,7 +16,23 @@ Put this comment on the first line for completion and validation in editors that
 
 himorime embeds the same schema and validates it before running a suite.
 
+This unreleased layout keeps `version: "1"` but removes the old spellings. See [GitHub Actions](/github-actions/) before copying it into a workflow.
+
 For a runnable first suite, use [Getting started](/getting-started/). The [Cookbook](/cookbook/) has examples for budgets, regression checks, fixtures and CI.
+
+## Migrating from the previous layout
+
+| Previous field | Version 1 field now used |
+|---|---|
+| `suite.name`, `suite.description` | `name`, `description` |
+| `benchmarks[].budget.COMMAND` | `benchmarks[].commands.COMMAND.budget` |
+| `metrics.latency` | Remove it; latency is always measured. |
+| `metrics.cpu.scope`, `metrics.memory.scope` | `metrics.cpu: true`, `metrics.memory: true` |
+| Budget `cpu.user`, `cpu.system`, `cpu.total`, `cpu.utilization` | `cpu_user`, `cpu_system`, `cpu_total`, `cpu_utilization` |
+| Budget `memory.peak_rss` | `peak_rss` |
+| `regression.cpu`, `regression.memory` | `regression.cpu_total`, `regression.peak_rss` |
+| `regression.*.metric` | `regression.*.statistic` |
+| `budget.COMMAND.median` and other aggregation shorthands | `budget.latency.median` and the corresponding aggregation map |
 
 ## Commands
 
@@ -32,11 +48,10 @@ Latency is always measured. `metrics` enables throughput, CPU time and peak RSS;
 
 ```yaml
 metrics:
-  latency: true            # always on; allowed for readability
   throughput:
     work: {value: 1000, unit: records}   # or {file_size: path}
-  cpu: true                # or {scope: process_tree}
-  memory: true             # or {scope: process_tree}
+  cpu: true
+  memory: true
   unsupported: fail        # or skip
 ```
 
@@ -45,13 +60,14 @@ metrics:
 A budget is an absolute limit for one command, metric and aggregation. Available aggregations are `min`, `max`, `mean`, `median` and percentiles from `p1` to `p99.9`.
 
 ```yaml
-budget:
+commands:
   mytool:
-    median: "< 20ms"                    # shorthand for latency.median
-    latency: {p95: "<= 30ms"}
-    throughput: {median: ">= 50MiB/s"}
-    cpu: {total: {median: "<= 25ms"}}
-    memory: {peak_rss: {max: "<= 64MiB"}}
+    command: [mytool, input.json]
+    budget:
+      latency: {p95: "<= 30ms"}
+      throughput: {median: ">= 50MiB/s"}
+      cpu_total: {median: "<= 25ms"}
+      peak_rss: {max: "<= 64MiB"}
 ```
 
 Latency, CPU time and peak RSS use upper bounds; throughput uses lower bounds. A budget for an unmeasured metric is invalid.
@@ -62,11 +78,11 @@ Latency, CPU time and peak RSS use upper bounds; throughput uses lower bounds. A
 regression:
   confidence: 0.95
   latency: {gate: false}                  # compared and reported, never fails
-  cpu: {max_percent: 15, min_difference: 5ms}
-  memory: {max_percent: 5, min_difference: 1MiB}
+  cpu_total: {max_percent: 15, min_difference: 5ms}
+  peak_rss: {max_percent: 5, min_difference: 1MiB}
 ```
 
-`metric` selects `median` or `mean`, `max_percent` sets the relative tolerance, `min_difference` ignores smaller absolute changes, and `gate: false` reports a verdict without changing the exit status. See [Regression detection](/regression-detection/) for the decision rules.
+`statistic` selects `median` or `mean`, `max_percent` sets the relative tolerance, `min_difference` ignores smaller absolute changes, and `gate: false` reports a verdict without changing the exit status. See [Regression detection](/regression-detection/) for the decision rules.
 
 ## Hooks
 
@@ -182,10 +198,10 @@ Commands and hooks inherit himorime's environment. `env` from `defaults`, the be
 | `regression.confidence` | `0.95` |
 | `regression.min_samples` | `10` |
 | `regression.max_cv` | `0.5` |
-| `regression.latency, cpu, memory: metric` | `median` |
-| `regression.latency, cpu, memory: max_percent` | `10` |
-| `regression.latency, cpu, memory: min_difference` | `unset (none)` |
-| `regression.latency, cpu, memory: gate` | `true` |
+| `regression.latency, cpu_total, peak_rss: statistic` | `median` |
+| `regression.latency, cpu_total, peak_rss: max_percent` | `10` |
+| `regression.latency, cpu_total, peak_rss: min_difference` | `unset (none)` |
+| `regression.latency, cpu_total, peak_rss: gate` | `true` |
 | `metrics.cpu, metrics.memory` | `false` |
 | `metrics.unsupported` | `fail` |
 | `metrics.throughput.work.unit` | `operations (value), bytes (file_size)` |
@@ -226,18 +242,12 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | Key | Required | Description |
 |---|---|---|
 | `version` | yes | Suite format version. Only "1" exists. |
-| `suite` | yes | Names the suite. |
+| `name` | yes | Suite name shown in reports. |
+| `description` |  | What the suite is for. |
 | `defaults` |  | Settings every benchmark inherits. |
 | `build` |  | Builds ${artifact} before measuring; in a comparison it runs once in each revision, with ${root} pointing into that revision. |
 | `benchmarks` | yes | The benchmark cases. |
 | `report` |  | Report files written after every run, relative to the suite file. |
-
-### suite
-
-| Key | Required | Description |
-|---|---|---|
-| `name` | yes | Suite name shown in reports. |
-| `description` |  | What the suite is for. |
 
 ### defaults
 
@@ -293,7 +303,6 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | `baseline` |  | Command name that RELATIVE and vs_baseline are computed against. |
 | `commands` | yes | Named commands measured side by side. Names use letters, digits, '.', '_' and '-'. |
 | `metrics` |  | What the benchmark measures besides latency. |
-| `budget` |  | Absolute budgets keyed by command name. A violation fails the run with exit status 1. |
 | `regression` |  | How a base revision and the working tree are compared (himorime compare / himorime ci). |
 
 ### benchmarks[].commands.NAME
@@ -308,12 +317,24 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | `stdout` |  | "discard" (default), or a path inside ${workdir} that receives the standard output of the latest run. |
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
 | `exit_codes` |  | Exit statuses that count as success. Default [0]. |
+| `budget` |  | Absolute budgets for this command. |
+
+### benchmarks[].commands.NAME.budget
+
+| Key | Required | Description |
+|---|---|---|
+| `latency` |  | Latency budgets keyed by aggregation, such as {p95: "<= 100ms"}. |
+| `throughput` |  | Throughput budgets keyed by aggregation. Needs metrics.throughput.work. |
+| `cpu_user` |  | User CPU time budgets keyed by aggregation. Needs metrics.cpu. |
+| `cpu_system` |  | System CPU time budgets keyed by aggregation. Needs metrics.cpu. |
+| `cpu_total` |  | Total (user + system) CPU time budgets keyed by aggregation. Needs metrics.cpu. |
+| `cpu_utilization` |  | CPU utilization budgets keyed by aggregation, in percent of one CPU; above 100% means more than one CPU was busy. Needs metrics.cpu. |
+| `peak_rss` |  | Peak resident set size budgets keyed by aggregation. Needs metrics.memory. |
 
 ### benchmarks[].metrics
 
 | Key | Required | Description |
 |---|---|---|
-| `latency` |  | Wall-clock time of each run. Always measured; true only says so. |
 | `throughput` |  | Compute throughput from declared work. |
 | `cpu` |  | Measure user, system and total CPU time and CPU utilization of the process tree. |
 | `memory` |  | Measure the peak resident set size (RSS) of the process tree. |
@@ -327,34 +348,6 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | `file_size` |  | A file whose size in bytes is the work of each run: relative to ${root} of the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Read before every run, outside the measured time. |
 | `unit` |  | The unit of work, such as records, lines or bytes. Default: operations for value, bytes for file_size. |
 
-### benchmarks[].budget.NAME
-
-| Key | Required | Description |
-|---|---|---|
-| `mean` |  | Budget on the mean latency (shorthand for latency.mean). |
-| `median` |  | Budget on the median latency (shorthand for latency.median). |
-| `min` |  | Budget on the min latency (shorthand for latency.min). |
-| `max` |  | Budget on the max latency (shorthand for latency.max). |
-| `latency` |  | Latency budgets keyed by aggregation, such as {p95: "<= 100ms"}. |
-| `throughput` |  | Throughput budgets keyed by aggregation, such as {median: ">= 50MiB/s"}. Needs metrics.throughput. |
-| `cpu` |  | CPU budgets. Needs metrics.cpu. |
-| `memory` |  | Memory budgets. Needs metrics.memory. |
-
-### benchmarks[].budget.NAME.cpu
-
-| Key | Required | Description |
-|---|---|---|
-| `user` |  | User CPU time budgets keyed by aggregation. |
-| `system` |  | System CPU time budgets keyed by aggregation. |
-| `total` |  | Total (user + system) CPU time budgets keyed by aggregation. |
-| `utilization` |  | CPU utilization budgets keyed by aggregation, in percent of one CPU; above 100% means more than one CPU was busy. |
-
-### benchmarks[].budget.NAME.memory
-
-| Key | Required | Description |
-|---|---|---|
-| `peak_rss` |  | Peak resident set size budgets keyed by aggregation. |
-
 ### regression
 
 | Key | Required | Description |
@@ -364,17 +357,17 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | `max_cv` |  | Overlapping or touching sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. Completely separated ranges still need the sample count, tolerance and bootstrap confidence checks. 0 disables the noise check. Default 0.5. |
 | `commands` |  | Compare only these commands. Default: every command. |
 | `latency` |  | How latency (wall-clock time; lower is better) is compared. |
-| `cpu` |  | How total CPU time (lower is better) is compared. |
-| `memory` |  | How peak RSS (lower is better) is compared. |
+| `cpu_total` |  | How total CPU time (lower is better) is compared. |
+| `peak_rss` |  | How peak RSS (lower is better) is compared. |
 
-### regression.latency, regression.cpu, regression.memory
+### regression.latency, regression.cpu_total, regression.peak_rss
 
 | Key | Required | Description |
 |---|---|---|
-| `metric` |  | Statistic compared: median (default) or mean. |
 | `max_percent` |  | Tolerated degradation in percent: a number such as 10, or a string such as "10%". Default 10. |
 | `min_difference` |  | The smallest absolute difference that can be a regression or an improvement; smaller differences pass. A duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory. Default: none. |
 | `gate` |  | Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run. |
+| `statistic` |  | Statistic compared: median (default) or mean. |
 
 ### report
 

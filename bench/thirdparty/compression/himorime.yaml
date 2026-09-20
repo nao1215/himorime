@@ -5,9 +5,8 @@
 # this an unequal-work benchmark.
 version: "1"
 
-suite:
-  name: compression tools
-  description: gzip, bzip2 and xz compressing one generated JSON Lines file with deterministic single-threaded options.
+name: compression tools
+description: gzip, bzip2 and xz compressing one generated JSON Lines file with deterministic single-threaded options.
 
 build:
   command: [go, build, -trimpath, -o, "${artifact}", ./gen]

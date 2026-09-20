@@ -201,7 +201,7 @@ scenarios:
           file: broken.yaml
           content: |
             version: "1"
-            suite: {name: broken}
+            name: broken
             benchmarks:
               - name: parse
                 runs: "20"
@@ -230,7 +230,7 @@ scenarios:
           file: semantic.yaml
           content: |
             version: "1"
-            suite: {name: semantic}
+            name: semantic
             benchmarks:
               - name: parse
                 baseline: missing
@@ -253,7 +253,7 @@ scenarios:
           file: escape.yaml
           content: |
             version: "1"
-            suite: {name: escape}
+            name: escape
             benchmarks:
               - name: parse
                 commands:
@@ -292,7 +292,7 @@ scenarios:
           file: --first.yaml
           content: |
             version: "1"
-            suite: {name: first}
+            name: first
             benchmarks:
               - name: check
                 commands:
@@ -301,7 +301,7 @@ scenarios:
           file: --second.yaml
           content: |
             version: "1"
-            suite: {name: second}
+            name: second
             benchmarks:
               - name: check
                 commands:
@@ -319,7 +319,7 @@ scenarios:
           file: execution.yaml
           content: |
             version: "1"
-            suite: {name: execution}
+            name: execution
             defaults: {warmup: 0, runs: 1}
             benchmarks:
               - name: failing command
@@ -337,7 +337,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: listing}
+            name: listing
             benchmarks:
               - name: parse small
                 tags: [parser, smoke]

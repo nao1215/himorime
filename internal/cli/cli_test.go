@@ -87,12 +87,12 @@ func TestActionsReportDoesNotCorruptJSONOrChangeVerdict(t *testing.T) {
 			if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil || decoded.Summary.ExitCode != exitcode.Failed {
 				t.Fatalf("JSON=%s, err=%v", stdout.String(), err)
 			}
-			if strings.Contains(stderr.String(), "| himorime | test |") != gh.Actions {
+			if strings.Contains(stderr.String(), "| Target | Metric | Value | Result | Reason |") != gh.Actions {
 				t.Fatalf("log=%s", stderr.String())
 			}
 			if mode == "summary" || mode == "explicit summary" {
 				data, err := os.ReadFile(path)
-				if err != nil || strings.Count(string(data), "| himorime | test |") != 1 {
+				if err != nil || strings.Count(string(data), "| Target | Metric | Value | Result | Reason |") != 1 {
 					t.Fatalf("summary=%s, err=%v", data, err)
 				}
 			}
@@ -263,7 +263,7 @@ func TestInitTemplateIsValid(t *testing.T) {
 func TestValidateReportsEveryIssue(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "himorime.yaml"), `version: "1"
-suite: {name: broken}
+name: broken
 benchmarks:
   - name: a
     runs: "3"
@@ -293,7 +293,7 @@ benchmarks:
 }
 
 const twoBenchmarks = `version: "1"
-suite: {name: cli}
+name: cli
 defaults: {warmup: 0, runs: 3}
 benchmarks:
   - name: fast one
@@ -352,7 +352,7 @@ func TestRunTableJSONAndOutputs(t *testing.T) {
 	if r.code != 0 {
 		t.Fatalf("run: %+v", r)
 	}
-	for _, want := range []string{"BENCHMARK", "fast one", "quick", "slower", "PASS", "seed 99"} {
+	for _, want := range []string{"TARGET", "fast one / quick", "fast one / slower", "PASS", "seed 99"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("stdout lacks %q:\n%s", want, r.stdout)
 		}
@@ -398,23 +398,22 @@ func TestRunTableJSONAndOutputs(t *testing.T) {
 func TestRunExitCodes(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "budget.himorime.yaml"), suite(t, `version: "1"
-suite: {name: budget}
+name: budget
 defaults: {warmup: 0, runs: 3}
 benchmarks:
   - name: too slow
     commands:
       tool:
         command: [@EXE@, sleep, 60ms]
-    budget:
-      tool: {median: "< 5ms"}
+        budget: {latency: {median: "< 5ms"}}
 `))
 	r := run(t, dir, nil, "run", "budget.himorime.yaml", "--quiet")
-	if r.code != exitcode.Failed || !strings.Contains(r.stdout, "OVER BUDGET") || !strings.Contains(r.stdout, "budget median < 5.00ms not met") {
+	if r.code != exitcode.Failed || !strings.Contains(r.stdout, "OVER BUDGET") || !strings.Contains(r.stdout, "latency median") || !strings.Contains(r.stdout, "5.00ms") || !strings.Contains(r.stdout, "budget not met") {
 		t.Fatalf("budget: %+v", r)
 	}
 
 	write(t, filepath.Join(dir, "fail.himorime.yaml"), suite(t, `version: "1"
-suite: {name: fail}
+name: fail
 defaults: {warmup: 0, runs: 2}
 benchmarks:
   - name: broken
@@ -431,7 +430,7 @@ benchmarks:
 	}
 
 	write(t, filepath.Join(dir, "timeout.himorime.yaml"), suite(t, `version: "1"
-suite: {name: timeout}
+name: timeout
 defaults: {warmup: 0, runs: 2}
 benchmarks:
   - name: hangs
@@ -473,7 +472,7 @@ func git(t *testing.T, dir string, args ...string) string {
 }
 
 const compareSuite = `version: "1"
-suite: {name: compare}
+name: compare
 build:
   command: [@EXE@, copy, delay.txt, "${artifact}"]
 defaults:
@@ -515,7 +514,7 @@ func TestCompare(t *testing.T) {
 	r := run(t, dir, nil, "compare", "--against", "main", "--quiet")
 	// An unchanged program passes, or is inconclusive when a shared runner is
 	// too noisy to tell; it is never a regression.
-	if r.code != 0 || !regexp.MustCompile(`\b(PASS|INCONCLUSIVE)\b`).MatchString(r.stdout) || !strings.Contains(r.stdout, "CHANGE") {
+	if r.code != 0 || !regexp.MustCompile(`\b(PASS|INCONCLUSIVE)\b`).MatchString(r.stdout) || !strings.Contains(r.stdout, "Latency (median)") || !strings.Contains(r.stdout, "→") {
 		t.Fatalf("unchanged compare: %+v", r)
 	}
 
@@ -571,7 +570,7 @@ func TestCompare(t *testing.T) {
 // brokenNewSuite fails when it runs: its build copies a file that does not
 // exist, and its setup hook exits non-zero.
 const brokenNewSuite = `version: "1"
-suite: {name: added}
+name: added
 build:
   command: [@EXE@, copy, missing.txt, "${artifact}"]
 defaults:
@@ -588,7 +587,7 @@ benchmarks:
 
 // newSuite builds and runs, within its budget.
 const newSuite = `version: "1"
-suite: {name: added}
+name: added
 build:
   command: [@EXE@, copy, delay.txt, "${artifact}"]
 defaults:
@@ -599,8 +598,7 @@ benchmarks:
     commands:
       app:
         command: [@EXE@, sleep-from, "${artifact}"]
-    budget:
-      app: {median: "<= 10s"}
+        budget: {latency: {median: "<= 10s"}}
 `
 
 func TestCompareSuiteNewInHead(t *testing.T) {
@@ -616,7 +614,8 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 	for _, want := range []string{
 		"suite: added (bench/himorime.yaml)",
 		"new in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked",
-		"error: build failed",
+		"ERROR",
+		"build failed",
 		"1 suite new in this revision",
 		"exit 4",
 	} {
@@ -683,7 +682,7 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 func TestSelectionSkipsEmptySuites(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "selected.yaml"), suite(t, `version: "1"
-suite: {name: selected}
+name: selected
 defaults: {runs: 1, warmup: 0}
 benchmarks:
   - name: selected
@@ -692,7 +691,7 @@ benchmarks:
       app: {command: [@EXE@, exit, "0"]}
 `))
 	write(t, filepath.Join(dir, "excluded.yaml"), suite(t, `version: "1"
-suite: {name: excluded}
+name: excluded
 build: {command: [@EXE@, exit, "3"]}
 benchmarks:
   - name: excluded
@@ -734,7 +733,7 @@ func TestCIGitHubActions(t *testing.T) {
 		t.Fatal("ci output must not be colored")
 	}
 	data, err := os.ReadFile(summary)
-	if err != nil || !strings.HasPrefix(string(data), "previous step\n| Benchmark |") || !strings.Contains(string(data), "| sleepy / app |") {
+	if err != nil || !strings.HasPrefix(string(data), "previous step\n| Target | Metric | Value | Result | Reason |") || !strings.Contains(string(data), "| sleepy / app |") {
 		t.Fatalf("summary = %q, %v", data, err)
 	}
 	if !strings.Contains(r.stderr, "comparing base "+base[:12]) {
@@ -914,7 +913,7 @@ func TestRunSuitesFromTwoRepositories(t *testing.T) {
 		git(t, base, "init", "-q", dir)
 		write(t, filepath.Join(dir, "fixtures", "in.txt"), "one\n")
 		write(t, filepath.Join(dir, "himorime.yaml"), suite(t, `version: "1"
-suite: {name: repo}
+name: repo
 defaults: {warmup: 0, runs: 2}
 benchmarks:
   - name: count
@@ -933,7 +932,7 @@ benchmarks:
 func TestRunUnsupportedMetrics(t *testing.T) {
 	dir := t.TempDir()
 	body := `version: "1"
-suite: {name: unsupported}
+name: unsupported
 defaults: {warmup: 0, runs: 2}
 benchmarks:
   - name: needs memory
@@ -941,10 +940,10 @@ benchmarks:
     setup:
       - command: [@EXE@, write, "${root}/setup-ran"]
     commands:
-      tool: {command: [@EXE@, sleep, 1ms]}
-    budget:
       tool:
-        memory: {peak_rss: {max: "<= 1GiB"}}
+        command: [@EXE@, sleep, 1ms]
+        budget:
+          peak_rss: {max: "<= 1GiB"}
 `
 	write(t, filepath.Join(dir, "fail.himorime.yaml"), suite(t, fmt.Sprintf(body, "")))
 	write(t, filepath.Join(dir, "skip.himorime.yaml"), suite(t, fmt.Sprintf(body, ", unsupported: skip")))
@@ -997,14 +996,14 @@ benchmarks:
 func TestAnnotationsOnlyInGitHubActions(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, `version: "1"
-suite: {name: annotations}
+name: annotations
 defaults: {warmup: 0, runs: 2}
 benchmarks:
   - name: slow
     commands:
-      tool: {command: [@EXE@, sleep, 30ms]}
-    budget:
-      tool: {median: "< 1ms"}
+      tool:
+        command: [@EXE@, sleep, 30ms]
+        budget: {latency: {median: "< 1ms"}}
 `))
 	r := run(t, dir, env{"GITHUB_ACTIONS": "true"}, "run", "--quiet")
 	if r.code != exitcode.Failed || !strings.Contains(r.stderr, "::error file=himorime.yaml,title=himorime%3A performance budget exceeded::slow / tool: latency median budget < 1.00ms, measured") {

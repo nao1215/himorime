@@ -4,9 +4,8 @@
 # https://nao1215.github.io/himorime/cookbook/#handle-a-metric-this-platform-cannot-measure
 version: "1"
 
-suite:
-  name: unsupported metrics
-  description: Peak RSS of a command that starts a child process, which Windows cannot report.
+name: unsupported metrics
+description: Peak RSS of a command that starts a child process, which Windows cannot report.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/sleepy]
@@ -27,8 +26,6 @@ benchmarks:
     commands:
       sleepy:
         command: ["${artifact}", -ms, "20", -children, "1"]
-    budget:
-      sleepy:
-        memory:
+        budget:
           peak_rss:
             max: "<= 256MiB"

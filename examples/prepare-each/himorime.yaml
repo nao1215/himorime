@@ -4,9 +4,8 @@
 # https://nao1215.github.io/himorime/cookbook/#reset-state-before-every-run
 version: "1"
 
-suite:
-  name: prepare each
-  description: Every run starts from a freshly generated output file.
+name: prepare each
+description: Every run starts from a freshly generated output file.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]

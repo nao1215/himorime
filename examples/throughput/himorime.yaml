@@ -4,9 +4,8 @@
 # https://nao1215.github.io/himorime/cookbook/#protect-the-throughput-of-large-csv-and-json-processing
 version: "1"
 
-suite:
-  name: throughput
-  description: Bytes and records per second of the word counter on large CSV and JSON Lines inputs.
+name: throughput
+description: Bytes and records per second of the word counter on large CSV and JSON Lines inputs.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]
@@ -29,12 +28,10 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}", "${workdir}/input.csv"]
-    budget:
-      wordcount:
-        # Higher is better, so a throughput budget is a floor.
-        throughput:
-          median: ">= 5MiB/s"
-
+        budget:
+          # Higher is better, so a throughput budget is a floor.
+          throughput:
+            median: ">= 5MiB/s"
   - name: jsonl records
     setup:
       - command: ["${artifact}", -gen, "200000", -gen-format, jsonl, -o, "${workdir}/input.jsonl"]
@@ -47,8 +44,7 @@ benchmarks:
     commands:
       wordcount:
         command: ["${artifact}", "${workdir}/input.jsonl"]
-    budget:
-      wordcount:
-        throughput:
-          median: ">= 50000 records/s"
-          min: ">= 20000 records/s"
+        budget:
+          throughput:
+            median: ">= 50000 records/s"
+            min: ">= 20000 records/s"

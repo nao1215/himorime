@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A tool comparison page covering himorime, hyperfine, benchstat, Bencher and CodSpeed, including their different uses and limitations.
 - A `himorime report` command renders a saved JSON report with the current schema validation without rerunning measurements.
 
+### Changed
+
+- The version 1 suite format has a breaking layout change: move `suite` fields to the top level, put budgets under each command, use flat CPU and memory metric names, and rename regression `metric` to `statistic`; migrate existing suites before using the new parser.
+- Terminal reports prioritize results and reasons; GitHub summaries put detailed statistics and metadata in expandable sections. JSON reports are unchanged.
+
 ### Fixed
 
 - Diagnostics distinguish Git failures, output failures and interruptions without changing exit statuses or JSON reports.

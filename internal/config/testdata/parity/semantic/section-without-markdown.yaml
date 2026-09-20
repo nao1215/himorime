@@ -1,6 +1,6 @@
 # expect: section is only allowed with format: markdown
 version: "1"
-suite: {name: x}
+name: x
 benchmarks:
   - name: a
     commands: {a: {command: [a]}}

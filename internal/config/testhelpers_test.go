@@ -43,14 +43,21 @@ func mustParse(t *testing.T, src string) *Suite {
 // minimal is a valid suite; tests append benchmark keys through a template.
 func minimal(benchmarkExtra string) string {
 	return `version: "1"
-suite:
-  name: test
+name: test
 benchmarks:
   - name: bench
     commands:
       tool:
         command: [tool, --version]
 ` + indent(benchmarkExtra, "    ")
+}
+
+func minimalCommandBudget(budget string) string {
+	return addCommandBudget(minimal(""), budget)
+}
+
+func addCommandBudget(src, budget string) string {
+	return strings.Replace(src, "        command: [tool, --version]\n", "        command: [tool, --version]\n        budget: "+budget+"\n", 1)
 }
 
 func indent(s, prefix string) string {

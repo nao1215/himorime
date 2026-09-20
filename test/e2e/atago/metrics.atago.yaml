@@ -25,19 +25,21 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: latency}
+            name: latency
             defaults: {warmup: 0, runs: 5}
             benchmarks:
               - name: fits
-                commands: {app: {command: [e2ehelper, sleep, 20ms]}}
-                budget:
+                commands:
                   app:
-                    latency: {p95: "<= 20s", p99: "< 30s"}
+                    command: [e2ehelper, sleep, 20ms]
+                    budget:
+                      latency: {p95: "<= 20s", p99: "< 30s"}
               - name: too slow
-                commands: {app: {command: [e2ehelper, sleep, 60ms]}}
-                budget:
+                commands:
                   app:
-                    latency: {p90: "< 10ms"}
+                    command: [e2ehelper, sleep, 60ms]
+                    budget:
+                      latency: {p90: "< 10ms"}
       - run:
           command: himorime run --quiet --format json --output report.json
       - assert:
@@ -69,33 +71,33 @@ scenarios:
           file: my suite/himorime.yaml
           content: |
             version: "1"
-            suite: {name: throughput}
+            name: throughput
             defaults: {warmup: 0, runs: 5}
             benchmarks:
               - name: records
                 metrics:
                   throughput:
                     work: {value: 1000, unit: records}
-                commands: {app: {command: [e2ehelper, records, "1000", 50ms]}}
-                budget:
+                commands:
                   app:
-                    throughput: {median: ">= 100 records/s"}
+                    command: [e2ehelper, records, "1000", 50ms]
+                    budget: {throughput: {median: ">= 100 records/s"}}
               - name: unreachable floor
                 metrics:
                   throughput:
                     work: {value: 1000, unit: records}
-                commands: {app: {command: [e2ehelper, records, "1000", 50ms]}}
-                budget:
+                commands:
                   app:
-                    throughput: {min: ">= 1000000 records/s"}
+                    command: [e2ehelper, records, "1000", 50ms]
+                    budget: {throughput: {min: ">= 1000000 records/s"}}
               - name: file bytes
                 metrics:
                   throughput:
                     work: {file_size: input data/large file.bin}
-                commands: {app: {command: [e2ehelper, sleep, 20ms]}}
-                budget:
+                commands:
                   app:
-                    throughput: {median: ">= 1KiB/s"}
+                    command: [e2ehelper, sleep, 20ms]
+                    budget: {throughput: {median: ">= 1KiB/s"}}
       - run:
           command: himorime run --format json --output report.json "my suite"
       - assert:
@@ -122,7 +124,7 @@ scenarios:
           command: himorime run --quiet "my suite"
       - assert:
           stdout:
-            contains: ["throughput\nBENCHMARK", "records/s", "MiB/s", "unreachable floor / app: budget throughput min >= 1.00M records/s not met"]
+            contains: ["Throughput (median)", "records/s", "MiB/s", "unreachable floor / app", "throughput min", "limit >= 1.00M records/s", "budget not met", "OVER BUDGET", "FAIL"]
 
   - name: cpu time and utilization separate a busy command from a sleeping one
     steps:
@@ -130,26 +132,24 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: cpu}
+            name: cpu
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: busy
                 metrics: {cpu: true}
                 commands:
-                  burn: {command: [e2ehelper, burn, 200ms, "2"]}
-                  sleep: {command: [e2ehelper, sleep, 200ms]}
-                budget:
                   burn:
-                    cpu: {total: {median: "<= 60s"}}
+                    command: [e2ehelper, burn, 200ms, "2"]
+                    budget: {cpu_total: {median: "<= 60s"}}
                   sleep:
-                    cpu: {utilization: {median: "<= 60%"}}
+                    command: [e2ehelper, sleep, 200ms]
+                    budget: {cpu_utilization: {median: "<= 60%"}}
               - name: over budget
-                metrics: {cpu: {scope: process_tree}}
+                metrics: {cpu: true}
                 commands:
-                  burn: {command: [e2ehelper, burn, 100ms]}
-                budget:
                   burn:
-                    cpu: {user: {max: "< 1ms"}}
+                    command: [e2ehelper, burn, 100ms]
+                    budget: {cpu_user: {max: "< 1ms"}}
       - run:
           command: himorime run --quiet --format json --output report.json
       - assert:
@@ -181,7 +181,7 @@ scenarios:
           command: himorime run --quiet
       - assert:
           stdout:
-            contains: ["cpu\nBENCHMARK", "UTILIZATION", "above 100% means more than one CPU was busy", "over budget / burn: budget cpu user max < 1.00ms not met"]
+            contains: ["CPU time (median)", "over budget / burn", "cpu user max", "limit < 1.00ms", "budget not met", "OVER BUDGET", "FAIL"]
 
   - name: peak rss reflects the memory a command holds
     steps:
@@ -189,21 +189,21 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: memory}
+            name: memory
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: holds 96MiB
                 metrics: {memory: true}
-                commands: {app: {command: [e2ehelper, alloc, "96"]}}
-                budget:
+                commands:
                   app:
-                    memory: {peak_rss: {max: "<= 48MiB"}}
+                    command: [e2ehelper, alloc, "96"]
+                    budget: {peak_rss: {max: "<= 48MiB"}}
               - name: holds 1MiB
                 metrics: {memory: true}
-                commands: {app: {command: [e2ehelper, alloc, "1"]}}
-                budget:
+                commands:
                   app:
-                    memory: {peak_rss: {max: "<= 1GiB"}}
+                    command: [e2ehelper, alloc, "1"]
+                    budget: {peak_rss: {max: "<= 1GiB"}}
       - run:
           command: himorime run --quiet --format json --output report.json
       - assert:
@@ -222,7 +222,7 @@ scenarios:
           command: himorime run --quiet
       - assert:
           stdout:
-            matches: "(?m)^holds 96MiB +app +[0-9.]+MiB +[0-9.]+MiB +OVER BUDGET$"
+            matches: "(?m)^holds 96MiB / app +Peak RSS \\(median\\) +[0-9.]+MiB +OVER BUDGET +-+$"
 
   - name: several metrics are judged together and the failing one is named
     steps:
@@ -230,7 +230,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: together}
+            name: together
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: everything
@@ -239,29 +239,33 @@ scenarios:
                     work: {value: 10, unit: files}
                   cpu: true
                   memory: true
-                commands: {app: {command: [e2ehelper, alloc, "64"]}}
-                budget:
+                commands:
                   app:
-                    median: "< 60s"
-                    throughput: {median: ">= 0.01 files/s"}
-                    cpu: {total: {p95: "<= 60s"}}
-                    memory: {peak_rss: {median: "< 16MiB"}}
+                    command: [e2ehelper, alloc, "64"]
+                    budget:
+                      latency: {median: "< 60s"}
+                      throughput: {median: ">= 0.01 files/s"}
+                      cpu_total: {p95: "<= 60s"}
+                      peak_rss: {median: "< 16MiB"}
       - run:
           command: himorime run --quiet
       - assert:
           exit_code: 1
           stdout:
             contains:
-              - "latency\nBENCHMARK"
-              - "\nthroughput\nBENCHMARK"
-              - "\ncpu\nBENCHMARK"
-              - "\nmemory\nBENCHMARK"
-              - "\nbudgets\nBENCHMARK"
-              - "everything / app: budget peak rss median < 16.00MiB not met"
+              - "Latency (median)"
+              - "Throughput (median)"
+              - "CPU time (median)"
+              - "Peak RSS (median)"
+              - "everything / app"
+              - "peak rss median"
+              - "16.00MiB"
+              - "OVER BUDGET"
+              - "FAIL"
               - "0 passed, 1 over budget"
       - assert:
           stdout:
-            matches: "(?m)^everything +app +throughput median +>= 0\\.01 files/s +\\S+ files/s +PASS$"
+            matches: "(?m)^everything / app +throughput median +\\S+ files/s \\(limit >= 0\\.01 files/s\\) +PASS +-+$"
 
   - name: cpu time covers the whole process tree
     steps:
@@ -269,7 +273,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: tree}
+            name: tree
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: children do the work
@@ -294,7 +298,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: tree}
+            name: tree
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: a child holds memory
@@ -319,13 +323,12 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: floor}
+            name: floor
             defaults: {warmup: 1, runs: 10}
             benchmarks:
               - name: tiny
                 metrics: {memory: true}
-                commands:
-                  "true": {command: ["true"]}
+                commands: {"true": {command: ["true"]}}
       - run:
           command: himorime run --quiet --format json
       - assert:
@@ -346,16 +349,15 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: floor budget}
+            name: floor budget
             defaults: {warmup: 1, runs: 10}
             benchmarks:
               - name: tiny
                 metrics: {memory: true}
                 commands:
-                  "true": {command: ["true"]}
-                budget:
                   "true":
-                    memory: {peak_rss: {max: "<= 1KiB"}}
+                    command: ["true"]
+                    budget: {peak_rss: {max: "<= 1KiB"}}
       - run:
           command: himorime run --quiet --format json
       - assert:
@@ -375,27 +377,26 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: tree}
+            name: tree
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: fail policy
                 metrics: {cpu: true, memory: true}
                 commands:
-                  parent: {command: [e2ehelper, tree, "1", "--", alloc, "8"]}
+                  parent:
+                    command: [e2ehelper, tree, "1", "--", alloc, "8"]
+                    budget: {peak_rss: {max: "<= 1MiB"}}
       - fixture:
           file: skip.himorime.yaml
           content: |
             version: "1"
-            suite: {name: tree}
+            name: tree
             defaults: {warmup: 0, runs: 3}
             benchmarks:
               - name: skip policy
                 metrics: {cpu: true, memory: true, unsupported: skip}
                 commands:
                   parent: {command: [e2ehelper, tree, "1", "--", alloc, "8"]}
-                budget:
-                  parent:
-                    memory: {peak_rss: {max: "<= 1MiB"}}
       - run:
           command: himorime run --quiet
       - assert:
@@ -419,7 +420,7 @@ scenarios:
           file: missing.himorime.yaml
           content: |
             version: "1"
-            suite: {name: missing work}
+            name: missing work
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: no input
@@ -431,7 +432,7 @@ scenarios:
           file: failing.himorime.yaml
           content: |
             version: "1"
-            suite: {name: failing command}
+            name: failing command
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: broken
@@ -456,7 +457,7 @@ scenarios:
           command: himorime run --quiet failing.himorime.yaml
       - assert:
           exit_code: 4
-          stdout: {contains: ["broken / app: exit code: exited with status 3", "stderr: broken on purpose"]}
+          stdout: {contains: ["broken / app (head)", "exit code: exited with status 3", "stderr: broken on purpose"]}
           stderr: {contains: "himorime: exit 4: the measurement did not complete"}
 
   - name: GitHub Actions annotations tell a performance failure from a measurement failure
@@ -467,20 +468,20 @@ scenarios:
           file: budget.himorime.yaml
           content: |
             version: "1"
-            suite: {name: budget}
+            name: budget
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: heavy
                 metrics: {memory: true}
-                commands: {app: {command: [e2ehelper, alloc, "64"]}}
-                budget:
+                commands:
                   app:
-                    memory: {peak_rss: {max: "<= 8MiB"}}
+                    command: [e2ehelper, alloc, "64"]
+                    budget: {peak_rss: {max: "<= 8MiB"}}
       - fixture:
           file: broken.himorime.yaml
           content: |
             version: "1"
-            suite: {name: broken}
+            name: broken
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: no input
@@ -518,7 +519,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: compare metrics}
+            name: compare metrics
             build:
               command: [e2ehelper, copy, work.txt, "$${artifact}"]
             defaults: {warmup: 1, runs: 10}
@@ -530,7 +531,7 @@ scenarios:
                 regression:
                   # Burning CPU also takes longer; only CPU time decides.
                   latency: {gate: false}
-                  cpu: {max_percent: 50}
+                  cpu_total: {max_percent: 50}
               - name: memory
                 metrics: {memory: true}
                 setup:
@@ -539,7 +540,7 @@ scenarios:
                   app: {command: [e2ehelper, args-from, "$${workdir}/memory.txt"]}
                 regression:
                   latency: {gate: false}
-                  memory: {max_percent: 50, min_difference: 16MiB}
+                  peak_rss: {max_percent: 50, min_difference: 16MiB}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
@@ -573,10 +574,10 @@ scenarios:
       - assert:
           exit_code: 1
           stdout:
-            contains: ["cpu total\nBENCHMARK", "peak rss\nBENCHMARK"]
+            contains: ["CPU time (median)", "Peak RSS (median)"]
       - assert:
           stdout:
-            matches: "(?m)^memory +[0-9.]+MiB +[0-9.]+MiB +\\+[0-9.]+MiB +\\+[0-9.]+% +\\S+ +\\+50% +REGRESSION$"
+            matches: '(?m)^memory / app +Peak RSS \(median\) +[0-9.]+MiB → [0-9.]+MiB \(\+[0-9.]+%\) +REGRESSION +.+$'
 
   - name: throughput is compared as higher-is-better
     steps:
@@ -585,7 +586,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: compare throughput}
+            name: compare throughput
             build:
               command: [e2ehelper, copy, delay.txt, "$${artifact}"]
             defaults: {warmup: 1, runs: 10}
@@ -638,7 +639,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: reports}
+            name: reports
             defaults: {warmup: 0, runs: 4}
             benchmarks:
               - name: all metrics
@@ -647,10 +648,10 @@ scenarios:
                     work: {value: 100, unit: records}
                   cpu: true
                   memory: true
-                commands: {app: {command: [e2ehelper, alloc, "8"]}}
-                budget:
+                commands:
                   app:
-                    latency: {p99: "<= 60s"}
+                    command: [e2ehelper, alloc, "8"]
+                    budget: {latency: {p99: "<= 60s"}}
             report:
               outputs:
                 - {format: json, path: out/report.json}
@@ -721,37 +722,38 @@ scenarios:
           file: units.himorime.yaml
           content: |
             version: "1"
-            suite: {name: units}
+            name: units
             benchmarks:
               - name: wrong
                 metrics:
                   memory: true
                   throughput:
                     work: {value: 100, unit: records}
-                commands: {app: {command: [e2ehelper, sleep, 1ms]}}
-                budget:
+                commands:
                   app:
-                    memory: {peak_rss: {max: "<= 64mib"}}
-                    latency: {p100: "< 1s", median: ">= 1ms"}
+                    command: [e2ehelper, sleep, 1ms]
+                    budget:
+                      peak_rss: {max: "<= 64mib"}
+                      latency: {p100: "< 1s", median: ">= 1ms"}
       - fixture:
           file: rate.himorime.yaml
           content: |
             version: "1"
-            suite: {name: rate}
+            name: rate
             benchmarks:
               - name: bytes for records
                 metrics:
                   throughput:
                     work: {value: 100, unit: records}
-                commands: {app: {command: [e2ehelper, sleep, 1ms]}}
-                budget:
+                commands:
                   app:
-                    throughput: {median: ">= 5MiB/s"}
+                    command: [e2ehelper, sleep, 1ms]
+                    budget: {throughput: {median: ">= 5MiB/s"}}
       - fixture:
           file: work.himorime.yaml
           content: |
             version: "1"
-            suite: {name: work}
+            name: work
             benchmarks:
               - name: zero
                 metrics:
@@ -761,23 +763,23 @@ scenarios:
                 commands: {app: {command: [e2ehelper, sleep, 1ms]}}
       - fixture:
           file: broken.himorime.yaml
-          content: "version: \"1\"\nsuite: {name: broken\nbenchmarks: [\n"
+          content: "version: \"1\"\nname: broken\nbenchmarks: [\n"
       - run:
           command: himorime validate units.himorime.yaml
       - assert:
           exit_code: 2
           stderr:
             contains:
-              - "units.himorime.yaml:12:34: benchmarks[0].budget.app.memory.peak_rss.max: invalid budget"
-              - 'benchmarks[0].budget.app.latency.p100: unknown aggregation "p100"'
-              - "benchmarks[0].budget.app.latency.median: invalid budget"
+              - "units.himorime.yaml:13:27: benchmarks[0].commands.app.budget.peak_rss.max: invalid budget"
+              - 'units.himorime.yaml:14:27: benchmarks[0].commands.app.budget.latency.p100: unknown aggregation "p100"'
+              - "units.himorime.yaml:14:43: benchmarks[0].commands.app.budget.latency.median: invalid budget"
               - "himorime: the suite is invalid; nothing was run"
       - run:
           command: himorime validate rate.himorime.yaml
       - assert:
           exit_code: 2
           stderr:
-            contains: "benchmarks[0].budget.app.throughput.median: the budget is in bytes/s but the declared work unit is records"
+            contains: "benchmarks[0].commands.app.budget.throughput.median: the budget is in bytes/s but the declared work unit is records"
       - run:
           command: himorime run work.himorime.yaml
       - assert:
@@ -796,7 +798,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: timeout}
+            name: timeout
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: hangs
@@ -810,7 +812,7 @@ scenarios:
           timeout: 60s
       - assert:
           exit_code: 4
-          stdout: {contains: "hangs / spawner: timeout: timed out after 500ms and was stopped"}
+          stdout: {contains: ["hangs / spawner (head)", "timeout: timed out after 500ms and was stopped"]}
       - run:
           command: e2ehelper sleep 3s
       - assert:
@@ -824,7 +826,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: shell}
+            name: shell
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: quoted

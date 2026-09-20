@@ -17,7 +17,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: separated}
+            name: separated
             build: {command: [e2ehelper, copy, program.txt, "$${artifact}"]}
             defaults: {warmup: 0, runs: 10, regression: {max_cv: 0.05}}
             benchmarks:
@@ -74,7 +74,7 @@ scenarios:
           file: himorime.yaml
           content: |
             version: "1"
-            suite: {name: legacy}
+            name: legacy
             benchmarks:
               - name: tool
                 metrics: {throughput: {work: {value: 1000}}}
@@ -92,7 +92,7 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: floor}
+            name: floor
             defaults: {warmup: 1, runs: 10, regression: {latency: {gate: false}}}
             benchmarks:
               - name: tiny
@@ -121,15 +121,15 @@ scenarios:
           file: repo/himorime.yaml
           content: |
             version: "1"
-            suite: {name: required floor budget}
+            name: required floor budget
             defaults: {warmup: 1, runs: 10}
             benchmarks:
               - name: tiny
                 metrics: {memory: true}
-                commands: {tool: {command: ["true"]}}
-                budget:
+                commands:
                   tool:
-                    memory: {peak_rss: {max: "<= 1KiB"}}
+                    command: ["true"]
+                    budget: {peak_rss: {max: "<= 1KiB"}}
       - run: {command: git init -q -b main, cwd: repo}
       - run: {command: git add -A, cwd: repo}
       - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}

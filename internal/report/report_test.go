@@ -289,8 +289,8 @@ func TestGeometricMeanRun(t *testing.T) {
 	}
 	var out bytes.Buffer
 	_ = WriteTerminal(&out, judge(ModeRun, false, mk("small", time.Millisecond, 2*time.Millisecond), missing), TerminalOptions{})
-	if !strings.Contains(out.String(), `no geometric mean: command "b" is missing from benchmark "partial"`) {
-		t.Fatalf("the terminal report must explain the missing score:\n%s", out.String())
+	if !strings.Contains(out.String(), "partial / a") || strings.Contains(out.String(), "1.00x") {
+		t.Fatalf("the compact terminal report is malformed:\n%s", out.String())
 	}
 	noBaseline := runResult("nb", "", map[string][]time.Duration{"a": samples(time.Millisecond, 10, 0), "b": samples(3*time.Millisecond, 10, 0)}, "a", "b")
 	r = judge(ModeRun, false, mk("small", time.Millisecond, 2*time.Millisecond), noBaseline)
@@ -377,9 +377,11 @@ func TestTerminalRunTable(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		"BENCHMARK  COMMAND   MEDIAN     MEAN  STDDEV  RELATIVE  RESULT",
-		"df small   jsonize   1.82ms   1.82ms     0ns     1.00x  PASS",
-		"df small   jc       28.41ms  28.41ms     0ns    15.61x  PASS",
+		"TARGET",
+		"df small / jsonize",
+		"df small / jc",
+		"1.82ms",
+		"28.41ms (15.61x vs baseline)",
 		"2 passed · 1 benchmark · seed 42 · exit 0",
 	} {
 		if !strings.Contains(got, want) {
@@ -396,6 +398,41 @@ func TestTerminalRunTable(t *testing.T) {
 	}
 }
 
+func TestTerminalColorDoesNotColorResultLikeTarget(t *testing.T) {
+	t.Parallel()
+	r := judge(ModeRun, false, runResult("PASS", "", map[string][]time.Duration{"tool": samples(time.Millisecond, 5, 0)}, "tool"))
+	var out bytes.Buffer
+	if err := WriteTerminal(&out, r, TerminalOptions{Color: true}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(out.String(), ansiGreen) != 1 || !strings.Contains(out.String(), "PASS / tool") {
+		t.Fatalf("target/result coloring is ambiguous:\n%q", out.String())
+	}
+}
+
+func TestCompactReportPreservesBothSideErrors(t *testing.T) {
+	t.Parallel()
+	r := &Report{Mode: ModeCompare, Suites: []Suite{{Name: "suite", Benchmarks: []Benchmark{{Name: "case", Commands: []Command{{Name: "tool", Result: ResultError, Base: &Measurement{Error: &Error{Kind: "exit_code", Message: "base failed"}}, Head: &Measurement{Error: &Error{Kind: "timeout", Message: "head timed out"}}}}}}}}}
+	var terminal bytes.Buffer
+	if err := WriteTerminal(&terminal, r, TerminalOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"case / tool (head)", "case / tool (base)", "head timed out", "base failed"} {
+		if !strings.Contains(terminal.String(), want) {
+			t.Errorf("terminal lacks %q:\n%s", want, terminal.String())
+		}
+	}
+	var summary bytes.Buffer
+	if err := WriteGitHubSummary(&summary, r); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"case / tool (head)", "case / tool (base)"} {
+		if !strings.Contains(summary.String(), want) {
+			t.Errorf("summary lacks %q:\n%s", want, summary.String())
+		}
+	}
+}
+
 func TestTerminalCompareTable(t *testing.T) {
 	t.Parallel()
 	r := judge(ModeCompare, false,
@@ -407,10 +444,11 @@ func TestTerminalCompareTable(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		"BENCHMARK     BASE     HEAD      DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT",
-		"df small    1.84ms   1.89ms  +50.00µs   +2.7%      100.0%       +10%  PASS",
-		"df large   14.20ms  16.41ms   +2.21ms  +15.6%      100.0%       +10%  REGRESSION",
-		"geometric mean over 2 cases (head relative to base): head/base 1.09x",
+		"TARGET",
+		"df small / tool",
+		"1.84ms → 1.89ms (+2.7%)",
+		"14.20ms → 16.41ms (+15.6%)",
+		"REGRESSION",
 		"1 passed, 1 regressed",
 	} {
 		if !strings.Contains(got, want) {
@@ -552,7 +590,7 @@ func TestGitHubSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := out.String()
-	for _, want := range []string{"| Benchmark | Metric | Base | Head |", "| slow / tool |", "REGRESSION", "| Seed | 42 |"} {
+	for _, want := range []string{"| Target | Metric | Value | Result | Reason |", "slow / tool", "REGRESSION", "| Seed | 42 |"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("summary lacks %q:\n%s", want, s)
 		}
@@ -560,22 +598,20 @@ func TestGitHubSummary(t *testing.T) {
 	ok := judge(ModeRun, false, runResult("x", "", map[string][]time.Duration{"a": samples(time.Millisecond, 10, 0)}, "a"))
 	out.Reset()
 	_ = WriteGitHubSummary(&out, ok)
-	if !strings.Contains(out.String(), "| x / a | head | Latency |") {
+	if !strings.Contains(out.String(), "| x / a | Latency (median) |") {
 		t.Fatalf("summary = %s", out.String())
 	}
 }
 
-func TestGitHubReportContainsOnlyTables(t *testing.T) {
+func TestGitHubReportStartsWithCompactTable(t *testing.T) {
 	t.Parallel()
 	r := judge(ModeCompare, false, compareResult("slow", samples(10*time.Millisecond, 20, 0), samples(30*time.Millisecond, 20, 0)))
 	var out bytes.Buffer
 	if err := WriteGitHubSummary(&out, r); err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(out.String(), "\n") {
-		if line != "" && (!strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|")) {
-			t.Errorf("non-table content: %q", line)
-		}
+	if !strings.HasPrefix(out.String(), "| Target | Metric | Value | Result | Reason |\n") {
+		t.Fatalf("summary does not start with its compact result table:\n%s", out.String())
 	}
 	for _, field := range []string{"Base", "Head", "Change", "Interval", "Tolerance", "Result", "Reason", "Minimum difference", "OS/architecture", "Seed"} {
 		if !strings.Contains(out.String(), field) {
@@ -704,6 +740,12 @@ func TestWriteDispatch(t *testing.T) {
 	if err := WriteCSV(failingWriter{}, r); err == nil {
 		t.Error("a CSV write error was swallowed")
 	}
+	if err := WriteTerminal(failingWriter{}, r, TerminalOptions{}); err == nil {
+		t.Error("a terminal write error was swallowed")
+	}
+	if err := WriteGitHubSummary(failingWriter{}, r); err == nil {
+		t.Error("a GitHub summary write error was swallowed")
+	}
 }
 
 type failingWriter struct{}
@@ -786,8 +828,9 @@ func TestRenderSuiteNewInHead(t *testing.T) {
 	}
 	addedText = "suite: added" + addedText
 	for _, want := range []string{
-		"suite: added (bench/himorime.yaml)\n" + line + "\nlatency\nBENCHMARK  COMMAND  MEDIAN",
-		"\nbudgets\n",
+		"suite: added (bench/himorime.yaml)\n" + line + "\nTARGET",
+		"fresh / app",
+		"latency median",
 		"PASS",
 	} {
 		if !strings.Contains(addedText, want) {

@@ -1,0 +1,15 @@
+coverage:
+  paths:
+    - cover.out
+  acceptable: 80%
+diff:
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}
+comment:
+  if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == env.GITHUB_REPOSITORY
+summary:
+  if: true
+report:
+  if: is_default_branch
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}

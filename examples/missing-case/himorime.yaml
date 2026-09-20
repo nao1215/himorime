@@ -4,9 +4,8 @@
 # https://nao1215.github.io/himorime/cookbook/#understand-the-geometric-mean
 version: "1"
 
-suite:
-  name: missing case
-  description: The readall implementation has no measurement for the large case.
+name: missing case
+description: The readall implementation has no measurement for the large case.
 
 build:
   command: [go, build, -o, "${artifact}", ../tools/wordcount]

@@ -10,9 +10,8 @@
 # reason to fail this repository's CI.
 version: "1"
 
-suite:
-  name: json processors
-  description: jq, gojq and jaq writing one field of every line of generated JSON Lines to a file.
+name: json processors
+description: jq, gojq and jaq writing one field of every line of generated JSON Lines to a file.
 
 build:
   command: [go, build, -trimpath, -o, "${artifact}", ./gen]
