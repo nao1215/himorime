@@ -27,7 +27,7 @@ jobs:
         with:
           go-version: stable
       # Installs a prebuilt, checksum-verified himorime release.
-      - uses: nao1215/setup-himorime@30710690b8b2dc8c61df8bf289f5bb899af3fbfa # v0.1.2 + automatic comments
+      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
       # Compares the pull request base and head, writes a job summary and
       # annotations, and saves JSON for setup-himorime's automatic comment.
       - run: himorime ci --format json --output "$RUNNER_TEMP/himorime.json"

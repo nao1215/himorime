@@ -32,7 +32,7 @@ jobs:
         with:
           go-version: stable
       # The prebuilt atago release, verified and put on PATH by its action.
-      - uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
+      - uses: nao1215/setup-atago@7cae89595fcbba334db0fe16fc9a24ed5b0a3fea # v0.1.2
         with:
           version: ${{ env.ATAGO_VERSION }}
       - name: run the E2E suite
