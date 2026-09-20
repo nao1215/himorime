@@ -23,10 +23,20 @@ const root = "../.."
 // blocks, and himorime command lines.
 func docFiles(t *testing.T) []string {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join(root, "website", "content", "*.md"))
+	var files []string
+	err := filepath.WalkDir(filepath.Join(root, "website", "content"), func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
+			files = append(files, path)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	sort.Strings(files)
 	return append(files, filepath.Join(root, "README.md"))
 }
 
@@ -148,19 +158,70 @@ func commandLines(text string, isYAML bool) []string {
 	return out
 }
 
-// TestCookbookRecipesAreRun ties the Cookbook to the E2E suite: every recipe
-// heading has a scenario of the same name in cookbook.atago.yaml, every
-// example directory is shown on the page, and every recipe link written in an
-// example points at a heading that exists.
+// TestCookbookRecipesAreRun ties nested Cookbook recipes to the E2E suite:
+// every recipe page title has a scenario of the same name, every example is
+// shown, and legacy links from examples still resolve through index headings.
 func TestCookbookRecipesAreRun(t *testing.T) {
 	t.Parallel()
-	page := read(t, filepath.Join(root, "website", "content", "cookbook.md"))
-	headings := map[string]bool{}
-	anchors := map[string]bool{}
-	for _, line := range strings.Split(page, "\n") {
-		if h, ok := strings.CutPrefix(line, "## "); ok {
-			headings[h] = true
-			anchors[anchor(h)] = true
+	index := read(t, filepath.Join(root, "website", "content", "cookbook.md"))
+	recipeRoot := filepath.Join(root, "website", "content", "cookbook")
+	var recipeFiles []string
+	err := filepath.WalkDir(recipeRoot, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() && entry.Name() == "index.md" {
+			recipeFiles = append(recipeFiles, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recipeFiles) < 10 {
+		t.Fatalf("found only %d nested recipe pages", len(recipeFiles))
+	}
+	sort.Strings(recipeFiles)
+	recipeTitles := map[string]bool{}
+	for _, path := range recipeFiles {
+		text := read(t, path)
+		m := regexp.MustCompile(`(?m)^title: (.+)$`).FindStringSubmatch(text)
+		if m == nil {
+			t.Errorf("%s has no front matter title", path)
+			continue
+		}
+		title := m[1]
+		if recipeTitles[title] {
+			t.Errorf("duplicate Cookbook recipe title %q", title)
+		}
+		recipeTitles[title] = true
+	}
+	indexSlugs := map[string]bool{}
+	indexLinks := regexp.MustCompile(`\]\(([a-z0-9-]+)/\)`)
+	for _, m := range indexLinks.FindAllStringSubmatch(index, -1) {
+		slug := m[1]
+		target := filepath.Join(recipeRoot, slug, "index.md")
+		if _, err := os.Stat(target); err != nil {
+			t.Errorf("Cookbook index link %q has no recipe page %s", slug, target)
+			continue
+		}
+		indexSlugs[slug] = true
+	}
+	indexAnchors := map[string]bool{}
+	indexHeadings := regexp.MustCompile(`(?m)^### \[([^]]+)\]\(([a-z0-9-]+)/\)$`)
+	for _, m := range indexHeadings.FindAllStringSubmatch(index, -1) {
+		if anchor(m[1]) != m[2] {
+			t.Errorf("Cookbook index heading %q does not preserve anchor #%s", m[1], m[2])
+		}
+		indexAnchors[anchor(m[1])] = true
+	}
+	if len(indexSlugs) != len(recipeFiles) {
+		t.Errorf("Cookbook index links %d recipe pages, want %d", len(indexSlugs), len(recipeFiles))
+	}
+	for _, path := range recipeFiles {
+		slug := filepath.Base(filepath.Dir(path))
+		if !indexSlugs[slug] {
+			t.Errorf("nested recipe %s is missing from the Cookbook index", slug)
 		}
 	}
 	var spec struct {
@@ -175,17 +236,14 @@ func TestCookbookRecipesAreRun(t *testing.T) {
 	for _, s := range spec.Scenarios {
 		scenarios[s.Name] = true
 	}
-	for h := range headings {
-		if h == "Find a recipe" {
-			continue
-		}
-		if !scenarios[h] {
-			t.Errorf("cookbook recipe %q has no scenario of the same name in test/e2e/atago/cookbook.atago.yaml", h)
+	for title := range recipeTitles {
+		if !scenarios[title] {
+			t.Errorf("cookbook recipe %q has no scenario of the same name in test/e2e/atago/cookbook.atago.yaml", title)
 		}
 	}
 	for s := range scenarios {
-		if !headings[s] {
-			t.Errorf("cookbook scenario %q has no recipe heading on the Cookbook page", s)
+		if !recipeTitles[s] {
+			t.Errorf("cookbook scenario %q has no nested recipe page with that title", s)
 		}
 	}
 
@@ -194,21 +252,133 @@ func TestCookbookRecipesAreRun(t *testing.T) {
 		t.Fatalf("found only %d example suites", len(dirs))
 	}
 	recipeLink := regexp.MustCompile(`https://nao1215\.github\.io/himorime/cookbook/#([a-z0-9-]+)`)
+	docText := map[string]string{}
+	for _, path := range docFiles(t) {
+		docText[path] = read(t, path)
+	}
 	for _, file := range dirs {
 		rel, _ := filepath.Rel(root, file)
 		rel = filepath.ToSlash(rel)
-		if !strings.Contains(page, "<!-- example: "+rel+" -->") {
+		shown := false
+		for _, page := range docText {
+			shown = shown || strings.Contains(page, "<!-- example: "+rel+" -->")
+		}
+		if !shown {
 			t.Errorf("%s is not shown on the Cookbook page", rel)
 		}
 		for _, m := range recipeLink.FindAllStringSubmatch(read(t, file), -1) {
-			if !anchors[m[1]] {
-				t.Errorf("%s links to cookbook anchor #%s, which no heading produces", rel, m[1])
+			if !indexAnchors[m[1]] {
+				t.Errorf("%s links to cookbook anchor #%s, which the index does not provide", rel, m[1])
 			}
 		}
 		if _, err := config.Load(file); err != nil {
 			t.Errorf("%s is not a valid suite: %v", rel, err)
 		}
 	}
+}
+
+// TestNestedCookbookLinks resolves links written in recipe pages. Relative and
+// site-root links must name a documentation page, and every fragment must be
+// produced by a heading in that page. External links are outside this check.
+func TestNestedCookbookLinks(t *testing.T) {
+	t.Parallel()
+	recipeRoot := filepath.Join(root, "website", "content", "cookbook")
+	var files []string
+	if err := filepath.WalkDir(recipeRoot, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() && entry.Name() == "index.md" {
+			files = append(files, path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	linkRE := regexp.MustCompile(`\[[^]]+\]\(([^)]+)\)`)
+	for _, from := range files {
+		text := read(t, from)
+		for _, match := range linkRE.FindAllStringSubmatch(text, -1) {
+			target := strings.TrimSpace(match[1])
+			if target == "" || strings.HasPrefix(target, "http:") || strings.HasPrefix(target, "https:") || strings.HasPrefix(target, "mailto:") || strings.HasPrefix(target, "//") {
+				continue
+			}
+			pageTarget, fragment, ok := splitDocLink(target)
+			if !ok {
+				continue
+			}
+			page := resolveDocLink(root, from, pageTarget)
+			if page == "" {
+				t.Errorf("%s: cannot resolve documentation link %q", from, target)
+				continue
+			}
+			if _, err := os.Stat(page); err != nil {
+				t.Errorf("%s: documentation link %q resolves to missing page %s", from, target, page)
+				continue
+			}
+			if fragment != "" && !markdownAnchors(read(t, page))[fragment] {
+				t.Errorf("%s: documentation link %q has no heading anchor #%s in %s", from, target, fragment, page)
+			}
+		}
+	}
+}
+
+func splitDocLink(target string) (string, string, bool) {
+	parts := strings.SplitN(target, "#", 2)
+	page := parts[0]
+	fragment := ""
+	if len(parts) == 2 {
+		fragment = parts[1]
+	}
+	if page == "" && fragment == "" {
+		return "", "", false
+	}
+	return page, fragment, true
+}
+
+func resolveDocLink(repo, from, target string) string {
+	if strings.HasPrefix(target, "/") {
+		path := strings.TrimPrefix(strings.TrimSuffix(target, "/"), "/")
+		if path == "cookbook" {
+			return filepath.Join(repo, "website", "content", "cookbook.md")
+		}
+		if rest, ok := strings.CutPrefix(path, "cookbook/"); ok {
+			return filepath.Join(repo, "website", "content", "cookbook", filepath.FromSlash(rest), "index.md")
+		}
+		return filepath.Join(repo, "website", "content", filepath.FromSlash(path)+".md")
+	}
+	if target == "" {
+		return from
+	}
+	path := filepath.Join(filepath.Dir(from), filepath.FromSlash(target))
+	if strings.HasSuffix(target, "/") {
+		return filepath.Join(path, "index.md")
+	}
+	if filepath.Ext(path) == "" {
+		return path + ".md"
+	}
+	return path
+}
+
+func markdownAnchors(text string) map[string]bool {
+	anchors := map[string]bool{}
+	inFence := false
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		trimmed := strings.TrimLeft(line, "#")
+		if trimmed == line || !strings.HasPrefix(trimmed, " ") {
+			continue
+		}
+		title := strings.TrimSpace(trimmed)
+		anchors[anchor(title)] = true
+	}
+	return anchors
 }
 
 // anchor mirrors Hugo's default heading anchors for the headings used here.

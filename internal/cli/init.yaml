@@ -1,53 +1,15 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
-#
-# A himorime benchmark suite. Replace the example with the programs you want to
-# measure, then run:
-#
-#   himorime validate
-#   himorime run
-#
+# A runnable first suite. Replace git with the command you want to measure.
+# Run: himorime validate himorime.yaml && himorime run himorime.yaml
 # Reference: https://nao1215.github.io/himorime/configuration/
 version: "1"
 
 name: my benchmarks
-description: Startup time of the tools this project depends on.
-
-defaults:
-  warmup: 2
-  # Remove runs to measure adaptively (at least 10 runs and 2s per command).
-  runs: 10
 
 benchmarks:
   - name: git startup
-    tags: [smoke]
     commands:
       git:
-        # A list of arguments runs without a shell. Use a string together
-        # with `shell: true` when you need pipes or redirection.
         command: [git, --version]
-    # Latency is always measured. Uncomment to also measure CPU time and
-    # peak memory of the process tree, and give them budgets:
-    # metrics:
-    #   cpu: true
-    #   memory: true
         budget:
           latency: {median: "< 1s"}
-          # latency: {p95: "<= 2s"}
-          # cpu_total: {median: "<= 1s"}
-          # peak_rss: {max: "<= 256MiB"}
-
-# To compare the working tree with a Git revision (himorime compare --against
-# main), add a build that writes ${artifact} and measure that artifact:
-#
-# build:
-#   command: [go, build, -o, "${artifact}", .]
-#
-# benchmarks:
-#   - name: help
-#     commands:
-#       mytool:
-#         command: ["${artifact}", --help]
-#     regression:
-#       confidence: 0.95
-#       latency:
-#         max_percent: 10

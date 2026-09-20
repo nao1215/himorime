@@ -32,6 +32,8 @@ type App struct {
 	Now       func() time.Time
 	// StdoutIsTerminal reports whether stdout is an interactive terminal.
 	StdoutIsTerminal bool
+	// StderrIsTerminal reports whether stderr is an interactive terminal.
+	StderrIsTerminal bool
 	// Capabilities reports what this platform can measure; the platform's
 	// own when nil. Tests replace it to exercise unsupported metrics.
 	Capabilities func() (cpu, memory error)
@@ -69,6 +71,7 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		ReadFile:         os.ReadFile,
 		Now:              time.Now,
 		StdoutIsTerminal: isTerminal(stdout),
+		StderrIsTerminal: isTerminal(stderr),
 	}
 	return app.Run(ctx, args)
 }

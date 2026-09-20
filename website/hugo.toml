@@ -21,7 +21,7 @@ startLevel = 2
 endLevel = 3
 
 [[menus.main]]
-name = "Getting started"
+name = "Start"
 pageRef = "/getting-started"
 weight = 10
 
@@ -31,32 +31,32 @@ pageRef = "/install"
 weight = 15
 
 [[menus.main]]
-name = "Configuration"
+name = "Write a suite"
 pageRef = "/configuration"
 weight = 20
 
 [[menus.main]]
-name = "Metrics"
+name = "Understand metrics"
 pageRef = "/metrics"
 weight = 22
 
 [[menus.main]]
-name = "Reports"
+name = "Read reports"
 pageRef = "/reports"
 weight = 30
 
 [[menus.main]]
-name = "Regressions"
+name = "Detect regressions"
 pageRef = "/regression-detection"
 weight = 35
 
 [[menus.main]]
-name = "GitHub Actions"
+name = "Run in CI"
 pageRef = "/github-actions"
 weight = 40
 
 [[menus.main]]
-name = "Cookbook"
+name = "Find a recipe"
 pageRef = "/cookbook"
 weight = 45
 
@@ -71,7 +71,7 @@ pageRef = "/reference"
 weight = 55
 
 [[menus.main]]
-name = "Comparison"
+name = "Choose a tool"
 pageRef = "/comparison"
 weight = 60
 
