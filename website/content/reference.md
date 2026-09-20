@@ -118,6 +118,19 @@ Like compare, with CI defaults: no colors, and a Markdown summary appended to $G
 | `--tag TAG` | select benchmarks with this tag (repeatable, or comma-separated) |
 | `--warmup N` | run n warmup runs per command, overriding the suite |
 
+### report
+
+```text
+himorime report [flags] INPUT
+```
+
+Validates a saved JSON report against the current embedded schema and renders its stored samples, bounds, verdicts and summary. It never runs commands or recomputes results. The default format is table; --format markdown writes GitHub-flavored Markdown.
+
+| Flag | Description |
+|---|---|
+| `--format FORMAT` | report format: table or markdown (default table) |
+| `--output FILE` | write the report to this file instead of stdout |
+
 ### version
 
 ```text

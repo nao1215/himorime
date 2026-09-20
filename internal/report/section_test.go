@@ -152,7 +152,7 @@ func TestUpdateMarkdownSection(t *testing.T) {
 	if !ok || tail != "\n\n## Notes\n" {
 		t.Fatalf("text after the section changed:\n%s", text)
 	}
-	if !strings.HasPrefix(body, "\n### suite \\| one\n\n") || !strings.HasSuffix(body, "- jc: jc version 1.25.7\n\n") || strings.Contains(body, "stale") {
+	if !strings.HasPrefix(body, "\n### suite \\| one\n\n") || !strings.HasSuffix(body, "- jc: jc version 1.25.7\n\n1 passed · 1 benchmark · seed 42 · exit 0\n\n") || strings.Contains(body, "stale") {
 		t.Fatalf("section body:\n%s", body)
 	}
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 && runtime.GOOS != "windows" {

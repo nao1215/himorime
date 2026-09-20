@@ -74,6 +74,8 @@ func writeMarkdownBody(sb *strings.Builder, r *Report, level int) {
 		markdownNotes(sb, mode, s)
 	}
 	markdownEnvironment(sb, r)
+	sb.WriteString("\n")
+	summaryLine(sb, r)
 }
 
 // markdownRun writes the tables of a plain run. A metric group table lists

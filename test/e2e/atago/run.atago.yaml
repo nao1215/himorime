@@ -274,7 +274,7 @@ scenarios:
             contains:
               - "# Compare\n\n## Speed\n\nWritten by hand.\n\n<!-- himorime:begin speed -->\n\n### sections\n\n#### Latency\n\n| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative |\n"
               - "#### Throughput\n\n| Benchmark | Command | Median | Mean | Min | P95 |\n|---|---|--:|--:|--:|--:|\n| records | helper |"
-              - ", seed 3.\n\n- helper: e2ehelper 1.0\n\n<!-- himorime:end speed -->\n\n## License\n\nMIT\n"
+              - ", seed 3.\n\n- helper: e2ehelper 1.0\n\n2 passed · 2 benchmarks · seed 3 · exit 0\n\n<!-- himorime:end speed -->\n\n## License\n\nMIT\n"
       - assert:
           file:
             path: docs/compare.md

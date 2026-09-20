@@ -102,6 +102,16 @@ func Commands() []Command {
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "ci", args) },
 		},
 		{
+			Name:  "report",
+			Usage: "himorime report [flags] INPUT",
+			Short: "Render a saved JSON report",
+			Long: "Validates a saved JSON report against the current embedded schema and renders its stored " +
+				"samples, bounds, verdicts and summary. It never runs commands or recomputes results. " +
+				"The default format is table; --format markdown writes GitHub-flavored Markdown.",
+			Flags: reportFlags,
+			run:   runReport,
+		},
+		{
 			Name:  "version",
 			Usage: "himorime version",
 			Short: "Print the himorime version",

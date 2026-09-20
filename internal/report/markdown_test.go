@@ -129,12 +129,12 @@ func TestMarkdownTools(t *testing.T) {
 	t.Parallel()
 	r := mixedReport(t, nil)
 	md := markdownOf(t, r)
-	if !strings.HasSuffix(md, ", seed 42.\n") {
-		t.Errorf("without tools the footer is one line:\n%s", md)
+	if !strings.Contains(md, ", seed 42.\n") || !strings.HasSuffix(md, "exit 0\n") {
+		t.Errorf("without tools the footer and summary are present:\n%s", md)
 	}
 	r.Environment.Tools = []Tool{{Name: "jc", Version: "jc version 1.25.7"}, {Name: "jo", Version: "1.9"}}
 	md = markdownOf(t, r)
-	if !strings.HasSuffix(md, ", seed 42.\n\n- jc: jc version 1.25.7\n- jo: 1.9\n") {
+	if !strings.Contains(md, ", seed 42.\n\n- jc: jc version 1.25.7\n- jo: 1.9\n\n") || !strings.HasSuffix(md, "exit 0\n") {
 		t.Errorf("tools footer:\n%s", md)
 	}
 	var term bytes.Buffer
