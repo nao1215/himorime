@@ -112,6 +112,13 @@ func TestReadPreservesWaivedRequiredBudgetAndPassingExit(t *testing.T) {
 	if r.Summary.ExitCode != 0 || r.Suites[0].Benchmarks[0].Commands[0].Budgets[0].Status != BudgetSkipped {
 		t.Fatalf("waived budget changed the saved outcome: summary=%+v budget=%+v", r.Summary, r.Suites[0].Benchmarks[0].Commands[0].Budgets[0])
 	}
+	var beforeTable, beforeMarkdown bytes.Buffer
+	if err := Write(&beforeTable, config.FormatTable, r, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := Write(&beforeMarkdown, config.FormatMarkdown, r, false); err != nil {
+		t.Fatal(err)
+	}
 	data, err := json.Marshal(r)
 	if err != nil {
 		t.Fatal(err)
@@ -123,5 +130,15 @@ func TestReadPreservesWaivedRequiredBudgetAndPassingExit(t *testing.T) {
 	c := got.Suites[0].Benchmarks[0].Commands[0]
 	if got.Summary.ExitCode != 0 || c.Budgets[0].Status != BudgetSkipped || c.Budgets[0].Reason != "memory collection waived" {
 		t.Fatalf("waived budget was not preserved: summary=%+v budget=%+v", got.Summary, c.Budgets[0])
+	}
+	var afterTable, afterMarkdown bytes.Buffer
+	if err := Write(&afterTable, config.FormatTable, got, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := Write(&afterMarkdown, config.FormatMarkdown, got, false); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(beforeTable.Bytes(), afterTable.Bytes()) || !bytes.Equal(beforeMarkdown.Bytes(), afterMarkdown.Bytes()) {
+		t.Fatal("waived report rendering changed after a validated save/load round trip")
 	}
 }
