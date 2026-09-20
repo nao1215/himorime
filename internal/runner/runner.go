@@ -51,6 +51,9 @@ type Runner struct {
 	WarmupOverride *int
 	// Log receives progress lines. nil discards them.
 	Log io.Writer
+	// Progress receives benchmark round updates after command execution. nil
+	// disables the interactive progress line.
+	Progress func(Progress)
 	// Clock measures durations; time.Now when nil.
 	Clock proc.Clock
 	// Environ is the base environment of every process; os.Environ when nil.
@@ -63,6 +66,16 @@ type Runner struct {
 	// Capabilities reports what the platform can measure;
 	// proc.Capabilities when nil.
 	Capabilities func() (cpu, memory error)
+}
+
+// Progress describes the state of the benchmark's measuring loop. Runs is
+// zero for adaptive benchmarks, whose final total is not known in advance.
+type Progress struct {
+	Benchmark   string
+	Warmups     int
+	WarmupTotal int
+	Rounds      int
+	Runs        int
 }
 
 func (r *Runner) exec(ctx context.Context, s proc.Spec) (proc.Result, error) {
@@ -116,6 +129,12 @@ func (r *Runner) logf(format string, args ...any) {
 		return
 	}
 	fmt.Fprintf(r.Log, "himorime: "+format+"\n", args...)
+}
+
+func (r *Runner) progress(p Progress) {
+	if r.Progress != nil {
+		r.Progress(p)
+	}
 }
 
 func (r *Runner) environ() []string {
@@ -252,16 +271,18 @@ func (r *Runner) Measure(ctx context.Context, b config.Benchmark, sides []Side) 
 		mode = fmt.Sprintf("adaptive runs (min %d, max %d, min time %s)", minRuns, b.MaxRuns, b.MinTime)
 	}
 	r.logf("benchmark %q: %s, %d warmup, %s", b.Name, plural(len(units), "measurement unit"), warmup, mode)
+	r.progress(Progress{Benchmark: b.Name, WarmupTotal: warmup, Runs: runs})
 
 	l := &loop{
 		r: r, ctx: ctx, b: b, states: states, units: units,
 		rng: rand.New(rand.NewPCG(r.Seed, nameHash(b.Name))), //nolint:gosec // the order must be reproducible from --seed
 	}
-	for range warmup {
+	for warmups := 0; warmups < warmup; warmups++ {
 		if _, f := l.round(false); f != nil {
 			res.Failure = f
 			return res
 		}
+		r.progress(Progress{Benchmark: b.Name, Warmups: warmups + 1, WarmupTotal: warmup, Runs: runs})
 	}
 	for round := 0; !done(units, runs, minRuns, b, round); round++ {
 		active, f := l.round(true)
@@ -273,6 +294,7 @@ func (r *Runner) Measure(ctx context.Context, b config.Benchmark, sides []Side) 
 			break
 		}
 		res.Rounds = round + 1
+		r.progress(Progress{Benchmark: b.Name, Warmups: warmup, WarmupTotal: warmup, Rounds: res.Rounds, Runs: runs})
 	}
 	r.logf("benchmark %q: finished after %s", b.Name, plural(res.Rounds, "round"))
 	return res

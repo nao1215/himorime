@@ -1,129 +1,33 @@
-[![UnitTest](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml) [![E2E](https://github.com/nao1215/himorime/actions/workflows/e2e.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/e2e.yml) [![tested with atago](https://img.shields.io/badge/tested%20with-atago-7c3aed?logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTMuNiA0LjIgMTEuOSAxMmwtOC4zIDcuOC0xLjktMi4yTDcuOSAxMiAxLjcgNi40eiIvPjxyZWN0IGZpbGw9IiNmZmYiIHg9IjEyLjYiIHk9IjE3LjIiIHdpZHRoPSI5LjciIGhlaWdodD0iMi44IiByeD0iMS40Ii8%2BPC9zdmc%2B&logoColor=white)](https://github.com/nao1215/atago) [![measured with himorime](https://img.shields.io/badge/measured%20with-himorime-d9480f)](https://github.com/nao1215/himorime) [![Lint](https://github.com/nao1215/himorime/actions/workflows/lint.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/lint.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/nao1215/himorime.svg)](https://pkg.go.dev/github.com/nao1215/himorime)
-
+[![UnitTest](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml) [![E2E](https://github.com/nao1215/himorime/actions/workflows/e2e.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/e2e.yml) [![Lint](https://github.com/nao1215/himorime/actions/workflows/lint.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/lint.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/nao1215/himorime.svg)](https://pkg.go.dev/github.com/nao1215/himorime)
 
 <p align="center">
   <img src="./doc/images/himorime-logo.jpeg" alt="himorime logo" width="600" />
 </p>
 
-himorime measures how fast and how lean a command-line program is: latency, throughput, CPU time and peak memory, from a YAML file kept in your repository. It runs your actual binary, in any language, checks the numbers against budgets, and compares a change with its Git base revision, so a pull request that makes the program slower fails CI. The same file and command work on your laptop and in GitHub Actions.
-
-himorime is the sister project of [atago](https://github.com/nao1215/atago): atago tests what a CLI does, himorime tests how it performs.
-
-Documentation: https://nao1215.github.io/himorime/ · [Comparison](https://nao1215.github.io/himorime/comparison/)
+himorime measures a command-line program from a YAML suite, checks latency and optional throughput, CPU and peak RSS budgets, and compares revisions for regressions.
 
 ## First run
 
-If you have Go and Git, paste this. `init` writes a suite that measures `git --version`, and `run` measures it:
-
-```shell
-go run github.com/nao1215/himorime@latest init
-go run github.com/nao1215/himorime@latest run
+```console
+$ go run github.com/nao1215/himorime@latest init
+$ go run github.com/nao1215/himorime@latest run
 ```
+
+`init` writes one runnable `git --version` case with a latency budget and the [JSON Schema](https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json) URL for editor completion. Replace the command with your tool, then keep the suite in your repository.
+
+When developing himorime from a checkout, use `go run .`; a released `@latest` binary and the `main` schema can differ before a release. See [Configuration migration](https://nao1215.github.io/himorime/configuration/#migrating-from-the-previous-layout).
 
 ```text
-suite: my benchmarks (himorime.yaml)
-latency
-BENCHMARK    COMMAND    MEDIAN      MEAN   STDDEV  RELATIVE  RESULT
-git startup  git      529.50µs  548.45µs  75.40µs     1.00x  PASS
-
-budgets
-BENCHMARK    COMMAND  METRIC           BUDGET  MEASURED  RESULT
-git startup  git      latency median  < 1.00s  529.50µs  PASS
-
-1 passed · 1 benchmark · seed 477717617585165 · exit 0
+1 passed · 1 benchmark · exit 0
 ```
 
-Then point `himorime.yaml` at your own tool. This suite builds it, measures one input on every metric, and sets a budget for each:
+Use [Getting started](https://nao1215.github.io/himorime/getting-started/) for the first suite, [Configuration](https://nao1215.github.io/himorime/configuration/) for the file format, [Metrics](https://nao1215.github.io/himorime/metrics/) for measured values, and [Reports](https://nao1215.github.io/himorime/reports/) for output formats.
 
-```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
-version: "1"
-
-name: mytool
-
-build:
-  command: [go, build, -o, "${artifact}", ./cmd/mytool]
-
-benchmarks:
-  - name: parse large input
-    metrics:
-      throughput:
-        work:
-          file_size: testdata/large.jsonl
-      cpu: true
-      memory: true
-    commands:
-      mytool:
-        command: ["${artifact}", testdata/large.jsonl]
-        budget:
-          latency: {p95: "<= 100ms"}
-          throughput: {median: ">= 50MiB/s"}
-          cpu_total: {median: "<= 80ms"}
-          peak_rss: {max: "<= 64MiB"}
-```
-
-`himorime run` exits 1 when a budget is missed. `himorime compare --against main` builds `main` in a temporary worktree and your working tree side by side, measures both in interleaved rounds, and exits 1 on a regression it is confident about. Reports are also available as JSON with every sample, CSV, Markdown and a GitHub Actions job summary, and a Markdown report can replace a marked section of a documentation page.
+For tool selection, see [Comparison](https://nao1215.github.io/himorime/comparison/); [atago](https://github.com/nao1215/atago) checks CLI behavior, while himorime checks performance.
 
 ## GitHub Actions
 
-The [setup-himorime action](https://github.com/nao1215/setup-himorime) installs a checksum-verified release before the benchmark runs.
-
-<!-- example: examples/github-actions/benchmark.yml -->
-```yaml
-# Copy this file to .github/workflows/benchmark.yml.
-# Recipe: fail a GitHub Actions job when a performance budget is violated.
-# https://nao1215.github.io/himorime/cookbook/#fail-a-github-actions-job-when-a-performance-budget-is-violated
-name: Benchmark
-
-on:
-  pull_request:
-
-# Fork PRs run with read-only permissions and receive no comment.
-permissions:
-  contents: read
-
-jobs:
-  benchmark:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The base commit must exist locally for the temporary worktree.
-          fetch-depth: 0
-          persist-credentials: false
-      # Go builds the suite's program; drop it if your suite needs no Go.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: stable
-      # Installs a prebuilt, checksum-verified himorime release.
-      - uses: nao1215/setup-himorime@30710690b8b2dc8c61df8bf289f5bb899af3fbfa # v0.1.2 + automatic comments
-      # Compares the pull request base and head, writes a job summary and
-      # annotations, and saves JSON for setup-himorime's automatic comment.
-      - run: himorime ci --format json --output "$RUNNER_TEMP/himorime.json"
-      # Keep raw samples available from the run page.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: himorime-report
-          path: ${{ runner.temp }}/himorime.json
-          retention-days: 7
-```
-
-setup-himorime automatically posts a short [problem-only comment](https://nao1215.github.io/himorime/github-actions/#a-pull-request-comment) on same-repository pull requests.
-
-Shared runners are noisy. himorime interleaves the revisions, needs statistical confidence to call a regression, and reports anything it cannot tell apart from noise as inconclusive.
-
-## Measuring programs you did not write
-
-himorime measures a command, so a third-party tool is measured like your own. The suites in [bench/thirdparty](./bench/thirdparty) do that with real programs, and they are written to be read and copied: [real-world suites](https://nao1215.github.io/himorime/real-world/) says what each one shows and what was made equal between the programs.
-
-| Suite | Programs |
-|---|---|
-| [json](./bench/thirdparty/json) | jq, gojq, jaq |
-| [compression](./bench/thirdparty/compression) | gzip, bzip2, xz |
+Use [setup-himorime](https://github.com/nao1215/setup-himorime) and `himorime ci` on pull requests; the [GitHub Actions guide](https://nao1215.github.io/himorime/github-actions/) contains the workflow.
 
 ## Install
 
@@ -131,19 +35,11 @@ himorime measures a command, so a third-party tool is measured like your own. Th
 go install github.com/nao1215/himorime@latest
 ```
 
-On macOS, Homebrew works too:
-
-```shell
-brew install --cask nao1215/tap/himorime
-```
-
-The [release page](https://github.com/nao1215/himorime/releases) has prebuilt archives for Linux, macOS and Windows (amd64 and arm64) and `.deb`, `.rpm` and `.apk` packages for Linux. In GitHub Actions, [setup-himorime](https://github.com/nao1215/setup-himorime) installs a release. Building from source needs Go 1.26 or later.
-
-Runs on Linux, macOS and Windows. What each metric covers on each OS is on the [metrics](https://nao1215.github.io/himorime/metrics/) page.
+Homebrew: `brew install --cask nao1215/tap/himorime`. The [release page](https://github.com/nao1215/himorime/releases) has archives and Linux packages, and [setup-himorime](https://github.com/nao1215/setup-himorime) installs a release in GitHub Actions.
 
 ## The name
 
-himorime was inspired by atago, whose name is associated with protection from fire. It is named after 火防女 (himorime), the maiden who tends the fire: in Demon's Souls, 黒衣の火防女, the Maiden in Black in English, manages the player's stats through leveling, which fits a tool that measures performance stats and detects regressions.
+himorime was inspired by atago and named after 火防女 (himorime), the maiden who tends the fire in Demon's Souls.
 
 ## License
 

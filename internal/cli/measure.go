@@ -47,12 +47,13 @@ func randomSeed() uint64 {
 
 // measurement is the state of one run/compare/ci invocation.
 type measurement struct {
-	app     *App
-	cmd     string
-	flags   *measureFlags
-	logw    io.Writer
-	redact  *redact.Redactor
-	tempDir string
+	app      *App
+	cmd      string
+	flags    *measureFlags
+	logw     io.Writer
+	progress *progressRenderer
+	redact   *redact.Redactor
+	tempDir  string
 	// tools are the versions of report.versions of every suite measured.
 	tools []report.Tool
 	// failureCause is set from typed runner failures before they are rendered
@@ -154,6 +155,10 @@ func runMeasure(ctx context.Context, a *App, cmd string, args []string) int {
 	m := &measurement{app: a, cmd: cmd, flags: f, redact: redact.New(a.Environ())}
 	if !f.quiet {
 		m.logw = a.Stderr
+		if a.StderrIsTerminal {
+			m.progress = newProgressRenderer(a.Stderr, a.Now)
+			m.logw = m.progress
+		}
 	}
 	return m.execute(ctx, suites)
 }
@@ -188,6 +193,9 @@ func (f *measureFlags) check(a *App, cmd string) int {
 }
 
 func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code int) {
+	if m.progress != nil {
+		defer m.progress.Close()
+	}
 	a, f := m.app, m.flags
 	started := a.Now()
 	seed := f.seed
@@ -272,6 +280,9 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 	rep.FinishedAt = a.Now().UTC()
 	if ctx.Err() != nil && rep.Summary.ExitCode == exitcode.OK {
 		rep.Summary.ExitCode = exitcode.Execution
+	}
+	if m.progress != nil {
+		m.progress.Close()
 	}
 	return m.finish(ctx, rep, suites, gh)
 }
@@ -399,6 +410,9 @@ func (m *measurement) newRunner(seed uint64) *runner.Runner {
 		Redactor: m.redact,
 
 		Capabilities: m.app.Capabilities,
+	}
+	if m.progress != nil {
+		r.Progress = m.progress.Update
 	}
 	if m.flags.runs > 0 {
 		r.RunsOverride = &m.flags.runs
