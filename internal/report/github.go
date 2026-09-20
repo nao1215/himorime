@@ -3,16 +3,26 @@ package report
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/nao1215/himorime/internal/metric"
 )
 
-// WriteGitHubSummary writes complete, table-only Markdown for Actions logs and
-// Job Summaries. JSON remains the lossless source of raw observations.
+// WriteGitHubSummary writes a compact result table followed by collapsed
+// detail tables for Actions logs and Job Summaries. JSON remains the lossless
+// source of raw observations.
 func WriteGitHubSummary(w io.Writer, r *Report) error {
 	t := githubTables{rules: map[string]string{}, collections: map[string]string{}}
+	var compactRowsAll []compactRow
 	for _, s := range r.Suites {
+		rows := compactRows(r, s)
+		if len(r.Suites) > 1 {
+			for i := range rows {
+				rows[i].target = s.Name + " / " + rows[i].target
+			}
+		}
+		compactRowsAll = append(compactRowsAll, rows...)
 		t.addError(s.Name, "suite", s.Error)
 		for _, b := range s.Benchmarks {
 			label := b.Name
@@ -25,14 +35,41 @@ func WriteGitHubSummary(w io.Writer, r *Report) error {
 			}
 		}
 	}
+	slices.SortStableFunc(compactRowsAll, func(a, b compactRow) int {
+		if a.order != b.order {
+			return b.order - a.order
+		}
+		return strings.Compare(a.target+"/"+a.metric, b.target+"/"+b.metric)
+	})
+	compact := make([][]string, 0, len(compactRowsAll))
+	for _, row := range compactRowsAll {
+		compact = append(compact, []string{row.target, row.metric, row.value, row.result, row.reason})
+	}
 	var out strings.Builder
-	githubTable(&out, []string{"Benchmark", "Stage", "Error", "Exit code", "Reason", "Stderr"}, t.errors)
-	githubTable(&out, []string{"Benchmark", "Metric", "Base", "Head", "Difference", "Change", "Interval", "Confidence", "Tolerance", "Result", "Reason", "Rule", "P(regression)", "P(improvement)"}, t.comparisons)
-	githubTable(&out, []string{"Benchmark", "Budget", "Measured", "Limit", "Result", "Reason"}, t.budgets)
-	githubTable(&out, []string{"Benchmark", "Side", "Metric", "Median", "Mean", "Stddev", "Min", "Max", "P90", "P95", "P99", "CV", "Robust CV", "Samples", "Status", "Reason", "Collection"}, t.measurements)
-	githubTable(&out, []string{"Rule", "Statistic", "Minimum difference", "Required confidence", "Minimum samples", "Max CV"}, t.ruleRows)
-	githubTable(&out, []string{"Collection", "Metric", "Source", "Scope", "Process aggregation"}, t.collectionRows)
-	githubTable(&out, []string{"Field", "Value"}, githubMetadata(r))
+	resultHeader := []string{"Target", "Metric", "Value", "Result", "Reason"}
+	githubTable(&out, resultHeader, compact)
+	if len(compact) == 0 {
+		githubTable(&out, resultHeader, [][]string{{"-", "-", "-", "PASS", "no benchmarks"}})
+	}
+	if len(t.errors) > 0 {
+		out.WriteString("<details>\n<summary>Failures and execution details</summary>\n\n")
+		githubTable(&out, []string{"Benchmark", "Stage", "Error", "Exit code", "Reason", "Stderr"}, t.errors)
+		out.WriteString("</details>\n\n")
+	}
+	if len(t.comparisons) > 0 || len(t.budgets) > 0 || len(t.measurements) > 0 || len(t.ruleRows) > 0 {
+		out.WriteString("<details>\n<summary>Detailed statistics and decision rules</summary>\n\n")
+		githubTable(&out, []string{"Benchmark", "Metric", "Base", "Head", "Difference", "Change", "Interval", "Confidence", "Tolerance", "Result", "Reason", "Rule", "P(regression)", "P(improvement)"}, t.comparisons)
+		githubTable(&out, []string{"Benchmark", "Budget", "Measured", "Limit", "Result", "Reason"}, t.budgets)
+		githubTable(&out, []string{"Benchmark", "Side", "Metric", "Median", "Mean", "Stddev", "Min", "Max", "P90", "P95", "P99", "CV", "Robust CV", "Samples", "Status", "Reason", "Collection"}, t.measurements)
+		githubTable(&out, []string{"Rule", "Statistic", "Minimum difference", "Required confidence", "Minimum samples", "Max CV"}, t.ruleRows)
+		out.WriteString("</details>\n\n")
+	}
+	if len(t.collectionRows) > 0 || len(r.Suites) > 0 {
+		out.WriteString("<details>\n<summary>Collection and environment</summary>\n\n")
+		githubTable(&out, []string{"Collection", "Metric", "Source", "Scope", "Process aggregation"}, t.collectionRows)
+		githubTable(&out, []string{"Field", "Value"}, githubMetadata(r))
+		out.WriteString("</details>\n\n")
+	}
 	_, err := io.WriteString(w, strings.TrimRight(out.String(), "\n")+"\n")
 	return err
 }
@@ -174,7 +211,7 @@ func githubMetadata(r *Report) [][]string {
 		if suite.NewInHead {
 			rows = append(rows, []string{"New suite", suite.Name})
 		}
-		if g := suite.GeometricMean; g != nil {
+		if g := suite.GeometricMean; g != nil && g.Cases > 1 {
 			for _, v := range g.Values {
 				rows = append(rows, []string{"Geometric mean: " + suite.Name + " / " + v.Command, fmt.Sprintf("%s (%d cases; reference %s)", FormatRatio(v.Ratio), g.Cases, g.Reference)})
 			}

@@ -19,24 +19,23 @@ An output error ends the run with exit status 4.
 
 ## Terminal tables
 
-A plain run prints one table for each measured metric and a budget table when needed:
+A plain run shows measured values and budget results, with failures and inconclusive results first:
 
 ```text
-latency
-BENCHMARK  COMMAND   MEDIAN     MEAN    STDDEV  RELATIVE  RESULT
-df large   jsonize  14.20ms  14.31ms  310.20µs     1.00x  PASS
-df large   jc       41.08ms  41.77ms    1.02ms     2.89x  PASS
+TARGET              METRIC                                    VALUE  RESULT  REASON
+df large / jsonize  Latency (median)                         14.20ms  PASS    -
+df large / jc       Latency (median)  41.08ms (2.89x vs baseline)       PASS    -
 
 2 passed · 1 benchmark · seed 42 · exit 0
 ```
 
-`RELATIVE` divides a command's median latency by the configured baseline, or by the fastest command when no baseline is set. CPU values and peak RSS are medians across runs; the memory table also shows the highest peak. [Metrics](/metrics/) explains the scope of each measurement.
+Latency ratios use the configured baseline, or the fastest command when no baseline is set. The compact view shows median latency, throughput, total CPU time and peak RSS; budget rows name their own statistic. [Metrics](/metrics/) explains their scope and measurement bounds.
 
-A comparison adds base, head, change, confidence, tolerance and verdict columns:
+A comparison shows base → head and the relative change:
 
 ```text
-BENCHMARK  BASE     HEAD     DIFF  CHANGE  CONFIDENCE  TOLERANCE  RESULT
-encode     8.10ms   9.43ms  1.33ms  +16.4%       98.1%       +10%  REGRESSION
+TARGET         METRIC                                     VALUE  RESULT      REASON
+encode / tool  Latency (median)  8.10ms → 9.43ms (+16.4%)          REGRESSION  -
 ```
 
 `REGRESSION` means the bootstrap probability of exceeding the tolerance meets the configured confidence. `INCONCLUSIVE` means the samples cannot separate the change from noise. [Regression detection](/regression-detection/) describes the test and gating rules.
@@ -92,9 +91,9 @@ $ himorime compare --against main --format samples-csv --output samples.csv
 
 ## Markdown and GitHub Actions
 
-Markdown contains the same result tables as the terminal report and is suitable for a checked-in page. The `github` format contains only tables: all comparisons, budgets, measurement statistics, decision settings, collection methods and execution metadata.
+Markdown includes detailed result tables suitable for a checked-in page. The `github` format starts with a compact result table; statistics, decision rules, collection methods and environment are available in expandable sections.
 
-When a measurement report is produced in GitHub Actions, its complete tables are also written to the log on standard error, including when JSON is written to standard output or a file. `himorime ci` appends the tables to `$GITHUB_STEP_SUMMARY` when available. Existing annotations and [exit statuses](/reference/#exit-codes) are unchanged.
+In GitHub Actions, this summary is also written to the log on standard error, including when JSON is written to standard output or a file. `himorime ci` appends it to `$GITHUB_STEP_SUMMARY` when available. Annotations and [exit statuses](/reference/#exit-codes) are unchanged.
 
 setup-himorime automatically posts a notification from the saved JSON report on same-repository pull requests. See [GitHub Actions](/github-actions/#a-pull-request-comment) for the required path and job permissions; no local comment command or separate workflow is needed.
 
