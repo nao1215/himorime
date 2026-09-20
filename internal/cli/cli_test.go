@@ -19,7 +19,9 @@ import (
 	"github.com/nao1215/himorime/internal/config"
 	"github.com/nao1215/himorime/internal/exitcode"
 	"github.com/nao1215/himorime/internal/ghactions"
+	"github.com/nao1215/himorime/internal/gitwt"
 	"github.com/nao1215/himorime/internal/report"
+	"github.com/nao1215/himorime/internal/runner"
 )
 
 // helperPath is the portable helper program from test/e2e/helper, built once
@@ -189,6 +191,11 @@ func TestHelpVersionAndUsageErrors(t *testing.T) {
 	if r := run(t, dir, nil, "run", "--help"); r.code != 0 || !strings.Contains(r.stdout, "Usage: himorime run") || !strings.Contains(r.stdout, "--skip-tag") {
 		t.Fatalf("run --help: %+v", r)
 	}
+	for _, command := range []string{"init", "validate", "list", "version"} {
+		if r := run(t, dir, nil, command, "--help"); r.code != 0 || !strings.Contains(r.stdout, "Usage: himorime "+command) {
+			t.Fatalf("%s --help: %+v", command, r)
+		}
+	}
 	if r := run(t, dir, nil, "version"); r.code != 0 || !strings.HasPrefix(r.stdout, "himorime ") || !strings.Contains(r.stdout, runtime.GOOS+"/"+runtime.GOARCH) {
 		t.Fatalf("version: %+v", r)
 	}
@@ -329,6 +336,10 @@ func TestListAndSelection(t *testing.T) {
 	if err := json.Unmarshal([]byte(r.stdout), &entries); err != nil || len(entries) != 1 || entries[0].Benchmark != "slow one" {
 		t.Fatalf("list --format json --tag slow: %v %+v", err, r)
 	}
+	r = runWith(t, dir, nil, func(a *App) { a.Stdout = completionFailingWriter{} }, "list", "--format", "json")
+	if r.code != exitcode.Execution || !strings.Contains(r.stderr, "write failed") {
+		t.Fatalf("list JSON write failure: %+v", r)
+	}
 	r = run(t, dir, nil, "list", "--skip-tag", "slow", "--filter", "fast")
 	if strings.Count(r.stdout, "\n") != 3 {
 		t.Fatalf("list --skip-tag: %s", r.stdout)
@@ -341,6 +352,23 @@ func TestListAndSelection(t *testing.T) {
 	}
 	if r := run(t, dir, nil, "list", "--tag", "nothing"); r.code != exitcode.OK || strings.Contains(r.stderr, "HMR") {
 		t.Fatalf("empty list is not a tool error: %+v", r)
+	}
+	if r := run(t, dir, nil, "list", "--filter", "("); r.code != exitcode.Usage || !strings.Contains(r.stderr, "invalid --filter") {
+		t.Fatalf("invalid list filter: %+v", r)
+	}
+	if r := run(t, dir, nil, "list", "missing.yaml"); r.code != exitcode.Config || !strings.Contains(r.stderr, "does not exist") {
+		t.Fatalf("missing list suite: %+v", r)
+	}
+	if err := os.Symlink("loop.yaml", filepath.Join(dir, "loop.yaml")); err == nil {
+		if r := run(t, dir, nil, "list", "loop.yaml"); r.code != exitcode.Execution || !strings.Contains(r.stderr, "loop.yaml") {
+			t.Fatalf("unreadable list suite: %+v", r)
+		}
+	} else {
+		t.Logf("symlinks unavailable: %v", err)
+	}
+	write(t, filepath.Join(dir, "untagged.yaml"), suite(t, oneBenchmark))
+	if r := run(t, dir, nil, "list", "untagged.yaml"); r.code != exitcode.OK || !strings.Contains(r.stdout, "  -") {
+		t.Fatalf("untagged list row: %+v", r)
 	}
 }
 
@@ -758,6 +786,9 @@ func TestCIGitHubActions(t *testing.T) {
 
 func TestCompletion(t *testing.T) {
 	dir := t.TempDir()
+	if r := run(t, dir, nil, "completion", "--help"); r.code != exitcode.OK || !strings.Contains(r.stdout, "Usage:") {
+		t.Fatalf("completion help: %+v", r)
+	}
 	for _, shell := range Shells() {
 		r := run(t, dir, nil, "completion", shell)
 		if r.code != 0 || !strings.Contains(r.stdout, "himorime") || !strings.Contains(r.stdout, "compare") || !strings.Contains(r.stdout, "fail-on-inconclusive") {
@@ -770,7 +801,14 @@ func TestCompletion(t *testing.T) {
 	if r := run(t, dir, nil, "completion"); r.code != exitcode.Usage {
 		t.Fatalf("no shell: %+v", r)
 	}
+	if r := runWith(t, dir, nil, func(a *App) { a.Stdout = completionFailingWriter{} }, "completion", "bash"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "write failed") {
+		t.Fatalf("completion write failure: %+v", r)
+	}
 }
+
+type completionFailingWriter struct{}
+
+func (completionFailingWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
 
 func TestBashCompletionLoads(t *testing.T) {
 	bash, err := exec.LookPath("bash")
@@ -830,6 +868,14 @@ func TestParseFlagsAnywhere(t *testing.T) {
 	if err := tags.Set("a,,b"); err == nil {
 		t.Fatal("an empty tag was accepted")
 	}
+	fs, v = newFlagSet("run")
+	if _, _, ok := parseFlags(fs, []string{"--warmup", "0"}, &stdout, &stderr); !ok {
+		t.Fatalf("valid warmup rejected: %s", stderr.String())
+	}
+	f, _ = v.(*measureFlags)
+	if !f.warmupSet || f.warmup != 0 {
+		t.Fatalf("warmup flags = set %v, value %d", f.warmupSet, f.warmup)
+	}
 }
 
 func TestOutcomeForSummary(t *testing.T) {
@@ -870,6 +916,101 @@ func TestSuitePaths(t *testing.T) {
 	}
 }
 
+func TestCLISmallHelpers(t *testing.T) {
+	if got := plural(1, "benchmark"); got != "1 benchmark" {
+		t.Fatalf("plural singular = %q", got)
+	}
+	if got := plural(2, "benchmark"); got != "2 benchmarks" {
+		t.Fatalf("plural plural = %q", got)
+	}
+	if got := nonNilStrings(nil); got == nil || len(got) != 0 {
+		t.Fatalf("nonNilStrings(nil) = %#v", got)
+	}
+	var help bytes.Buffer
+	WriteHelp(&help, "does-not-exist")
+	if help.Len() != 0 {
+		t.Fatalf("unknown command produced help: %q", help.String())
+	}
+	m := &measurement{}
+	m.addTool(report.Tool{Name: "compiler", Version: "1"})
+	m.addTool(report.Tool{Name: "compiler", Version: "2"})
+	if len(m.tools) != 1 || m.tools[0].Version != "1" {
+		t.Fatalf("duplicate tool replaced the first version: %+v", m.tools)
+	}
+	if got := shortRef("short"); got != "short" {
+		t.Fatalf("shortRef(short) = %q", got)
+	}
+	if got := dirtyNote(true); got == "" {
+		t.Fatal("dirty working tree has no note")
+	}
+	missing := filepath.Join(t.TempDir(), "missing")
+	if got := realDir(missing); got != missing {
+		t.Fatalf("realDir(missing) = %q", got)
+	}
+}
+
+func TestMeasurementBoundaryHelpers(t *testing.T) {
+	warmup := 2
+	m := &measurement{app: &App{}, flags: &measureFlags{warmup: warmup, warmupSet: true}}
+	r := m.newRunner(7)
+	if r.WarmupOverride == nil || *r.WarmupOverride != warmup {
+		t.Fatalf("warmup override = %v", r.WarmupOverride)
+	}
+
+	repository := t.TempDir()
+	outside := t.TempDir()
+	ls := loadedSuite{display: "outside.yaml", suite: &config.Suite{Dir: outside}}
+	if _, err := ls.baseRoot(&gitwt.Repo{Top: repository}, &gitwt.Worktree{Dir: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "outside") {
+		t.Fatalf("outside suite base root error = %v", err)
+	}
+
+	missing := filepath.Join(t.TempDir(), "missing")
+	for _, tt := range []struct {
+		name  string
+		build *config.Exec
+		kind  runner.FailureKind
+	}{
+		{name: "without build", kind: runner.FailSetup},
+		{name: "with build", build: &config.Exec{Argv: []string{"build"}}, kind: runner.FailBuild},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			state := &measurement{tempDir: t.TempDir()}
+			input := state.measureSuite(context.Background(), &runner.Runner{}, loadedSuite{display: "missing.yaml", suite: &config.Suite{Name: "missing", Dir: missing, Build: tt.build}}, nil, nil)
+			if input.BuildFailure == nil || input.BuildFailure.Kind != tt.kind || state.failureCause.Number == 0 {
+				t.Fatalf("missing suite result = %+v, cause = %s", input.BuildFailure, state.failureCause)
+			}
+		})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	existing := &config.Suite{Name: "cancelled", Dir: t.TempDir(), Benchmarks: []config.Benchmark{{Name: "never runs"}}}
+	input := (&measurement{}).measureSuite(ctx, &runner.Runner{}, loadedSuite{display: "cancelled.yaml", suite: existing}, nil, nil)
+	if input.BuildFailure != nil || len(input.Benchmarks) != 0 {
+		t.Fatalf("cancelled suite was measured: %+v", input)
+	}
+}
+
+func TestRunAlreadyCancelledContextSkipsBenchmarks(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "himorime.yaml"), suite(t, oneBenchmark))
+	var stdout, stderr bytes.Buffer
+	a := &App{
+		Stdin: strings.NewReader(""), Stdout: &stdout, Stderr: &stderr,
+		LookupEnv: os.LookupEnv, Environ: os.Environ, Getwd: func() (string, error) { return dir, nil },
+		ReadFile: os.ReadFile, Now: time.Now,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	chdir(t, dir)
+	if code := a.Run(ctx, []string{"run", "--quiet", "--seed", "1"}); code != exitcode.Execution || !strings.Contains(stderr.String(), "interrupted; cleanup has run") {
+		t.Fatalf("cancelled run: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if strings.Contains(stdout.String(), "quick") {
+		t.Fatalf("cancelled run measured a benchmark: %q", stdout.String())
+	}
+}
+
 func TestCommandsDocumented(t *testing.T) {
 	t.Parallel()
 	seen := map[string]bool{}
@@ -897,8 +1038,35 @@ func TestMainEntryPoint(t *testing.T) {
 	if isTerminal(&stdout) {
 		t.Fatal("a buffer is not a terminal")
 	}
+	closed, err := os.CreateTemp(t.TempDir(), "closed-terminal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := closed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if isTerminal(closed) {
+		t.Fatal("a closed file is not a terminal")
+	}
 	if cleanupFailed(exitcode.OK) != exitcode.Execution || cleanupFailed(exitcode.Failed) != exitcode.Failed {
 		t.Fatal("cleanupFailed must not replace an existing failure")
+	}
+}
+
+func TestAppRunReportsCommandPanics(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	a := &App{
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Getwd: func() (string, error) {
+			panic("broken working directory provider")
+		},
+	}
+	if code := a.Run(context.Background(), []string{"report", "saved.json"}); code != exitcode.Internal {
+		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "internal error: broken working directory provider") || !strings.Contains(stderr.String(), "/issues") {
+		t.Fatalf("panic diagnostic = %q", stderr.String())
 	}
 }
 

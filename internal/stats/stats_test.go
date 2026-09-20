@@ -19,6 +19,22 @@ func ms(values ...float64) []float64 {
 
 const msf = float64(time.Millisecond)
 
+func TestBootstrapOrderStatistics(t *testing.T) {
+	t.Parallel()
+	for _, statistic := range []Metric{Min, Max} {
+		o := defaultOptions()
+		o.Metric = statistic
+		base, head := make([]float64, o.MinSamples), make([]float64, o.MinSamples)
+		for i := range base {
+			base[i], head[i] = 10, 20
+		}
+		c := Compare(base, head, o)
+		if c.Verdict != VerdictRegression || c.Change != 100 {
+			t.Fatalf("statistic %v: %+v", statistic, c)
+		}
+	}
+}
+
 func TestSummarize(t *testing.T) {
 	t.Parallel()
 

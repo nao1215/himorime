@@ -103,6 +103,62 @@ func samePath(a, b string) bool {
 	return filepath.Clean(a) == filepath.Clean(b)
 }
 
+func TestRepositoryFailures(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := newRepo(t)
+	repo, err := Open(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocked, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AddWorktree(ctx, filepath.Join(blocked, "child"), "HEAD"); err == nil {
+		t.Fatal("created worktree below a regular file")
+	}
+	if err := repo.settleIndex(ctx, t.TempDir()); err == nil {
+		t.Fatal("settled a non-repository index")
+	}
+	missing := &Repo{Top: filepath.Join(dir, "missing"), git: repo.git}
+	if _, err := missing.Dirty(ctx); err == nil {
+		t.Fatal("read status in a missing directory")
+	}
+	if got := short("abc"); got != "abc" {
+		t.Fatalf("short SHA = %q", got)
+	}
+	if got := firstLine("first\nsecond"); got != "first" {
+		t.Fatalf("first diagnostic line = %q", got)
+	}
+}
+
+func TestOpenWithoutGit(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	if _, err := Open(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "git is not installed") {
+		t.Fatalf("Open without Git = %v", err)
+	}
+}
+
+func TestRemoveStillCleansFilesWhenGitIsUnavailable(t *testing.T) {
+	t.Parallel()
+	base := filepath.Join(t.TempDir(), "checkout")
+	dir := filepath.Join(base, "tree")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	w := &Worktree{Dir: dir, base: base, repo: &Repo{Top: dir, git: filepath.Join(base, "missing-git")}}
+	if err := w.Remove(context.Background()); err == nil {
+		t.Fatal("missing Git did not report a cleanup error")
+	}
+	if _, err := os.Stat(base); !os.IsNotExist(err) {
+		t.Fatalf("checkout remains after cleanup: %v", err)
+	}
+	if err := w.Remove(context.Background()); err != nil {
+		t.Fatalf("repeated removal: %v", err)
+	}
+}
+
 func TestWorktreeLifecycleLeavesNoTrace(t *testing.T) {
 	t.Parallel()
 	dir := newRepo(t)

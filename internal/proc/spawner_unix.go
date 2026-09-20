@@ -271,12 +271,19 @@ func ServeSpawner() int {
 	if err := c.send(spawnReply{Version: spawnProtocol}, nil); err != nil {
 		return 1
 	}
+	return serveSpawner(c, gc)
+}
+
+// serveSpawner handles requests until the owner disconnects.
+func serveSpawner(c *spawnConn, gc *heapGrowth) int {
 	// wake ends the watch on himorime's socket once a command was reaped, so
 	// no goroutine is left reading it when the next request arrives.
 	wakeR, wakeW, err := os.Pipe()
 	if err != nil {
 		return 1
 	}
+	defer wakeR.Close()
+	defer wakeW.Close()
 	var env []string
 	for {
 		var req spawnRequest

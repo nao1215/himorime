@@ -22,26 +22,19 @@ const DefaultFileName = "himorime.yaml"
 // Defaults applied when a suite does not set a value. They are documented in
 // the generated Configuration page table.
 const (
-	DefaultWarmup        = 1
-	DefaultMinRuns       = 10
-	DefaultMaxRuns       = 100
-	DefaultMinTime       = 2 * time.Second
-	DefaultTimeout       = time.Minute
-	DefaultHookTimeout   = 5 * time.Minute
-	DefaultBuildTimeout  = 10 * time.Minute
-	DefaultMetric        = MetricMedian
-	DefaultMaxPercent    = 10.0
-	DefaultConfidence    = 0.95
-	DefaultMinSamples    = 10
-	DefaultMaxCV         = 0.5
-	OutputDiscard        = "discard"
-	MaxRunsLimit         = 100000
-	MaxWarmupLimit       = 10000
-	MinConfidence        = 0.5
-	MaxConfidence        = 0.999
-	MaxPercentLimit      = 1000.0
-	MaxCVLimit           = 10.0
-	MinSamplesLowerBound = 2
+	DefaultWarmup       = 1
+	DefaultMinRuns      = 10
+	DefaultMaxRuns      = 100
+	DefaultMinTime      = 2 * time.Second
+	DefaultTimeout      = time.Minute
+	DefaultHookTimeout  = 5 * time.Minute
+	DefaultBuildTimeout = 10 * time.Minute
+	DefaultMetric       = MetricMedian
+	DefaultMaxPercent   = 10.0
+	DefaultConfidence   = 0.95
+	DefaultMinSamples   = 10
+	DefaultMaxCV        = 0.5
+	OutputDiscard       = "discard"
 )
 
 // Metric names the statistic a regression check compares.
@@ -172,7 +165,6 @@ type Stdin struct {
 
 // Stdin kinds.
 const (
-	StdinNone    = ""
 	StdinFile    = "file"
 	StdinContent = "content"
 )

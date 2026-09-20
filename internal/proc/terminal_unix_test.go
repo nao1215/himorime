@@ -6,7 +6,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -14,6 +16,35 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+func TestTerminalClosedAndNonTerminalDescriptors(t *testing.T) {
+	t.Parallel()
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := setTerminalSize(f); err == nil {
+		t.Fatal("resized a non-terminal")
+	}
+	if _, err := lineMode(f); err == nil {
+		t.Fatal("read line mode on a non-terminal")
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	term := &Terminal{master: f, slave: f, stop: make(chan struct{}), wrote: make(chan struct{}), ready: make(chan struct{})}
+	if term.waitReady() || term.waitRead() {
+		t.Fatal("closed terminal was ready for input")
+	}
+	close(term.wrote)
+	if err := term.typeKeys([]byte("x")); err != nil {
+		t.Fatalf("typing after close: %v", err)
+	}
+	if err := term.copyOutput(io.Discard); err != nil {
+		t.Fatalf("copying after close: %v", err)
+	}
+}
 
 // terminalHelper checks that the helper runs the way a program started from a
 // shell on a terminal does, then reads keys in raw mode up to a q and prints
@@ -162,5 +193,77 @@ func TestTerminalCloseStopsCopyingInputTheCommandNeverRead(t *testing.T) {
 	}
 	if err := term.Close(); err != nil {
 		t.Fatalf("second close: %v", err)
+	}
+}
+
+func TestTerminalReportsSupportAndReadinessBeforeCommandStarts(t *testing.T) {
+	t.Parallel()
+	if !TerminalSupported() {
+		t.Fatal("TerminalSupported() = false on Unix")
+	}
+	term, err := OpenTerminal(strings.NewReader("x"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !term.NeverReady() {
+		t.Fatal("NeverReady() = false before a command writes or switches mode")
+	}
+	if err := term.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type terminalFailReader struct{}
+
+func (terminalFailReader) Read([]byte) (int, error) { return 0, errors.New("input failed") }
+
+type terminalFailWriter struct{}
+
+func (terminalFailWriter) Write([]byte) (int, error) { return 0, errors.New("output failed") }
+
+func TestTerminalInternalStateAndIOFailures(t *testing.T) {
+	if _, err := OpenTerminal(terminalFailReader{}, nil); err == nil || !strings.Contains(err.Error(), "input failed") {
+		t.Fatalf("OpenTerminal failing input = %v", err)
+	}
+	master, slave, err := openPTY()
+	if err != nil {
+		t.Fatal(err)
+	}
+	term := &Terminal{master: master, slave: slave, wrote: make(chan struct{}), stop: make(chan struct{}), ready: make(chan struct{})}
+	if _, err := slave.Write([]byte("output")); err != nil {
+		t.Fatal(err)
+	}
+	if err := term.copyOutput(terminalFailWriter{}); err == nil || err.Error() != "output failed" {
+		t.Fatalf("copyOutput failing writer = %v", err)
+	}
+	_ = master.Close()
+	_ = slave.Close()
+
+	stop := make(chan struct{})
+	close(stop)
+	state := &Terminal{wrote: make(chan struct{}), stop: stop, ready: make(chan struct{})}
+	if state.typeKeys([]byte("x")) != nil || state.waitReady() {
+		t.Fatal("stopped terminal did not stop key typing/readiness")
+	}
+	if state.waitRead() || state.pause() {
+		t.Fatal("stopped terminal wait helpers returned true")
+	}
+	if stopped(stop) == false {
+		t.Fatal("stopped did not recognize a closed channel")
+	}
+	close(state.ready)
+	state.hasKeys = true
+	if state.NeverReady() {
+		t.Fatal("NeverReady remained true after readiness")
+	}
+	if state.typeKeys(nil) != nil {
+		t.Fatal("empty key input returned an error")
+	}
+
+	wrote := make(chan struct{})
+	close(wrote)
+	ready := &Terminal{wrote: wrote, stop: make(chan struct{}), ready: make(chan struct{})}
+	if !ready.waitReady() {
+		t.Fatal("waitReady did not observe terminal output")
 	}
 }

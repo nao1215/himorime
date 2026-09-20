@@ -3,7 +3,9 @@
 package proc
 
 import (
+	"os/exec"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -53,6 +55,48 @@ func TestUsageFromValues(t *testing.T) {
 	raw.MaxRSS = 0
 	if u := usageFromValues(raw); u.MemoryErr == nil || IsUnsupported(u.MemoryErr) || u.CPUErr != nil {
 		t.Fatalf("a zero ru_maxrss must be a collection failure, not unsupported: %+v", u)
+	}
+}
+
+func TestUsageFromRawReportsMissingAndInvalidCPU(t *testing.T) {
+	t.Parallel()
+	missing := usageFromRaw(rawUsage{Missing: "rusage unavailable"})
+	if missing.CPUErr == nil || missing.MemoryErr == nil || missing.CPUErr.Error() != "rusage unavailable" {
+		t.Fatalf("usageFromRaw missing = %+v", missing)
+	}
+	negative := usageFromRaw(rawUsage{UserCPU: -1, SystemCPU: 2, MaxRSS: 1})
+	if negative.CPUErr == nil || negative.MemoryErr != nil {
+		t.Fatalf("usageFromRaw negative CPU = %+v", negative)
+	}
+	if !strings.Contains(negative.CPUErr.Error(), "negative CPU time") {
+		t.Fatalf("CPU error = %v", negative.CPUErr)
+	}
+}
+
+func TestRawUsageOfReportsMissingProcessState(t *testing.T) {
+	t.Parallel()
+	got := rawUsageOf(&exec.Cmd{})
+	if got.Missing == "" || got.UserCPU != 0 || got.SystemCPU != 0 || got.MaxRSS != 0 {
+		t.Fatalf("rawUsageOf without process state = %+v", got)
+	}
+}
+
+func TestPlatformCollectionsDescribeUnixRusage(t *testing.T) {
+	t.Parallel()
+	if !rusageSupported() {
+		t.Skip("resource usage is not available on this Unix")
+	}
+	if got := platformCollection(false); got != (Collection{Source: SourceRusage, ProcessAggregation: AggregationSumWaited}) {
+		t.Fatalf("CPU collection = %+v", got)
+	}
+	if got := platformCollection(true); got != (Collection{Source: SourceRusage, ProcessAggregation: AggregationMaxProcess}) {
+		t.Fatalf("memory collection = %+v", got)
+	}
+	if got := CPUCollection(); got.ProcessAggregation != AggregationSumWaited {
+		t.Fatalf("CPUCollection = %+v", got)
+	}
+	if got := MemoryCollection(); got.ProcessAggregation != AggregationMaxProcess {
+		t.Fatalf("MemoryCollection = %+v", got)
 	}
 }
 

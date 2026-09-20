@@ -74,9 +74,9 @@ func ParseDuration(s string) (time.Duration, error) {
 	return d, nil
 }
 
-// ParseBytes parses a byte size such as "64MiB" into bytes. KB, MB, GB and
+// parseBytes parses a byte size such as "64MiB" into bytes. KB, MB, GB and
 // TB are powers of 1000; KiB, MiB, GiB and TiB powers of 1024.
-func ParseBytes(s string) (float64, error) {
+func parseBytes(s string) (float64, error) {
 	m := bytesRE.FindStringSubmatch(strings.TrimSpace(s))
 	if m == nil {
 		return 0, fmt.Errorf("invalid byte size %q: write a number with a unit, such as 64MiB or 512KB (units: B, KB, MB, GB, TB, KiB, MiB, GiB, TiB)", s)
@@ -98,10 +98,10 @@ func IsByteUnit(u string) bool {
 	return ok
 }
 
-// ParseRate parses a rate such as "50MiB/s" or "1000 records/s". A byte unit
+// parseRate parses a rate such as "50MiB/s" or "1000 records/s". A byte unit
 // is converted to bytes per second and reported as the unit "bytes"; any
 // other unit is returned as written.
-func ParseRate(s string) (value float64, unit string, err error) {
+func parseRate(s string) (value float64, unit string, err error) {
 	m := rateRE.FindStringSubmatch(strings.TrimSpace(s))
 	if m == nil {
 		return 0, "", fmt.Errorf("invalid rate %q: write a number, a unit and /s, such as 50MiB/s or \"1000 records/s\"", s)
@@ -132,10 +132,10 @@ func finiteFloat(s string) (float64, error) {
 	return v, nil
 }
 
-// FormatDuration renders nanoseconds for humans with two decimals in the
+// formatDuration renders nanoseconds for humans with two decimals in the
 // largest unit that keeps the value at or above one: 850ns, 12.34µs, 1.82ms,
 // 3.40s. Machine-readable reports carry the unrounded value instead.
-func FormatDuration(ns float64) string {
+func formatDuration(ns float64) string {
 	abs := math.Abs(ns)
 	switch {
 	case abs < float64(time.Microsecond):
@@ -149,8 +149,8 @@ func FormatDuration(ns float64) string {
 	}
 }
 
-// FormatBytes renders a byte size with binary units: 512B, 1.50KiB, 64.00MiB.
-func FormatBytes(b float64) string {
+// formatBytes renders a byte size with binary units: 512B, 1.50KiB, 64.00MiB.
+func formatBytes(b float64) string {
 	abs := math.Abs(b)
 	units := []struct {
 		name string
@@ -164,12 +164,12 @@ func FormatBytes(b float64) string {
 	return fmt.Sprintf("%.0fB", b)
 }
 
-// FormatRate renders a rate of work: bytes as MiB/s and friends, anything
+// formatRate renders a rate of work: bytes as MiB/s and friends, anything
 // else as a number with a k, M or G prefix and the unit, such as
 // "12.35k records/s".
-func FormatRate(v float64, unit string) string {
+func formatRate(v float64, unit string) string {
 	if unit == BytesUnit {
-		return FormatBytes(v) + "/s"
+		return formatBytes(v) + "/s"
 	}
 	if unit == "" {
 		unit = "operations"
@@ -187,8 +187,8 @@ func FormatRate(v float64, unit string) string {
 	}
 }
 
-// FormatPercent renders a percentage with one decimal, such as 187.3%.
-func FormatPercent(p float64) string {
+// formatPercent renders a percentage with one decimal, such as 187.3%.
+func formatPercent(p float64) string {
 	return fmt.Sprintf("%.1f%%", p)
 }
 
@@ -200,13 +200,13 @@ func Format(k Kind, v float64, workUnit string) string {
 	}
 	switch k {
 	case KindDuration:
-		return FormatDuration(v)
+		return formatDuration(v)
 	case KindBytes:
-		return FormatBytes(v)
+		return formatBytes(v)
 	case KindRate:
-		return FormatRate(v, workUnit)
+		return formatRate(v, workUnit)
 	case KindPercent:
-		return FormatPercent(v)
+		return formatPercent(v)
 	}
 	return strconv.FormatFloat(v, 'g', -1, 64)
 }
@@ -220,10 +220,10 @@ func ParseQuantity(k Kind, s string) (value float64, unit string, err error) {
 		d, err := ParseDuration(strings.TrimSpace(s))
 		return float64(d), "", err
 	case KindBytes:
-		v, err := ParseBytes(s)
+		v, err := parseBytes(s)
 		return v, "", err
 	case KindRate:
-		return ParseRate(s)
+		return parseRate(s)
 	case KindPercent:
 		return 0, "", fmt.Errorf("a percentage has no absolute quantity form")
 	}

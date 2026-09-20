@@ -63,8 +63,8 @@ func (t Threshold) String() string {
 	return string(t.Op) + " " + Format(t.Kind, t.Limit, t.Unit)
 }
 
-// BudgetHint is the example budget of a kind, used in messages.
-func BudgetHint(k Kind) string {
+// budgetHint is the example budget of a kind, used in messages.
+func budgetHint(k Kind) string {
 	switch k {
 	case KindDuration:
 		return `"<= 80ms"`
@@ -101,7 +101,7 @@ func ParseThreshold(k Kind, better Direction, s string) (Threshold, error) {
 		if m == nil {
 			return t, budgetError(k, better, s)
 		}
-		v, err := ParseBytes(m[2] + m[4])
+		v, err := parseBytes(m[2] + m[4])
 		if err != nil {
 			return t, err
 		}
@@ -147,7 +147,7 @@ func budgetError(k Kind, better Direction, s string) error {
 		ops = `"<", "<=", ">" or ">="`
 	case LowerIsBetter:
 	}
-	return fmt.Errorf("invalid budget %q: write %s and a %s greater than zero, such as %s", strings.TrimSpace(s), ops, k, BudgetHint(k))
+	return fmt.Errorf("invalid budget %q: write %s and a %s greater than zero, such as %s", strings.TrimSpace(s), ops, k, budgetHint(k))
 }
 
 func checkDirection(op Op, better Direction, raw string) error {

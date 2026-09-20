@@ -794,3 +794,26 @@ func TestLoadRejectsARelativePathThatLeavesTheProject(t *testing.T) {
 		}
 	})
 }
+
+func TestResolveHelperErrorsAndImplicitWorkUnit(t *testing.T) {
+	t.Parallel()
+	v := &validator{dir: t.TempDir(), projectRoot: t.TempDir()}
+	if got, unit := v.quantity(path{"budget"}, metric.KindDuration, "not-a-duration"); got != 0 || unit != "" || len(v.issues) != 1 {
+		t.Fatalf("invalid quantity = %v %q, issues = %+v", got, unit, v.issues)
+	}
+	if got := refName(Ref{Name: "env", Env: "TOKEN"}); got != "env:TOKEN" || refName(Ref{Name: VarRoot}) != VarRoot {
+		t.Fatalf("refName = %q", got)
+	}
+	if (&validator{}).leavesProject("../outside") {
+		t.Fatal("leavesProject without roots reported an escape")
+	}
+	value := 5.0
+	w := v.resolveWork(path{"metrics"}, RawWork{Value: &value})
+	if w == nil || w.Value != value || w.Unit != "operations" {
+		t.Fatalf("implicit work unit = %+v", w)
+	}
+	before := len(v.issues)
+	if _, ok := v.resolveBudget("tool", budgetEntry{metric: metric.Latency, agg: "unknown", expr: "< 1ms", path: path{"budget"}}, Metrics{}); ok || len(v.issues) != before+1 {
+		t.Fatalf("invalid aggregation issues = %+v", v.issues)
+	}
+}

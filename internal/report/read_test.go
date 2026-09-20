@@ -50,6 +50,20 @@ func TestReadRejectsMalformedTruncatedAndUnsupportedReports(t *testing.T) {
 	}
 }
 
+func TestReadRejectsIntegerOverflowAfterSchemaValidation(t *testing.T) {
+	r := judge(ModeRun, false, runResult("saved", "", map[string][]time.Duration{
+		"tool": samples(2*time.Millisecond, 10, 0),
+	}, "tool"))
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = bytes.Replace(data, []byte(`"suites":1,`), []byte(`"suites":9223372036854775808,`), 1)
+	if _, err := Read(data); err == nil || !strings.Contains(err.Error(), "decode report") {
+		t.Fatalf("Read integer overflow error = %v", err)
+	}
+}
+
 func TestReadPreservesUnassessedRSSFloorDetails(t *testing.T) {
 	b := floorResult("details", 3<<20, repeat(5<<20, 10)...)
 	b.Benchmark.Budgets = []config.Budget{budget(t, "tool", metric.PeakRSS, metric.AggMedian, "< 5MiB")}

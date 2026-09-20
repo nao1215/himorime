@@ -55,6 +55,11 @@ func TestReplaceSection(t *testing.T) {
 			want: "---\ntitle: x\n# comment\n---\n\n<!-- himorime:begin bench -->\n\n## suite\n\n| a |\n|---|\n| 1 |\n\n<!-- himorime:end bench -->\n",
 		},
 		{
+			name: "unclosed front matter is not treated as front matter",
+			doc:  "---\ntitle: x\n# Heading\n<!-- himorime:begin bench -->\n<!-- himorime:end bench -->\n",
+			want: "---\ntitle: x\n# Heading\n<!-- himorime:begin bench -->\n\n## suite\n\n| a |\n|---|\n| 1 |\n\n<!-- himorime:end bench -->\n",
+		},
+		{
 			name: "levels never go deeper than 6",
 			doc:  "###### Deep\n<!-- himorime:begin bench -->\n<!-- himorime:end bench -->\n",
 			want: "###### Deep\n<!-- himorime:begin bench -->\n\n###### suite\n\n| a |\n|---|\n| 1 |\n\n<!-- himorime:end bench -->\n",
@@ -63,6 +68,16 @@ func TestReplaceSection(t *testing.T) {
 			name: "markers inside a code block do not count",
 			doc:  "```md\n<!-- himorime:begin bench -->\n<!-- himorime:end bench -->\n```\n<!-- himorime:begin bench -->\nold\n<!-- himorime:end bench -->\n",
 			want: "```md\n<!-- himorime:begin bench -->\n<!-- himorime:end bench -->\n```\n<!-- himorime:begin bench -->\n\n## suite\n\n| a |\n|---|\n| 1 |\n\n<!-- himorime:end bench -->\n",
+		},
+		{
+			name:    "unclosed code block hides markers",
+			doc:     "```md\n<!-- himorime:begin bench -->\n<!-- himorime:end bench -->\n",
+			wantErr: `no line "<!-- himorime:begin bench -->"`,
+		},
+		{
+			name: "invalid ATX headings do not set a level",
+			doc:  "####### too deep\n#NoSpace\n<!-- himorime:begin bench -->\n<!-- himorime:end bench -->\n",
+			want: "####### too deep\n#NoSpace\n<!-- himorime:begin bench -->\n\n## suite\n\n| a |\n|---|\n| 1 |\n\n<!-- himorime:end bench -->\n",
 		},
 		{
 			name: "other sections are left alone",

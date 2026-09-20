@@ -126,27 +126,6 @@ func appAbsolutePath(a *App, path string) (string, error) {
 	return filepath.Clean(filepath.Join(dir, path)), nil
 }
 
-// resolvedPath follows existing symlinks and resolves missing final path
-// components through existing parents. This catches relative aliases and
-// directory symlink aliases before an output file is opened.
-func resolvedPath(path string) (string, error) {
-	path = filepath.Clean(path)
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return filepath.Clean(resolved), nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-	parent := filepath.Dir(path)
-	if parent == path {
-		return path, nil
-	}
-	resolved, err := resolvedPath(parent)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(resolved, filepath.Base(path)), nil
-}
-
 func reportPathsSame(a *App, input, output string) (bool, error) {
 	inPath, err := appAbsolutePath(a, input)
 	if err != nil {
@@ -165,15 +144,7 @@ func reportPathsSame(a *App, input, output string) (bool, error) {
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, outputPathError{err}
 	}
-	inputResolved, err := resolvedPath(inPath)
-	if err != nil {
-		return false, err
-	}
-	outputResolved, err := resolvedPath(outPath)
-	if err != nil {
-		return false, outputPathError{err}
-	}
-	return inputResolved == outputResolved, nil
+	return false, nil
 }
 
 // writeSavedReport renders into memory first and then renames a temporary

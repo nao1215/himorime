@@ -17,6 +17,7 @@ func TestFailureCauseUsesRunnerKind(t *testing.T) {
 		{runner.FailInterrupted, diag.Interrupted},
 		{runner.FailInternal, diag.Internal},
 		{runner.FailMetricCollection, diag.Metric},
+		{runner.FailureKind("future_failure"), diag.Internal},
 	} {
 		if got := failureCause(tt.kind); got != tt.want {
 			t.Errorf("failureCause(%q) = %s, want %s", tt.kind, got, tt.want)

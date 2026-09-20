@@ -88,18 +88,20 @@ func runFlags(fs *flag.FlagSet) any {
 
 func compareFlags(fs *flag.FlagSet) any {
 	m := &measureFlags{}
-	m.registerCommon(fs)
-	fs.StringVar(&m.against, "against", "", "the Git `revision` to compare the working tree with (required)")
-	fs.BoolVar(&m.failOnInconclusive, "fail-on-inconclusive", false, "exit 1 when a gated comparison is inconclusive")
+	registerComparisonFlags(fs, m, "the Git `revision` to compare the working tree with (required)")
 	return m
 }
 
 func ciFlags(fs *flag.FlagSet) any {
 	m := &measureFlags{}
-	m.registerCommon(fs)
-	fs.StringVar(&m.against, "against", "", "the base `revision`; defaults to $HIMORIME_BASE_REF, then the GitHub Actions event")
-	fs.BoolVar(&m.failOnInconclusive, "fail-on-inconclusive", false, "exit 1 when a gated comparison is inconclusive")
+	registerComparisonFlags(fs, m, "the base `revision`; defaults to $HIMORIME_BASE_REF, then the GitHub Actions event")
 	return m
+}
+
+func registerComparisonFlags(fs *flag.FlagSet, m *measureFlags, againstUsage string) {
+	m.registerCommon(fs)
+	fs.StringVar(&m.against, "against", "", againstUsage)
+	fs.BoolVar(&m.failOnInconclusive, "fail-on-inconclusive", false, "exit 1 when a gated comparison is inconclusive")
 }
 
 type listOptions struct {

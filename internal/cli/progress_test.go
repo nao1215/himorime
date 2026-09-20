@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -58,6 +59,38 @@ func TestProgressTextAdaptiveDoesNotInventTotal(t *testing.T) {
 	if strings.Contains(text, "measured 7/") || !strings.Contains(text, "measured 7") {
 		t.Fatalf("adaptive text = %q", text)
 	}
+}
+
+type failOnWrite struct {
+	calls int
+	fail  int
+}
+
+func (w *failOnWrite) Write(p []byte) (int, error) {
+	w.calls++
+	if w.calls == w.fail {
+		return 0, errors.New("write failed")
+	}
+	return len(p), nil
+}
+
+func TestProgressRendererPropagatesLogWriteErrors(t *testing.T) {
+	for _, fail := range []int{1, 2} {
+		out := &failOnWrite{fail: fail}
+		p := newProgressRenderer(out, nil)
+		p.active = true
+		if _, err := p.Write([]byte("log\n")); err == nil {
+			t.Errorf("write %d failure was swallowed", fail)
+		}
+	}
+
+	out := &failOnWrite{fail: 1}
+	p := newProgressRenderer(out, nil)
+	p.Close()
+	if n, err := p.Write([]byte("after close")); err == nil || n != 0 {
+		t.Fatalf("closed renderer write = %d, %v", n, err)
+	}
+	p.Update(runner.Progress{Benchmark: "ignored"})
 }
 
 func TestNonTTYLogHasNoANSI(t *testing.T) {

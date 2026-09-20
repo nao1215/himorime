@@ -365,6 +365,8 @@ scenarios:
             defaults: {warmup: 0, runs: 10}
             benchmarks:
               - name: quick
+                # This scenario checks base selection, not timing.
+                regression: {latency: {gate: false}}
                 commands:
                   app: {command: [e2ehelper, sleep, 1ms]}
       - run: {command: git init -q -b main, cwd: repo}
@@ -379,6 +381,7 @@ scenarios:
           stdout:
             json:
               - {path: "$.git.base_source", equals: "HIMORIME_BASE_REF"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: false}
       - run:
           command: himorime ci --quiet --against main --summary ${workdir}/local-summary.md
           cwd: repo

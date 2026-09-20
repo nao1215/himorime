@@ -1,7 +1,7 @@
 coverage:
   paths:
     - cover.out
-  acceptable: 80%
+  acceptable: 95%
 diff:
   datastores:
     - artifact://${GITHUB_REPOSITORY}

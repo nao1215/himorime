@@ -139,8 +139,8 @@ func Defs() []Def {
 	return out
 }
 
-// Lookup returns the definition of a metric.
-func Lookup(n Name) (Def, bool) {
+// lookup returns the definition of a metric.
+func lookup(n Name) (Def, bool) {
 	for _, d := range defs {
 		if d.Name == n {
 			return d, true
@@ -152,7 +152,7 @@ func Lookup(n Name) (Def, bool) {
 // MustLookup returns the definition of a metric defined in this package. It
 // panics on an unknown name, which is a programming error.
 func MustLookup(n Name) Def {
-	d, ok := Lookup(n)
+	d, ok := lookup(n)
 	if !ok {
 		panic(fmt.Sprintf("metric: unknown metric %q", n))
 	}
