@@ -75,7 +75,7 @@ scenarios:
           file: passing.yaml
           content: |
             version: "1"
-            suite: {name: saved report}
+            name: saved report
             defaults: {warmup: 0, runs: 2}
             benchmarks:
               - name: pass
@@ -118,7 +118,7 @@ scenarios:
           file: failing.yaml
           content: |
             version: "1"
-            suite: {name: saved failure}
+            name: saved failure
             defaults: {warmup: 0, runs: 1}
             benchmarks:
               - name: fail
