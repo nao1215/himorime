@@ -562,7 +562,7 @@ func TestBenchmarkCommentWorkflow(t *testing.T) {
 			var installed, measured, uploaded bool
 			for _, step := range job.Steps {
 				if strings.HasPrefix(step.Uses, "nao1215/setup-himorime@") {
-					installed = step.Uses == "nao1215/setup-himorime@30710690b8b2dc8c61df8bf289f5bb899af3fbfa"
+					installed = step.Uses == "nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897"
 				}
 				if strings.Contains(step.Run, "himorime ci ") {
 					measured = installed && strings.Contains(step.Run, `--output "$RUNNER_TEMP/himorime.json"`) && strings.Contains(step.Run, "--format json")
