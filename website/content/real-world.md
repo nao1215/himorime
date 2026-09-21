@@ -30,6 +30,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [sort](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sort) | GNU sort, uutils sort | One program name installed by two packages, one of them reached through a multi-call binary and a subcommand, and a setup step that checks which implementation the name resolves to before anything is measured |
 | [shell](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/shell) | bash, dash | Interactive programs run on a pseudo-terminal with `terminal: true` and keys typed from `stdin`, checked in `cleanup`, which reads what the last measured run printed, because a command that needs a terminal cannot run in setup |
 | [cc](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/cc) | GCC, Clang | Commands that take seconds, with a fixed number of `runs` and a raised `timeout`, and outputs that are programs, checked by running them rather than by comparing their bytes |
+| [js](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/js) | Node.js, Bun, Deno | Runtimes that keep settings and caches in the home directory, pointed into the working directory so the warmup runs fill a cache that starts empty, and a sandboxed runtime given the one permission the job needs |
 
 ## JSON processors
 
@@ -202,3 +203,19 @@ The baseline is GCC, the compiler of most Linux distributions, so `RELATIVE` rea
 The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed; its size is approximate, because C cannot be padded without changing what a compiler does with it, and throughput reads the size of the file. Both compilers come from the pinned runner image and their versions are recorded in the report.
 
 Suite: [bench/thirdparty/cc](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/cc)
+
+## JavaScript runtimes
+
+Same job: run [count.mjs](https://github.com/nao1215/himorime/blob/main/bench/thirdparty/js/count.mjs) over generated JSON Lines and write, for each event in sorted order, how many records carry it and the sum of their `dur_ms`, to a file. Measured at 5MiB and at 100MiB.
+
+Made equal: the same module, which uses only `node:fs` and `node:process` so the three runtimes run it unchanged, the same input file and the same kind of destination, a file in the working directory. Each runtime reads settings and keeps caches of its own: Bun reads `~/.bunfig.toml`, Deno keeps compiled modules under `DENO_DIR` and checks online for a newer release, and `NODE_OPTIONS` can pass flags to Node.js. `HOME` and `DENO_DIR` point into the working directory, `DENO_NO_UPDATE_CHECK` is set and `NODE_OPTIONS` is empty, so no runtime reads or fills the files of whoever runs the suite, and each benchmark starts with an empty cache that the warmup runs fill. Setup checks that Node.js wrote one line per event and compares the three outputs byte for byte.
+
+Deno reads a file only when it is allowed to, so it is given `--allow-read`, the one permission the job needs, and `--no-config` so it does not read a `deno.json` of the directory it runs in. Node.js and Bun read files without asking.
+
+Not equal: the engines. Node.js and Deno run V8 and Bun runs JavaScriptCore, and each compiles JavaScript and collects garbage on threads of its own, so CPU time can exceed wall-clock time. The module reads the whole file into one string, so peak RSS follows the input size for all three.
+
+The baseline is Node.js, the most widely used of the three, so `RELATIVE` reads as a multiple of it.
+
+The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. Node.js is installed from its release tarball and Bun and Deno from release archives, each at a pinned version whose digest is checked; the runner image ships a Node.js of its own, which the pinned one replaces.
+
+Suite: [bench/thirdparty/js](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/js)

@@ -296,6 +296,47 @@ jobs:
           "$RUNNER_TEMP/himorime" run bench/thirdparty/cc
           --format json --output "$RUNNER_TEMP/cc.json"
           --summary "$GITHUB_STEP_SUMMARY"
+      # Node.js comes from its release tarball, and Bun and Deno from release
+      # archives, each with a pinned version and SHA256. The image ships a
+      # Node.js of its own; the pinned one goes into a directory that comes
+      # first on PATH, as jq does above.
+      - name: Install the JavaScript runtimes
+        env:
+          NODE_VERSION: "24.21.0"
+          NODE_SHA256: "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6"
+          BUN_VERSION: "1.4.2"
+          BUN_SHA256: "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913"
+          DENO_VERSION: "2.9.7"
+          DENO_SHA256: "c6527f24f4b16031d3ae4fa9f658d5f11534c8d84ce7dc8502420280919c3490"
+        run: |
+          set -euo pipefail
+          bin="$(go env GOPATH)/bin"
+          mkdir -p "${bin}"
+          archive="node-v${NODE_VERSION}-linux-x64"
+          curl -fsSL -o "${RUNNER_TEMP}/node.tar.xz" \
+            "https://nodejs.org/dist/v${NODE_VERSION}/${archive}.tar.xz"
+          echo "${NODE_SHA256}  ${RUNNER_TEMP}/node.tar.xz" | sha256sum --check -
+          tar -xJf "${RUNNER_TEMP}/node.tar.xz" -C "${RUNNER_TEMP}" "${archive}/bin/node"
+          install -m 0755 "${RUNNER_TEMP}/${archive}/bin/node" "${bin}/node"
+          curl -fsSL -o "${RUNNER_TEMP}/bun.zip" \
+            "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64.zip"
+          echo "${BUN_SHA256}  ${RUNNER_TEMP}/bun.zip" | sha256sum --check -
+          unzip -o -q "${RUNNER_TEMP}/bun.zip" -d "${RUNNER_TEMP}"
+          install -m 0755 "${RUNNER_TEMP}/bun-linux-x64/bun" "${bin}/bun"
+          curl -fsSL -o "${RUNNER_TEMP}/deno.zip" \
+            "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip"
+          echo "${DENO_SHA256}  ${RUNNER_TEMP}/deno.zip" | sha256sum --check -
+          unzip -o -q "${RUNNER_TEMP}/deno.zip" deno -d "${RUNNER_TEMP}/deno"
+          install -m 0755 "${RUNNER_TEMP}/deno/deno" "${bin}/deno"
+          command -v node
+          node --version
+          bun --version
+          deno --version
+      - name: Measure the JavaScript runtimes
+        run: >
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/js
+          --format json --output "$RUNNER_TEMP/js.json"
+          --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
