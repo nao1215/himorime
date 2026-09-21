@@ -1,0 +1,134 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# GNU grep and ripgrep searching the same generated directory tree for a fixed
+# string.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: text search
+description: GNU grep and ripgrep writing every line that contains ERROR, with its file and line number, from a generated tree of log files.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  # Every command and hook runs in the working directory, so the tree is
+  # searched as the relative path "tree" and the matches read
+  # tree/d00/s00/f00000.log:12:..., the same on every machine.
+  cwd: "${workdir}"
+  # The locale of whoever runs the suite would otherwise decide how GNU grep
+  # reads bytes. ripgrep does not look at the locale.
+  env:
+    LC_ALL: C.UTF-8
+  metrics:
+    # CPU time is what tells a search on several threads from one on a single
+    # thread. Peak RSS is left out: every command stayed at what starting a
+    # process already costs when this suite was written.
+    cpu: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    grep: [grep, --version]
+    rg: [rg, --version]
+
+benchmarks:
+  - name: search a tree of 80 files, 5MiB
+    description: >-
+      Each command writes every line containing the fixed string ERROR, as
+      path:line:text, to a file in the working directory. ripgrep is told to
+      search what grep -r searches: no ignore files, hidden files included,
+      no heading, no color. The outputs are sorted and compared in setup,
+      because a parallel search prints files in the order it finishes them.
+      rg runs with one thread, as grep does, and with its default thread
+      count, which depends on the machine; its CPU time shows how many
+      threads it used.
+    tags: [thirdparty, search, small]
+    baseline: grep
+    setup:
+      - command: ["${artifact}", -kind, tree, -size, 5MiB, -seed, "21", -o, tree]
+      # The throughput below is declared as 80 files; this proves the
+      # generator wrote 80.
+      - command: test "$(find tree -type f | wc -l)" -eq 80
+        shell: true
+      - command: grep -r -n -F ERROR tree | sort > expect.txt
+        shell: true
+      - command: test -s expect.txt
+        shell: true
+      - command: rg --threads 1 -n -F --no-heading --color never --no-ignore --hidden ERROR tree | sort > got-rg-j1.txt
+        shell: true
+      - command: cmp expect.txt got-rg-j1.txt
+        shell: true
+      - command: rg -n -F --no-heading --color never --no-ignore --hidden ERROR tree | sort > got-rg.txt
+        shell: true
+      - command: cmp expect.txt got-rg.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          value: 80
+          unit: files
+    commands:
+      grep:
+        command: [grep, -r, -n, -F, ERROR, tree]
+        stdout: out-grep.txt
+      rg-j1:
+        command: [rg, --threads, "1", -n, -F, --no-heading, --color, never, --no-ignore, --hidden, ERROR, tree]
+        stdout: out-rg-j1.txt
+      rg:
+        command: [rg, -n, -F, --no-heading, --color, never, --no-ignore, --hidden, ERROR, tree]
+        stdout: out-rg.txt
+
+  - name: search a tree of 1600 files, 100MiB
+    description: >-
+      The same search over twenty times as many files, where reading and
+      scanning dominate and the process start no longer shows. The seed
+      differs from the 5MiB benchmark, so the files are different bytes of
+      the same shape. rg with its default thread count has more files to
+      share out here.
+    tags: [thirdparty, search, large]
+    baseline: grep
+    setup:
+      - command: ["${artifact}", -kind, tree, -size, 100MiB, -seed, "22", -o, tree]
+      - command: test "$(find tree -type f | wc -l)" -eq 1600
+        shell: true
+      - command: grep -r -n -F ERROR tree | sort > expect.txt
+        shell: true
+      - command: test -s expect.txt
+        shell: true
+      - command: rg --threads 1 -n -F --no-heading --color never --no-ignore --hidden ERROR tree | sort > got-rg-j1.txt
+        shell: true
+      - command: cmp expect.txt got-rg-j1.txt
+        shell: true
+      - command: rg -n -F --no-heading --color never --no-ignore --hidden ERROR tree | sort > got-rg.txt
+        shell: true
+      - command: cmp expect.txt got-rg.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          value: 1600
+          unit: files
+    commands:
+      grep:
+        command: [grep, -r, -n, -F, ERROR, tree]
+        stdout: out-grep.txt
+      rg-j1:
+        command: [rg, --threads, "1", -n, -F, --no-heading, --color, never, --no-ignore, --hidden, ERROR, tree]
+        stdout: out-rg-j1.txt
+      rg:
+        command: [rg, -n, -F, --no-heading, --color, never, --no-ignore, --hidden, ERROR, tree]
+        stdout: out-rg.txt
