@@ -1,0 +1,6 @@
+version: "1"
+name: x
+defaults: {regression: {latency: {min_difference: 0.9ns}}}
+benchmarks:
+  - name: a
+    commands: {a: {command: [a]}}

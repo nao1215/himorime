@@ -159,14 +159,14 @@
   },
   "definitions": {
     "duration": {
-      "description": "A duration such as 500ms, 2s or 1m30s. Units: ns, us, µs, ms, s, m, h.",
+      "description": "A duration such as 500ms, 2s or 1m30s. Units: ns, us, µs, ms, s, m, h. Nanoseconds are whole, and a fraction of a larger unit must come to whole nanoseconds.",
       "type": "string",
-      "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+      "pattern": "^([0-9]+(\\.[0-9]+)?(us|µs|ms|s|m|h)|[0-9]+ns)+$"
     },
     "positiveDuration": {
       "description": "A duration greater than zero.",
       "type": "string",
-      "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+      "pattern": "^([0-9]+(\\.[0-9]+)?(us|µs|ms|s|m|h)|[0-9]+ns)+$",
       "not": {
         "pattern": "^(0+(\\.0+)?(ns|us|µs|ms|s|m|h))+$"
       }
@@ -174,7 +174,7 @@
     "budget": {
       "description": "An upper bound on a duration: < or <= followed by a duration greater than zero, such as \"< 20ms\".",
       "type": "string",
-      "pattern": "^\\s*(<=|<)\\s*(([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+      "pattern": "^\\s*(<=|<)\\s*(([0-9]+(\\.[0-9]+)?(us|µs|ms|s|m|h)|[0-9]+ns)+)\\s*$",
       "not": {
         "pattern": "^\\s*(<=|<)\\s*(0+(\\.0+)?(ns|us|µs|ms|s|m|h))+\\s*$"
       }

@@ -186,6 +186,19 @@ func TestParseDuration(t *testing.T) {
 			t.Errorf("ParseDuration(%q) accepted", in)
 		}
 	}
+	// A value is used exactly as written: a fraction of a nanosecond would be
+	// dropped, so it is rejected, while a fraction of a larger unit that
+	// comes to whole nanoseconds is kept.
+	for in, want := range map[string]time.Duration{"1.5us": 1500, "0.001us": 1, "1.000000001s": time.Second + 1, "2ns": 2} {
+		if d, err := ParseDuration(in); err != nil || d != want {
+			t.Errorf("ParseDuration(%q) = %v, %v; want %v", in, d, err, want)
+		}
+	}
+	for _, in := range []string{"1.9ns", "0.5ns", "1.0ns", "0.0001us", "0.0000000001s", "1s0.5ns"} {
+		if _, err := ParseDuration(in); err == nil || !strings.Contains(err.Error(), "a fraction of a nanosecond") {
+			t.Errorf("ParseDuration(%q) error = %v, want it to name a fraction of a nanosecond", in, err)
+		}
+	}
 }
 
 func TestParseThreshold(t *testing.T) {
