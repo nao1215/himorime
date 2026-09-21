@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 - The README and the installation page list the AUR package `himorime-bin`, maintained by Rafael Baboni Dominiquini, who is credited in a new Contributors section. The documentation guard now counts `yay -S` as a published channel.
 
+### Fixed
+
+- `compare` and `ci` no longer delete the `.git/worktrees` entry of a worktree of yours whose directory is missing, such as one on an unmounted disk; they clear only the entries of their own temporary worktrees.
+- A suite file with a second YAML document after `---` is rejected; before, everything after the first document was ignored, so its benchmarks and budgets never ran and the run could pass.
+- A suite that uses a YAML alias or merge key keeps its strings as written: a tab in an argument was dropped, and values such as `".inf"` or keys overridden next to `<<` were rejected.
+- `max_percent` written as a string such as `"0%"` or `"5000%"` is held to the same range as a number, greater than 0 and at most 1000, in the loader and in the schema.
+- A percentile budget with so many decimals that it rounds to p100, such as `p99.99999999999999999`, is rejected by `validate`; before, it failed every run and made the JSON report fail to write.
+- In JSON and CSV reports, a metric of a command that never completed a run has status `failed` with a reason instead of `measured` with null statistics.
+- Validation errors under a quoted key, such as a command written as `"tool":`, point at the offending line instead of the enclosing `commands:` key.
+
 ## [0.4.1] - 2026-09-21
 
 ### Added

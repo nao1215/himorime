@@ -317,6 +317,10 @@ func metricSummaries(m *runner.Measurement, cfg config.Benchmark, percentiles []
 			ms.Status, ms.Reason = StatusFailed, "the runs did not record this metric"
 			continue
 		}
+		if len(samples) == 0 {
+			ms.Status, ms.Reason = StatusFailed, "no successful run measured this metric"
+			continue
+		}
 		ms.Status = StatusMeasured
 		ms.Samples = samples
 		ms.Stats = metricStats(samples, percentiles)

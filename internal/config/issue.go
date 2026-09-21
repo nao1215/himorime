@@ -168,7 +168,8 @@ func child(node ast.Node, seg any) (ast.Node, ast.Node) {
 			return nil, nil
 		}
 		for _, mv := range n.Values {
-			if mv.Key != nil && mv.Key.String() == key {
+			// The token value is the key without the quotes it was written with.
+			if mv.Key != nil && mv.Key.GetToken() != nil && mv.Key.GetToken().Value == key {
 				if mv.Value != nil && mv.Value.Type() != ast.NullType {
 					return mv.Value, mv.Key
 				}

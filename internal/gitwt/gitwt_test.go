@@ -258,9 +258,18 @@ func TestAddWorktreeFailureCleansUp(t *testing.T) {
 func TestAddWorktreePrunesStaleWorktrees(t *testing.T) {
 	t.Parallel()
 	dir := newRepo(t)
-	stale := filepath.Join(t.TempDir(), "stale")
+	stale := filepath.Join(t.TempDir(), "worktree-stale", "tree")
 	git(t, dir, "worktree", "add", "--detach", "-q", stale, "HEAD")
-	if err := os.RemoveAll(stale); err != nil {
+	if err := os.RemoveAll(filepath.Dir(stale)); err != nil {
+		t.Fatal(err)
+	}
+	// A worktree of the user's whose directory is missing for now, such as
+	// one on an unmounted disk, is not himorime's to prune: its entry holds
+	// the user's index and branch lock.
+	away := filepath.Join(t.TempDir(), "feature")
+	git(t, dir, "worktree", "add", "-q", "-b", "feature", away)
+	moved := away + "-unmounted"
+	if err := os.Rename(away, moved); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
@@ -276,9 +285,33 @@ func TestAddWorktreePrunesStaleWorktrees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = wt.Remove(ctx) }()
 	if list := git(t, dir, "worktree", "list", "--porcelain"); strings.Contains(list, "stale") {
 		t.Fatalf("a worktree killed mid-run was not pruned:\n%s", list)
+	}
+	// An entry Git has not finished writing has no gitdir file; it is left
+	// alone, and so is a himorime worktree that is still in use.
+	if err := os.MkdirAll(filepath.Join(dir, ".git", "worktrees", "incomplete"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.pruneOrphans(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "worktrees", "incomplete")); err != nil {
+		t.Fatalf("an entry without gitdir was removed: %v", err)
+	}
+	// git fails in the worktree if its entry was pruned.
+	git(t, wt.Dir, "status", "--porcelain")
+	if err := wt.Remove(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if list := git(t, dir, "worktree", "list", "--porcelain"); !strings.Contains(list, "feature") {
+		t.Fatalf("the user's worktree was pruned:\n%s", list)
+	}
+	if err := os.Rename(moved, away); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, away, "branch", "--show-current"); got != "feature" {
+		t.Fatalf("the user's worktree is broken: branch %q", got)
 	}
 }
 

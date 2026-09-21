@@ -263,6 +263,10 @@ func TestNoDataBudgetKeepsExecutionError(t *testing.T) {
 	if c.Budgets[0].Status != BudgetNoData || c.Result != ResultMetricError || r.Summary.ExitCode != exitcode.Metric {
 		t.Fatalf("no-data budget = %+v, result %s, summary %+v", c.Budgets[0], c.Result, r.Summary)
 	}
+	// A metric no run measured is failed, not measured with null statistics.
+	if lat := c.Head.Metrics["latency"]; lat.Status != StatusFailed || lat.Stats != nil || lat.Reason != "no successful run measured this metric" {
+		t.Fatalf("latency without runs = %+v", lat)
+	}
 	execution := runResult("execution", "", map[string][]time.Duration{"tool": nil}, "tool")
 	execution.Benchmark.Budgets = noData.Benchmark.Budgets
 	execution.Commands[0].Sides[runner.SideHead].Failure = &runner.Failure{Kind: runner.FailExitCode, ExitCode: 1, Message: "exited"}

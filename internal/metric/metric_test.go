@@ -324,7 +324,7 @@ func TestAggregations(t *testing.T) {
 			t.Errorf("ParseAggregation(%q): %v", in, err)
 		}
 	}
-	for _, in := range []string{"", "p0", "p100", "p01", "p", "p99.", "stddev", "avg", "P95", "p-1"} {
+	for _, in := range []string{"", "p0", "p100", "p01", "p", "p99.", "stddev", "avg", "P95", "p-1", "p99.999999999999999", "p99.99999999999999999"} {
 		if _, err := ParseAggregation(in); err == nil {
 			t.Errorf("ParseAggregation(%q) accepted", in)
 		}

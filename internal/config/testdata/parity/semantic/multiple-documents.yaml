@@ -1,0 +1,12 @@
+# expect: a suite file holds one YAML document
+version: "1"
+name: first
+benchmarks:
+  - name: a
+    commands: {a: {command: [a]}}
+---
+version: "1"
+name: second
+benchmarks:
+  - name: b
+    commands: {b: {command: [b]}}

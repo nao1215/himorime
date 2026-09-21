@@ -1,0 +1,6 @@
+version: "1"
+name: x
+defaults: {regression: {latency: {max_percent: "1000.5%"}}}
+benchmarks:
+  - name: a
+    commands: {a: {command: [a]}}
