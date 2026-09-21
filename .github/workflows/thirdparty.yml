@@ -85,6 +85,29 @@ jobs:
           "$RUNNER_TEMP/himorime" run bench/thirdparty/compression
           --format json --output "$RUNNER_TEMP/compression.json"
           --summary "$GITHUB_STEP_SUMMARY"
+      # GNU grep comes from the pinned image, like the compression tools.
+      # ripgrep is a Rust release binary with a pinned version and SHA256.
+      - name: Install ripgrep
+        env:
+          RG_VERSION: "15.2.0"
+          RG_SHA256: "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c"
+        run: |
+          set -euo pipefail
+          bin="$(go env GOPATH)/bin"
+          mkdir -p "${bin}"
+          archive="ripgrep-${RG_VERSION}-x86_64-unknown-linux-musl"
+          curl -fsSL -o "${RUNNER_TEMP}/${archive}.tar.gz" \
+            "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/${archive}.tar.gz"
+          echo "${RG_SHA256}  ${RUNNER_TEMP}/${archive}.tar.gz" | sha256sum --check -
+          tar -xzf "${RUNNER_TEMP}/${archive}.tar.gz" -C "${RUNNER_TEMP}"
+          install -m 0755 "${RUNNER_TEMP}/${archive}/rg" "${bin}/rg"
+          grep --version
+          rg --version
+      - name: Measure the search tools
+        run: >
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/search
+          --format json --output "$RUNNER_TEMP/search.json"
+          --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

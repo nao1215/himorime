@@ -31,6 +31,16 @@ For tool selection, see [Comparison](https://nao1215.github.io/himorime/comparis
 
 Use [setup-himorime](https://github.com/nao1215/setup-himorime) and `himorime ci` on pull requests; the [GitHub Actions guide](https://nao1215.github.io/himorime/github-actions/) contains the workflow.
 
+## Measuring programs you did not write
+
+himorime measures a command, so a program you did not write is measured like your own. The suites in [bench/thirdparty](./bench/thirdparty) measure real third-party tools and are written to be copied; [Real-world suites](https://nao1215.github.io/himorime/real-world/) says what each one shows.
+
+| Suite | Programs |
+|---|---|
+| [json](./bench/thirdparty/json) | jq, gojq, jaq |
+| [compression](./bench/thirdparty/compression) | gzip, bzip2, xz |
+| [search](./bench/thirdparty/search) | GNU grep, ripgrep |
+
 ## Install
 
 ```shell

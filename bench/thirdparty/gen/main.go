@@ -7,6 +7,7 @@
 // input.
 //
 //	gen -kind jsonl -size 5MiB -seed 1 -o out.jsonl
+//	gen -kind tree -size 5MiB -seed 1 -o dir
 //
 // Add a shape here rather than writing a second generator for the next
 // category.
@@ -19,6 +20,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -32,10 +34,10 @@ func main() {
 
 func run(args []string) error {
 	fs := flag.NewFlagSet("gen", flag.ContinueOnError)
-	kind := fs.String("kind", "jsonl", "shape of the generated input: jsonl")
+	kind := fs.String("kind", "jsonl", "shape of the generated input: jsonl, or tree for a directory of log files")
 	size := fs.String("size", "1MiB", "size of the output in bytes, with an optional KiB, MiB or GiB suffix")
 	seed := fs.Uint64("seed", 1, "seed of the random source; the same seed produces the same bytes")
-	out := fs.String("o", "", "path of the file to write")
+	out := fs.String("o", "", "path of the file to write, or of the directory to create for tree")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -46,16 +48,23 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	if *kind != "jsonl" {
-		return fmt.Errorf("unknown -kind %q; the shapes are: jsonl", *kind)
+	switch *kind {
+	case "jsonl":
+		return writeFile(*out, func(w *bufio.Writer) error { return writeJSONL(w, n, *seed) })
+	case "tree":
+		return writeTree(*out, n, *seed)
+	default:
+		return fmt.Errorf("unknown -kind %q; the shapes are: jsonl, tree", *kind)
 	}
+}
 
-	f, err := os.Create(*out)
+func writeFile(path string, write func(*bufio.Writer) error) error {
+	f, err := os.Create(path) //nolint:gosec // G304: the path is the -o flag, or a file under it, given by the suite that runs this generator
 	if err != nil {
 		return err
 	}
 	w := bufio.NewWriterSize(f, 1<<20)
-	if err := writeJSONL(w, n, *seed); err != nil {
+	if err := write(w); err != nil {
 		_ = f.Close()
 		return err
 	}
@@ -154,4 +163,68 @@ var minPadLen = len(padPrefix) + len(padSuffix)
 
 func padRecord(n int) string {
 	return padPrefix + strings.Repeat("x", n-minPadLen) + padSuffix
+}
+
+// treeFileSize is the size of every file of a tree, so the number of files is
+// the requested size divided by it, and a suite can declare that number as
+// the work of each run.
+const treeFileSize = 64 << 10
+
+var (
+	levels     = []string{"INFO", "INFO", "INFO", "INFO", "INFO", "INFO", "INFO", "INFO", "DEBUG", "WARN"}
+	components = []string{"http", "db", "cache", "auth", "queue", "scheduler"}
+	messages   = []string{"request served", "connection reused", "retrying after errors", "slow query", "token refreshed", "job finished", "cache miss"}
+)
+
+// writeTree writes size/treeFileSize log files of exactly treeFileSize bytes
+// under dir, spread over two levels of directories as a source tree or a log
+// archive is. About one line in fifty is an ERROR line, and some messages
+// contain the lowercase word, so a search that ignores case would find more.
+func writeTree(dir string, size int64, seed uint64) error {
+	if size%treeFileSize != 0 {
+		return fmt.Errorf("bad -size for tree: want a multiple of %d bytes, the size of one file", treeFileSize)
+	}
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
+	for i := range size / treeFileSize {
+		sub := filepath.Join(dir, fmt.Sprintf("d%02d", i%16), fmt.Sprintf("s%02d", i/16%8))
+		if err := os.MkdirAll(sub, 0o750); err != nil {
+			return err
+		}
+		path := filepath.Join(sub, fmt.Sprintf("f%05d.log", i))
+		if err := writeFile(path, func(w *bufio.Writer) error { return writeLog(w, r) }); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeLog writes exactly treeFileSize bytes of log lines. The last line is
+// padded to the byte, like the last record of writeJSONL.
+func writeLog(w *bufio.Writer, r *rand.Rand) error {
+	written := 0
+	for {
+		line := logLine(r)
+		if written+len(line)+len(logPadPrefix)+1 > treeFileSize {
+			break
+		}
+		if _, err := w.WriteString(line); err != nil {
+			return err
+		}
+		written += len(line)
+	}
+	_, err := w.WriteString(logPadPrefix + strings.Repeat("x", treeFileSize-written-len(logPadPrefix)-1) + "\n")
+	return err
+}
+
+const logPadPrefix = "2026-01-01T00:00:00Z INFO [pad] "
+
+func logLine(r *rand.Rand) string {
+	level := levels[r.IntN(len(levels))]
+	if r.IntN(50) == 0 {
+		level = "ERROR"
+	}
+	return fmt.Sprintf("2026-%02d-%02dT%02d:%02d:%02dZ %s [%s] %s id=%d dur_ms=%d\n",
+		1+r.IntN(12), 1+r.IntN(28), r.IntN(24), r.IntN(60), r.IntN(60),
+		level, components[r.IntN(len(components))], messages[r.IntN(len(messages))],
+		100000+r.IntN(900000), r.IntN(5000))
 }

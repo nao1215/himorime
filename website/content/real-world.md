@@ -20,6 +20,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 |---|---|---|
 | [json](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/json) | jq, gojq, jaq | Several implementations of one job in a single benchmark, input generated from a fixed seed, throughput declared from that input file, and a setup hook that proves the outputs match before anything is measured |
 | [compression](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/compression) | gzip, bzip2, xz | Binary output commands writing to different formats, with decompression and byte comparison in setup before latency, throughput, CPU time and peak RSS are measured |
+| [search](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/search) | GNU grep, ripgrep | A directory tree as input, a pinned locale, outputs compared after sorting, throughput declared as a number of files, and one tool measured at two thread counts |
 
 ## JSON processors
 
@@ -46,3 +47,17 @@ Not equal: gzip, bzip2 and xz use different compression formats and algorithms, 
 The baseline is gzip, a widely deployed reference implementation. Versions are recorded in the report so a local run can be interpreted with the exact tool versions.
 
 Suite: [bench/thirdparty/compression](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/compression)
+
+## Text search
+
+Same job: write every line that contains the fixed string `ERROR`, as `path:line:text`, from a generated tree of 64KiB log files to a file. Measured on 80 files (5MiB), where starting the process dominates, and on 1600 files (100MiB), where reading and scanning dominate.
+
+Made equal: the same tree, searched as the relative path `tree` from the working directory, the same fixed string, line numbers on, and the same kind of destination, a file in the working directory. ripgrep is told to search what `grep -r` searches, with `--no-ignore --hidden`, and to print as grep does, with `--no-heading --color never`. `LC_ALL` is set to `C.UTF-8` so the locale of whoever runs the suite does not change how GNU grep reads bytes. Setup sorts each output and compares it with grep's byte for byte, and checks that grep found at least one line.
+
+Not equal: GNU grep searches on one thread. ripgrep is measured twice, as `rg-j1` with `--threads 1` and as `rg` with its default thread count, which depends on the number of CPUs of the machine; the CPU time of `rg` can exceed its wall-clock time, while that of grep and `rg-j1` cannot. `rg` prints files in the order its threads finish them, so its output order varies between runs; this is why setup compares sorted outputs. Peak RSS is not measured, because every command stayed at what starting a process costs when the suite was written.
+
+The baseline is GNU grep, the reference implementation that `grep -r` scripts assume, so `RELATIVE` reads as a multiple of it.
+
+Throughput is declared as a fixed `value` in files, because the input is a directory rather than one file whose size could be read; setup counts the files so the number cannot drift from the tree. The tree comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. GNU grep comes from the pinned runner image and ripgrep is installed at a pinned version whose digest is checked.
+
+Suite: [bench/thirdparty/search](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/search)
