@@ -1,0 +1,129 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# GNU awk, mawk and GoAWK running the same awk program, kept next to this
+# file, over generated CSV.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: awk interpreters
+description: GNU awk, mawk and GoAWK running sum.awk, which totals the amount column of generated CSV per city.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  # Commands and hooks run in ${root}, the directory of this file, which is
+  # the default. That is what lets every command name the program as
+  # "-f sum.awk": a script, a query or a config file kept beside the suite is
+  # found the same way on every machine, and in a comparison each revision
+  # runs its own copy.
+  #
+  # GNU awk reads the locale and, in a UTF-8 one, handles characters rather
+  # than bytes. mawk and GoAWK work on bytes, so the C locale gives all three
+  # the same job.
+  env:
+    LC_ALL: C
+  metrics:
+    # Peak RSS is left out: all three read a line at a time and hold six
+    # array entries, so every command stayed near what starting a process
+    # already costs when this suite was written.
+    cpu: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    gawk: [gawk, --version]
+    mawk: [mawk, -W, version]
+    goawk: [goawk, -version]
+
+benchmarks:
+  - name: total a column of 5MiB of CSV per city
+    description: >-
+      Each command runs sum.awk over the same CSV and writes one line per
+      city, with its row count and its total, to a file in the working
+      directory. An awk program walks an array in an order each interpreter
+      chooses, so setup sorts the three outputs before comparing them byte
+      for byte. The totals are sums of doubles added in input order and
+      printed with %.2f, which all three do the same way. GoAWK starts a Go
+      runtime and runs a garbage collector on threads of its own, so its CPU
+      time can exceed its wall-clock time.
+    tags: [thirdparty, awk, small]
+    baseline: gawk
+    setup:
+      - command: ["${artifact}", -kind, csv, -size, 5MiB, -seed, "81", -o, "${workdir}/input.csv"]
+      - command: gawk -f sum.awk ${workdir}/input.csv | sort > ${workdir}/expect.txt
+        shell: true
+      # Six cities, one line each; an empty or short output would compare
+      # equal to another empty one.
+      - command: test $(wc -l < ${workdir}/expect.txt) -eq 6
+        shell: true
+      - command: mawk -f sum.awk ${workdir}/input.csv | sort > ${workdir}/got-mawk.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-mawk.txt
+        shell: true
+      - command: goawk -f sum.awk ${workdir}/input.csv | sort > ${workdir}/got-goawk.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-goawk.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.csv"
+    commands:
+      gawk:
+        command: [gawk, -f, sum.awk, "${workdir}/input.csv"]
+        stdout: out-gawk.txt
+      mawk:
+        command: [mawk, -f, sum.awk, "${workdir}/input.csv"]
+        stdout: out-mawk.txt
+      goawk:
+        command: [goawk, -f, sum.awk, "${workdir}/input.csv"]
+        stdout: out-goawk.txt
+
+  - name: total a column of 100MiB of CSV per city
+    description: >-
+      The same program over twenty times the input. The seed differs from the
+      5MiB benchmark, so the two are different bytes of the same shape.
+    tags: [thirdparty, awk, large]
+    baseline: gawk
+    setup:
+      - command: ["${artifact}", -kind, csv, -size, 100MiB, -seed, "82", -o, "${workdir}/input.csv"]
+      - command: gawk -f sum.awk ${workdir}/input.csv | sort > ${workdir}/expect.txt
+        shell: true
+      - command: test $(wc -l < ${workdir}/expect.txt) -eq 6
+        shell: true
+      - command: mawk -f sum.awk ${workdir}/input.csv | sort > ${workdir}/got-mawk.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-mawk.txt
+        shell: true
+      - command: goawk -f sum.awk ${workdir}/input.csv | sort > ${workdir}/got-goawk.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-goawk.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.csv"
+    commands:
+      gawk:
+        command: [gawk, -f, sum.awk, "${workdir}/input.csv"]
+        stdout: out-gawk.txt
+      mawk:
+        command: [mawk, -f, sum.awk, "${workdir}/input.csv"]
+        stdout: out-mawk.txt
+      goawk:
+        command: [goawk, -f, sum.awk, "${workdir}/input.csv"]
+        stdout: out-goawk.txt

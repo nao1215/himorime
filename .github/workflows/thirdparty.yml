@@ -221,6 +221,35 @@ jobs:
           "$RUNNER_TEMP/himorime" run bench/thirdparty/yaml
           --format json --output "$RUNNER_TEMP/yaml.json"
           --summary "$GITHUB_STEP_SUMMARY"
+      # mawk is the awk of the pinned image. GoAWK is a Go module pinned
+      # through go install. GNU awk has no release binaries, so it is built
+      # from a release tarball with a pinned version and SHA256.
+      - name: Install the awk interpreters
+        env:
+          GAWK_VERSION: "5.4.1"
+          GAWK_SHA256: "07f6f7342b7febe4313fc2c2542ad93d64fe20ad8717200109f105a826f5fd37"
+        run: |
+          set -euo pipefail
+          bin="$(go env GOPATH)/bin"
+          mkdir -p "${bin}"
+          go install github.com/benhoyt/goawk@v1.32.0
+          curl -fsSL -o "${RUNNER_TEMP}/gawk.tar.xz" \
+            "https://ftp.gnu.org/gnu/gawk/gawk-${GAWK_VERSION}.tar.xz"
+          echo "${GAWK_SHA256}  ${RUNNER_TEMP}/gawk.tar.xz" | sha256sum --check -
+          tar -xJf "${RUNNER_TEMP}/gawk.tar.xz" -C "${RUNNER_TEMP}"
+          cd "${RUNNER_TEMP}/gawk-${GAWK_VERSION}"
+          ./configure --quiet --prefix="${RUNNER_TEMP}/gawk" --disable-nls --disable-mpfr
+          make -s -j"$(nproc)" > /dev/null
+          make -s install > /dev/null
+          install -m 0755 "${RUNNER_TEMP}/gawk/bin/gawk" "${bin}/gawk"
+          gawk --version
+          mawk -W version
+          goawk -version
+      - name: Measure the awk interpreters
+        run: >
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/awk
+          --format json --output "$RUNNER_TEMP/awk.json"
+          --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

@@ -26,6 +26,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [sql](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sql) | DuckDB, trdsql, csvq, sqly | Peak RSS as the metric that separates the programs, a tool from this repository's author measured without being the baseline, and `HOME` and `TMPDIR` pointed into the working directory so no tool reads or writes the reader's files |
 | [diff](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/diff) | GNU diff, git diff | Commands whose success is exit status 1, declared with `exit_codes`, outputs compared after dropping headers that differ by design, and git kept from reading the configuration files of whoever runs it |
 | [yaml](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/yaml) | yq, yj, gojq | Outputs that differ only in key order, which the job allows, normalized with jq, which is not measured, before they are compared |
+| [awk](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/awk) | GNU awk, mawk, GoAWK | Interpreters running one program kept as a file next to the suite, found by a path relative to the suite directory, which is where commands run unless `cwd` says otherwise |
 
 ## JSON processors
 
@@ -136,3 +137,17 @@ The baseline is yq, the most widely used of the three, so `RELATIVE` reads as a 
 The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. yq and gojq are installed with `go install` at pinned versions, and yj from a release binary at a pinned version whose digest is checked.
 
 Suite: [bench/thirdparty/yaml](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/yaml)
+
+## awk interpreters
+
+Same job: run [sum.awk](https://github.com/nao1215/himorime/blob/main/bench/thirdparty/awk/sum.awk) over generated CSV and write, for each city, its number of rows and the total of its amount column to a file. Measured at 5MiB and at 100MiB.
+
+Made equal: the same program file, the same input file and the same kind of destination, a file in the working directory. The program sits next to the suite and every command names it as `-f sum.awk`. Commands run in the directory of the suite file unless `cwd` says otherwise, so the path works on every machine, and in a comparison each revision runs its own copy of the program. `LC_ALL` is set to `C`, because GNU awk reads the locale and handles characters rather than bytes in a UTF-8 one, while mawk and GoAWK work on bytes. Setup checks that GNU awk wrote six lines, one per city, and compares the three outputs byte for byte after sorting them.
+
+Not equal: the order of the lines. An awk program that walks an array with `for (key in array)` gets the keys in an order the interpreter chooses, and the three choose differently, which is why the outputs are sorted before they are compared. The totals are sums of doubles added in the order of the input and printed with `%.2f`, which the three do the same way. GoAWK starts a Go runtime and runs a garbage collector on threads of its own, so its CPU time can exceed its wall-clock time. Peak RSS is not measured, because the three read one line at a time and keep six array entries, and every command stayed near what starting a process costs when the suite was written.
+
+The baseline is GNU awk, the oldest of the three, so `RELATIVE` reads as a multiple of it.
+
+The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. mawk comes from the pinned runner image, GoAWK is installed with `go install` at a pinned version, and GNU awk is built from a release tarball at a pinned version whose digest is checked.
+
+Suite: [bench/thirdparty/awk](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/awk)
