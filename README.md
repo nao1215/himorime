@@ -52,11 +52,16 @@ himorime measures a command, so a program you did not write is measured like you
 go install github.com/nao1215/himorime@latest
 ```
 
-Homebrew: `brew install --cask nao1215/tap/himorime`. The [release page](https://github.com/nao1215/himorime/releases) has archives and Linux packages, and [setup-himorime](https://github.com/nao1215/setup-himorime) installs a release in GitHub Actions.
+Homebrew: `brew install --cask nao1215/tap/himorime`. Arch Linux: `yay -S himorime-bin` from the [AUR](https://aur.archlinux.org/packages/himorime-bin). The [release page](https://github.com/nao1215/himorime/releases) has archives and Linux packages, and [setup-himorime](https://github.com/nao1215/setup-himorime) installs a release in GitHub Actions.
 
 ## The name
 
 himorime was inspired by atago and named after 火防女 (himorime), the maiden who tends the fire in Demon's Souls.
+
+## Contributors
+
+- [Naohiro CHIKAMATSU](https://github.com/nao1215): code and documentation
+- [Rafael Baboni Dominiquini](https://github.com/Dominiquini): the [`himorime-bin`](https://aur.archlinux.org/packages/himorime-bin) AUR package
 
 ## License
 
