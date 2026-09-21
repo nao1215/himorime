@@ -123,6 +123,27 @@ func TestReportCommandSavesRenderedOutput(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("saved report leaked to stdout: %q", stdout.String())
 	}
+	if runtime.GOOS == "windows" {
+		return
+	}
+	// The file is written as run --output writes it: readable by others, as
+	// a page for a documentation site must be, and through a symbolic link.
+	if info, err := os.Stat(filepath.Join(dir, "nested", "report.md")); err != nil || info.Mode().Perm()&0o044 == 0 {
+		t.Fatalf("saved report mode = %v, %v; want it readable by group and others", info.Mode(), err)
+	}
+	target := filepath.Join(dir, "target.md")
+	if err := os.Symlink(target, filepath.Join(dir, "link.md")); err != nil {
+		t.Fatal(err)
+	}
+	if code := a.Run(context.Background(), []string{"report", "result.json", "--format", "markdown", "--output", "link.md"}); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	if info, err := os.Lstat(filepath.Join(dir, "link.md")); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the symbolic link was replaced: %v, %v", info.Mode(), err)
+	}
+	if data, err := os.ReadFile(target); err != nil || !strings.Contains(string(data), "## saved") {
+		t.Fatalf("the link target was not written: %q, %v", data, err)
+	}
 }
 
 func TestReportCommandRejectsInvalidInputs(t *testing.T) {
