@@ -25,6 +25,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [csv](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/csv) | Miller, qsv, xan | A program that reads standard input, given a generated file with `stdin` so every run reads it from the first byte, and outputs that match only because the input quotes as little as it can |
 | [sql](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sql) | DuckDB, trdsql, csvq, sqly | Peak RSS as the metric that separates the programs, a tool from this repository's author measured without being the baseline, and `HOME` and `TMPDIR` pointed into the working directory so no tool reads or writes the reader's files |
 | [diff](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/diff) | GNU diff, git diff | Commands whose success is exit status 1, declared with `exit_codes`, outputs compared after dropping headers that differ by design, and git kept from reading the configuration files of whoever runs it |
+| [yaml](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/yaml) | yq, yj, gojq | Outputs that differ only in key order, which the job allows, normalized with jq, which is not measured, before they are compared |
 
 ## JSON processors
 
@@ -121,3 +122,17 @@ The baseline is GNU diff, the diff that most Linux systems run as `diff -u`, so 
 The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed, and the second file from `awk` in setup. Both tools come from the pinned runner image and their versions are recorded in the report. On macOS, `diff` is not GNU diff; the report says which one ran.
 
 Suite: [bench/thirdparty/diff](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/diff)
+
+## YAML to JSON
+
+Same job: read one generated YAML document, a sequence of records, on standard input and write it as compact JSON to a file. Measured at 1MiB and at 10MiB, smaller than in the other suites because every tool holds the whole document in memory, many times its size.
+
+Made equal: the same document on standard input for every command, because yj reads nothing else; compact output without color (`yq -M -o=json -I=0`, `yj -yj`, `gojq --yaml-input -c`); yq colors its output when standard output is a terminal or `/dev/null`, so it is given `-M`; the same kind of destination, a file in the working directory. The generated document double-quotes its timestamps, which a YAML 1.1 reader can resolve to a timestamp instead of a string, and writes no number with a leading zero, which yq reads as decimal and yj and gojq read as octal, so every tool reads the same values.
+
+Not equal: gojq writes the keys of every object in sorted order, while yq and yj keep the order of the document. The order of keys does not change what a JSON object means, so setup passes each output through `jq -S -c` and compares the results byte for byte; jq is used only there and is not measured. All three are written in Go and run a garbage collector on threads of their own, so their CPU time can exceed their wall-clock time.
+
+The baseline is yq, the most widely used of the three, so `RELATIVE` reads as a multiple of it.
+
+The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. yq and gojq are installed with `go install` at pinned versions, and yj from a release binary at a pinned version whose digest is checked.
+
+Suite: [bench/thirdparty/yaml](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/yaml)

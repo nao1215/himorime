@@ -196,6 +196,31 @@ jobs:
           "$RUNNER_TEMP/himorime" run bench/thirdparty/diff
           --format json --output "$RUNNER_TEMP/diff.json"
           --summary "$GITHUB_STEP_SUMMARY"
+      # gojq, and the jq that setup uses to normalize the outputs, come from
+      # the Install the JSON processors step above. yq is a Go module pinned through go
+      # install. yj comes from a release binary with a pinned version and
+      # SHA256, because a go install build reports its version as v0.0.0.
+      - name: Install the YAML converters
+        env:
+          YJ_VERSION: "5.1.0"
+          YJ_SHA256: "8ce43e40fda9a28221dabc0d7228e2325d1e959cd770487240deb47e02660986"
+        run: |
+          set -euo pipefail
+          bin="$(go env GOPATH)/bin"
+          mkdir -p "${bin}"
+          go install github.com/mikefarah/yq/v4@v4.53.6
+          curl -fsSL -o "${RUNNER_TEMP}/yj" \
+            "https://github.com/sclevine/yj/releases/download/v${YJ_VERSION}/yj-linux-amd64"
+          echo "${YJ_SHA256}  ${RUNNER_TEMP}/yj" | sha256sum --check -
+          install -m 0755 "${RUNNER_TEMP}/yj" "${bin}/yj"
+          yq --version
+          yj -v
+          gojq --version
+      - name: Measure the YAML converters
+        run: >
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/yaml
+          --format json --output "$RUNNER_TEMP/yaml.json"
+          --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

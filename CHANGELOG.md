@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 
+- `bench/thirdparty/yaml` measures yq, yj and gojq converting a generated YAML document on standard input to compact JSON, at 1MiB and at 10MiB, as a worked example of outputs normalized before they are compared: gojq sorts object keys, so each output passes through `jq -S -c` first. The generator in `bench/thirdparty/gen` gains a `yaml` shape for it.
 - `bench/thirdparty/diff` measures GNU diff and `git diff --no-index` writing a unified diff of two generated files, at 5MiB and at 100MiB, as a worked example of commands whose success is exit status 1, declared with `exit_codes`. The hunks are compared byte for byte before measuring.
 - `bench/thirdparty/sql` measures DuckDB, trdsql, csvq and sqly running one GROUP BY query over generated CSV, at 5MiB and at 100MiB, as a worked example of a suite where peak RSS separates the programs. The four outputs are compared byte for byte before measuring, and `HOME` and `TMPDIR` point into the working directory.
 - `bench/thirdparty/csv` measures Miller, qsv and xan writing two columns of generated CSV read from standard input, at 5MiB and at 100MiB, as a worked example of `stdin`. The three outputs are compared byte for byte before measuring, and the generator in `bench/thirdparty/gen` gains a `csv` shape for it.

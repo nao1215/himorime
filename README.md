@@ -44,6 +44,7 @@ himorime measures a command, so a program you did not write is measured like you
 | [csv](./bench/thirdparty/csv) | Miller, qsv, xan |
 | [sql](./bench/thirdparty/sql) | DuckDB, trdsql, csvq, sqly |
 | [diff](./bench/thirdparty/diff) | GNU diff, git diff |
+| [yaml](./bench/thirdparty/yaml) | yq, yj, gojq |
 
 ## Install
 

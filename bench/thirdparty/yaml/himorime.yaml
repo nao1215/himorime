@@ -1,0 +1,119 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# yq, yj and gojq converting the same generated YAML document to JSON.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: yaml to json
+description: yq, yj and gojq converting one generated YAML document on standard input to compact JSON.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  cwd: "${workdir}"
+  metrics:
+    cpu: true
+    # Each tool builds the whole document in memory before it writes any
+    # JSON, so peak RSS follows the input size.
+    memory: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    yq: [yq, --version]
+    yj: [yj, -v]
+    gojq: [gojq, --version]
+
+benchmarks:
+  - name: convert 1MiB of YAML to JSON
+    description: >-
+      Each command reads one YAML document, a sequence of records, on
+      standard input and writes it as compact JSON to a file in the working
+      directory. yj reads only standard input, so every command does. yq is
+      given -M, because it colors its output when standard output is a
+      terminal or /dev/null, and a copy of this suite may send it there. gojq
+      writes the keys of every object in sorted order, while yq and yj keep
+      the order of the document, so setup passes each output through jq -S -c
+      before comparing them byte for byte. jq is used only there and is not
+      measured.
+    tags: [thirdparty, yaml, small]
+    baseline: yq
+    stdin: "${workdir}/input.yaml"
+    setup:
+      - command: ["${artifact}", -kind, yaml, -size, 1MiB, -seed, "71", -o, input.yaml]
+      - command: yq -M -o=json -I=0 . < input.yaml | jq -S -c . > expect.json
+        shell: true
+      - command: test -s expect.json
+        shell: true
+      - command: yj -yj < input.yaml | jq -S -c . > got-yj.json
+        shell: true
+      - command: cmp expect.json got-yj.json
+        shell: true
+      - command: gojq --yaml-input -c . < input.yaml | jq -S -c . > got-gojq.json
+        shell: true
+      - command: cmp expect.json got-gojq.json
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.yaml"
+    commands:
+      yq:
+        command: [yq, -M, -o=json, -I=0, .]
+        stdout: out-yq.json
+      yj:
+        command: [yj, -yj]
+        stdout: out-yj.json
+      gojq:
+        command: [gojq, --yaml-input, -c, .]
+        stdout: out-gojq.json
+
+  - name: convert 10MiB of YAML to JSON
+    description: >-
+      The same conversion over ten times the input. The seed differs from the
+      1MiB benchmark, so the two are different bytes of the same shape.
+    tags: [thirdparty, yaml, large]
+    baseline: yq
+    stdin: "${workdir}/input.yaml"
+    setup:
+      - command: ["${artifact}", -kind, yaml, -size, 10MiB, -seed, "72", -o, input.yaml]
+      - command: yq -M -o=json -I=0 . < input.yaml | jq -S -c . > expect.json
+        shell: true
+      - command: test -s expect.json
+        shell: true
+      - command: yj -yj < input.yaml | jq -S -c . > got-yj.json
+        shell: true
+      - command: cmp expect.json got-yj.json
+        shell: true
+      - command: gojq --yaml-input -c . < input.yaml | jq -S -c . > got-gojq.json
+        shell: true
+      - command: cmp expect.json got-gojq.json
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.yaml"
+    commands:
+      yq:
+        command: [yq, -M, -o=json, -I=0, .]
+        stdout: out-yq.json
+      yj:
+        command: [yj, -yj]
+        stdout: out-yj.json
+      gojq:
+        command: [gojq, --yaml-input, -c, .]
+        stdout: out-gojq.json

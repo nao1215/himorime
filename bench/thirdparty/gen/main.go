@@ -9,6 +9,7 @@
 //	gen -kind jsonl -size 5MiB -seed 1 -o out.jsonl
 //	gen -kind tree -size 5MiB -seed 1 -o dir
 //	gen -kind csv -size 5MiB -seed 1 -o out.csv
+//	gen -kind yaml -size 5MiB -seed 1 -o out.yaml
 //
 // Add a shape here rather than writing a second generator for the next
 // category.
@@ -35,7 +36,7 @@ func main() {
 
 func run(args []string) error {
 	fs := flag.NewFlagSet("gen", flag.ContinueOnError)
-	kind := fs.String("kind", "jsonl", "shape of the generated input: jsonl, csv, or tree for a directory of log files")
+	kind := fs.String("kind", "jsonl", "shape of the generated input: jsonl, csv, yaml, or tree for a directory of log files")
 	size := fs.String("size", "1MiB", "size of the output in bytes, with an optional KiB, MiB or GiB suffix")
 	seed := fs.Uint64("seed", 1, "seed of the random source; the same seed produces the same bytes")
 	out := fs.String("o", "", "path of the file to write, or of the directory to create for tree")
@@ -54,10 +55,12 @@ func run(args []string) error {
 		return writeFile(*out, func(w *bufio.Writer) error { return writeJSONL(w, n, *seed) })
 	case "csv":
 		return writeFile(*out, func(w *bufio.Writer) error { return writeCSV(w, n, *seed) })
+	case "yaml":
+		return writeFile(*out, func(w *bufio.Writer) error { return writeYAML(w, n, *seed) })
 	case "tree":
 		return writeTree(*out, n, *seed)
 	default:
-		return fmt.Errorf("unknown -kind %q; the shapes are: jsonl, csv, tree", *kind)
+		return fmt.Errorf("unknown -kind %q; the shapes are: jsonl, csv, yaml, tree", *kind)
 	}
 }
 
@@ -285,4 +288,40 @@ func csvField(s string) string {
 		return s
 	}
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+}
+
+// writeYAML writes exactly total bytes of one YAML document: a sequence of
+// records of the shape writeJSONL writes, in block style. The timestamps are
+// double-quoted, because a YAML 1.1 reader can resolve them to timestamps,
+// and no number has a leading zero, which readers disagree on, so every
+// reader sees the same values. The last record carries only ts, event and a
+// pad field of at least one byte so the file ends on the requested byte.
+func writeYAML(w *bufio.Writer, total int64, seed uint64) error {
+	if least := len(yamlPadPrefix) + 2; total < int64(least) {
+		return fmt.Errorf("bad -size for yaml: want at least %d bytes", least)
+	}
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
+	written := int64(0)
+	for {
+		rec := yamlRecord(r)
+		if written+int64(len(rec))+int64(len(yamlPadPrefix))+2 > total {
+			break
+		}
+		if _, err := w.WriteString(rec); err != nil {
+			return err
+		}
+		written += int64(len(rec))
+	}
+	_, err := w.WriteString(yamlPadPrefix + strings.Repeat("x", int(total-written)-len(yamlPadPrefix)-1) + "\n")
+	return err
+}
+
+const yamlPadPrefix = "- ts: \"2026-01-01T00:00:00Z\"\n  event: pad\n  pad: "
+
+func yamlRecord(r *rand.Rand) string {
+	return fmt.Sprintf("- ts: \"2026-%02d-%02dT%02d:%02d:%02dZ\"\n  user:\n    id: %d\n    name: user-%d\n  event: %s\n  path: /%s/%s/%d\n  dur_ms: %d\n  ok: %t\n",
+		1+r.IntN(12), 1+r.IntN(28), r.IntN(24), r.IntN(60), r.IntN(60),
+		100000+r.IntN(900000), 1000+r.IntN(9000), events[r.IntN(len(events))],
+		verbs[r.IntN(len(verbs))], nouns[r.IntN(len(nouns))], r.IntN(1000),
+		r.IntN(5000), r.IntN(10) != 0)
 }
