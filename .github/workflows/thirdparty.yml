@@ -275,6 +275,17 @@ jobs:
           "$RUNNER_TEMP/himorime" run bench/thirdparty/sort
           --format json --output "$RUNNER_TEMP/sort.json"
           --summary "$GITHUB_STEP_SUMMARY"
+      # bash and dash come from the pinned image. dash has no option that
+      # prints its version, so the package version is printed here.
+      - name: Check the shells
+        run: |
+          bash --version
+          dpkg-query -W dash
+      - name: Measure the interactive shells
+        run: >
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/shell
+          --format json --output "$RUNNER_TEMP/shell.json"
+          --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

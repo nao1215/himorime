@@ -1,0 +1,113 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# bash and dash started as interactive shells on a pseudo-terminal, running
+# one command typed into them and exiting.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: interactive shells
+description: bash and dash started as interactive shells on a pseudo-terminal, without startup files, evaluating one typed command and exiting.
+
+defaults:
+  warmup: 2
+  min_runs: 20
+  min_time: 3s
+  max_runs: 200
+  # An interactive shell reads files of whoever runs it: ~/.bashrc, the file
+  # named by ENV, readline's ~/.inputrc and /etc/inputrc, and the history
+  # file, which bash also writes on exit, so each run would start from what
+  # the last one left. The flags below skip the startup files; these
+  # variables do the rest.
+  #
+  # TERM is set, because the terminal type of whoever runs the suite would
+  # otherwise decide what readline does: with a TERM such as xterm, bash 5.1
+  # and later switch on bracketed paste and write escape sequences around
+  # every command. A dumb terminal gets none of them from either shell.
+  env:
+    TERM: dumb
+    HOME: "${workdir}"
+    ENV: ""
+    INPUTRC: /dev/null
+    HISTFILE: ""
+  metrics:
+    cpu: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    # terminal: true is not available on Windows.
+    unsupported: skip
+
+report:
+  versions:
+    bash: [bash, --version]
+    # dash has no option that prints its version; the report records where
+    # it was found, and the workflow prints the package version.
+    dash: [sh, -c, "command -v dash"]
+
+benchmarks:
+  - name: start an interactive shell, run one command, exit
+    description: >-
+      Each shell runs on an 80 by 24 pseudo-terminal, gets the keys of
+      "echo $((6*7))", Enter, "exit", Enter typed one at a time, each once the
+      shell has read the one before, and ends. Latency covers starting,
+      printing a prompt, reading those keys, evaluating and exiting. bash reads
+      the keys one at a time through readline, so the wait for each key counts
+      toward its latency, while dash, which has no line editor, reads a whole
+      line at once; the latency of bash is above its CPU time for that
+      reason. Cleanup checks that the last measured run of each shell printed
+      42.
+    tags: [thirdparty, shell, small]
+    baseline: bash
+    # terminal: true runs every command on a pseudo-terminal: standard input,
+    # output and error are the terminal, and stdin is typed into it.
+    terminal: true
+    stdin: {content: "echo $((6*7))\nexit\n"}
+    commands:
+      bash:
+        command: [bash, --norc, --noprofile, -i]
+        # What the terminal showed: prompts, the echoed keys and the result.
+        stdout: out-bash.txt
+      dash:
+        command: [dash, -i]
+        stdout: out-dash.txt
+    # A command on a terminal cannot be run in setup, which has no terminal,
+    # so the check that each shell did the job reads what the last measured
+    # run printed. A failing cleanup fails the benchmark. The typed keys
+    # never contain 42, so finding it means the shell printed the result.
+    # It is not always alone on its line: the terminal echoes keys typed
+    # ahead, such as the exit that follows, when the shell has not yet
+    # switched echo off, so they can land before the result.
+    cleanup:
+      - command: grep -q 42 ${workdir}/out-bash.txt
+        shell: true
+      - command: grep -q 42 ${workdir}/out-dash.txt
+        shell: true
+
+  - name: run a loop of 100000 iterations typed into an interactive shell
+    description: >-
+      The same start and exit around a typed POSIX loop that counts to 100000
+      with arithmetic expansion and prints it as count=100000, which the
+      typed keys do not contain, so evaluating the command outweighs starting
+      the shell. Cleanup checks that the last measured run of each shell
+      printed it.
+    tags: [thirdparty, shell, large]
+    baseline: bash
+    terminal: true
+    stdin: {content: "i=0; while [ $i -lt 100000 ]; do i=$((i+1)); done; echo count=$i\nexit\n"}
+    commands:
+      bash:
+        command: [bash, --norc, --noprofile, -i]
+        stdout: out-bash.txt
+      dash:
+        command: [dash, -i]
+        stdout: out-dash.txt
+    cleanup:
+      - command: grep -q count=100000 ${workdir}/out-bash.txt
+        shell: true
+      - command: grep -q count=100000 ${workdir}/out-dash.txt
+        shell: true
