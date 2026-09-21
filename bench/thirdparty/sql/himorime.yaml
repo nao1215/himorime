@@ -1,0 +1,139 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# DuckDB, trdsql, csvq and sqly running the same SQL query over generated CSV.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: sql over csv
+description: DuckDB, trdsql, csvq and sqly counting the rows of generated CSV per city with one SQL query.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  # Every tool names its table after the file, so the commands run in the
+  # working directory and name input.csv without a path.
+  cwd: "${workdir}"
+  # HOME points into the working directory, so no tool reads the reader's
+  # settings or writes to them: DuckDB reads ~/.duckdbrc, trdsql reads a
+  # config.json that can switch its database driver, and sqly appends to a
+  # history even with --sql. TMPDIR does the same for the temporary files
+  # SQLite writes.
+  env:
+    HOME: "${workdir}"
+    TMPDIR: "${workdir}"
+  metrics:
+    cpu: true
+    # Peak RSS is the metric this suite is about: the tools hold very
+    # different amounts of the file while they answer the query.
+    memory: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    duckdb: [duckdb, --version]
+    trdsql: [trdsql, -version]
+    csvq: [csvq, --version]
+    sqly: [sqly, --version]
+
+benchmarks:
+  - name: count rows per city in 5MiB of CSV
+    description: >-
+      Each command runs SELECT city, count(*) AS n ... GROUP BY city ORDER BY
+      city over the same CSV and writes the result as CSV with a header to a
+      file in the working directory. The four outputs are compared byte for
+      byte in setup. The query is the same; how the table is named is not,
+      because each tool names a file differently. DuckDB is told to use one
+      thread and csvq one CPU; trdsql and sqly run one query thread next to
+      a Go garbage collector. trdsql imports the file into a temporary SQLite
+      table, which SQLite keeps in a temporary file behind a small page
+      cache; sqly imports it into an in-memory SQLite database; csvq reads the
+      file into memory; DuckDB scans the file.
+    tags: [thirdparty, sql, small]
+    baseline: duckdb
+    setup:
+      - command: ["${artifact}", -kind, csv, -size, 5MiB, -seed, "51", -o, input.csv]
+      - command: duckdb -csv -c "SET threads=1" -c "SELECT city, count(*) AS n FROM 'input.csv' GROUP BY city ORDER BY city" > expect.csv
+        shell: true
+      - command: trdsql -icsv -ih -ocsv -oh "SELECT city, count(*) AS n FROM input.csv GROUP BY city ORDER BY city" > got-trdsql.csv
+        shell: true
+      - command: cmp expect.csv got-trdsql.csv
+        shell: true
+      - command: csvq --cpu 1 -f CSV "SELECT city, count(*) AS n FROM input GROUP BY city ORDER BY city" > got-csvq.csv
+        shell: true
+      - command: cmp expect.csv got-csvq.csv
+        shell: true
+      - command: sqly --output-format csv --sql "SELECT city, count(*) AS n FROM input GROUP BY city ORDER BY city" input.csv > got-sqly.csv
+        shell: true
+      - command: cmp expect.csv got-sqly.csv
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.csv"
+    commands:
+      duckdb:
+        command: [duckdb, -csv, -c, "SET threads=1", -c, "SELECT city, count(*) AS n FROM 'input.csv' GROUP BY city ORDER BY city"]
+        stdout: out-duckdb.csv
+      trdsql:
+        command: [trdsql, -icsv, -ih, -ocsv, -oh, "SELECT city, count(*) AS n FROM input.csv GROUP BY city ORDER BY city"]
+        stdout: out-trdsql.csv
+      csvq:
+        command: [csvq, --cpu, "1", -f, CSV, "SELECT city, count(*) AS n FROM input GROUP BY city ORDER BY city"]
+        stdout: out-csvq.csv
+      sqly:
+        command: [sqly, --output-format, csv, --sql, "SELECT city, count(*) AS n FROM input GROUP BY city ORDER BY city", input.csv]
+        stdout: out-sqly.csv
+
+  - name: count rows per city in 100MiB of CSV
+    description: >-
+      The same query over twenty times the input. The seed differs from the
+      5MiB benchmark, so the two are different bytes of the same shape.
+    tags: [thirdparty, sql, large]
+    baseline: duckdb
+    setup:
+      - command: ["${artifact}", -kind, csv, -size, 100MiB, -seed, "52", -o, input.csv]
+      - command: duckdb -csv -c "SET threads=1" -c "SELECT city, count(*) AS n FROM 'input.csv' GROUP BY city ORDER BY city" > expect.csv
+        shell: true
+      - command: trdsql -icsv -ih -ocsv -oh "SELECT city, count(*) AS n FROM input.csv GROUP BY city ORDER BY city" > got-trdsql.csv
+        shell: true
+      - command: cmp expect.csv got-trdsql.csv
+        shell: true
+      - command: csvq --cpu 1 -f CSV "SELECT city, count(*) AS n FROM input GROUP BY city ORDER BY city" > got-csvq.csv
+        shell: true
+      - command: cmp expect.csv got-csvq.csv
+        shell: true
+      - command: sqly --output-format csv --sql "SELECT city, count(*) AS n FROM input GROUP BY city ORDER BY city" input.csv > got-sqly.csv
+        shell: true
+      - command: cmp expect.csv got-sqly.csv
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.csv"
+    commands:
+      duckdb:
+        command: [duckdb, -csv, -c, "SET threads=1", -c, "SELECT city, count(*) AS n FROM 'input.csv' GROUP BY city ORDER BY city"]
+        stdout: out-duckdb.csv
+      trdsql:
+        command: [trdsql, -icsv, -ih, -ocsv, -oh, "SELECT city, count(*) AS n FROM input.csv GROUP BY city ORDER BY city"]
+        stdout: out-trdsql.csv
+      csvq:
+        command: [csvq, --cpu, "1", -f, CSV, "SELECT city, count(*) AS n FROM input GROUP BY city ORDER BY city"]
+        stdout: out-csvq.csv
+      sqly:
+        command: [sqly, --output-format, csv, --sql, "SELECT city, count(*) AS n FROM input GROUP BY city ORDER BY city", input.csv]
+        stdout: out-sqly.csv
