@@ -24,6 +24,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [copy](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/copy) | cp, rsync | A command that changes the state the next run starts from, reset by `prepare_each` outside the measured time, and CPU time taken over a tool that forks processes of its own |
 | [csv](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/csv) | Miller, qsv, xan | A program that reads standard input, given a generated file with `stdin` so every run reads it from the first byte, and outputs that match only because the input quotes as little as it can |
 | [sql](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sql) | DuckDB, trdsql, csvq, sqly | Peak RSS as the metric that separates the programs, a tool from this repository's author measured without being the baseline, and `HOME` and `TMPDIR` pointed into the working directory so no tool reads or writes the reader's files |
+| [diff](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/diff) | GNU diff, git diff | Commands whose success is exit status 1, declared with `exit_codes`, outputs compared after dropping headers that differ by design, and git kept from reading the configuration files of whoever runs it |
 
 ## JSON processors
 
@@ -104,3 +105,19 @@ sqly is written by the author of himorime. It is measured like the others and is
 The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. csvq and sqly are installed with `go install` at pinned versions, and DuckDB and trdsql from release archives at pinned versions whose digests are checked.
 
 Suite: [bench/thirdparty/sql](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sql)
+
+## Diff tools
+
+Same job: write the unified diff, with three lines of context, of two generated JSON Lines files to a file. The second file is the first with `"ok":true` turned into `"ok":false` on every hundredth line where it appears. Measured at 5MiB and at 100MiB.
+
+Made equal: the same two files, named without a path from the working directory, the same context, and the same kind of destination, a file in the working directory. `git diff --no-index` compares two files outside a repository, as `diff -u` does. `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1` keep git from reading a `diff.algorithm` or `diff.context` in the system and global configuration of whoever runs the suite, `GIT_DIR` pointing at a path that does not exist keeps it from reading a repository that contains the working directory, and `--no-ext-diff` keeps an external diff program from replacing git's own. Setup drops the lines before the first hunk of each output and compares the hunks byte for byte.
+
+Both tools exit with status 1 when the files differ, which is the result asked for, so the suite declares `exit_codes: [1]`. Status 0 would mean the files were equal, and 2 or more that the tool failed; either fails the benchmark.
+
+Not equal: the headers. diff names the files with their modification times, and git with `a/` and `b/` prefixes and an `index` line, which is why only the hunks are compared; git also hashes both files in full to print that line, work diff does not do. The hunks match because every line is unique, the changes are a hundred lines apart and no line starts with a letter: git appends the nearest line starting with a letter to each `@@` line, which `diff -u` does not, and on input with repeated lines the two tools can place a change differently. Both tools hold both files in memory, so peak RSS follows the input size for both.
+
+The baseline is GNU diff, the diff that most Linux systems run as `diff -u`, so `RELATIVE` reads as a multiple of it.
+
+The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed, and the second file from `awk` in setup. Both tools come from the pinned runner image and their versions are recorded in the report. On macOS, `diff` is not GNU diff; the report says which one ran.
+
+Suite: [bench/thirdparty/diff](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/diff)

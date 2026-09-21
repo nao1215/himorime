@@ -1,0 +1,133 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# GNU diff and git diff --no-index writing a unified diff of the same two
+# generated files.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: diff tools
+description: GNU diff and git diff --no-index writing a unified diff of two generated JSON Lines files that differ in about one line of a hundred.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  # Commands and hooks run in the working directory, so the two files are
+  # named without a path and the headers of the diffs name them the same way.
+  cwd: "${workdir}"
+  # A diff tool that finds a difference exits with status 1, which is the
+  # result this suite asks for. Status 0 would mean the files were equal, and
+  # 2 or more that the tool failed, so both fail the benchmark.
+  exit_codes: [1]
+  # git reads the configuration of whoever runs it, and a diff.algorithm or
+  # diff.context set there would change the job. The first two variables
+  # keep it from reading the system and global files, and GIT_DIR pointing at
+  # a path that does not exist keeps it from reading a repository that
+  # contains the working directory. --no-ext-diff below keeps an external
+  # diff program from replacing git's own.
+  env:
+    GIT_CONFIG_GLOBAL: /dev/null
+    GIT_CONFIG_NOSYSTEM: "1"
+    GIT_DIR: "${workdir}/no-repository"
+  metrics:
+    cpu: true
+    memory: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    diff: [diff, --version]
+    git: [git, --version]
+
+benchmarks:
+  - name: diff two 5MiB files
+    description: >-
+      Each command writes the unified diff, with three lines of context, of
+      old.jsonl and new.jsonl to a file in the working directory. new.jsonl
+      is old.jsonl with "ok":true turned into "ok":false on every hundredth
+      line where it appears, which is about nine lines in ten of those. The headers differ by design: diff names the
+      files with their modification times, git with a/ and b/ prefixes and an
+      index line, for which git hashes both files in full. Setup drops the
+      lines before the first hunk and compares the hunks byte for byte. They
+      match because every line is unique, the changes are a hundred lines
+      apart and no line starts with a letter, which git would append to the
+      @@ line. Both tools hold both files in memory.
+    tags: [thirdparty, diff, small]
+    baseline: diff
+    setup:
+      - command: ["${artifact}", -kind, jsonl, -size, 5MiB, -seed, "61", -o, old.jsonl]
+      - command: awk 'NR%100==0{sub(/"ok":true/,"\"ok\":false")}1' old.jsonl > new.jsonl
+        shell: true
+      # A tool that finds the difference exits with 1; "|| test $? -eq 1"
+      # keeps that from failing setup, while 2 or more still does. Status 0,
+      # equal files, is caught by "test -s expect.txt" below.
+      - command: diff -u old.jsonl new.jsonl > diff.out || test $? -eq 1
+        shell: true
+      - command: git diff --no-index --no-color --no-ext-diff old.jsonl new.jsonl > git.out || test $? -eq 1
+        shell: true
+      - command: sed -n '/^@@/,$p' diff.out > expect.txt
+        shell: true
+      - command: sed -n '/^@@/,$p' git.out > got-git.txt
+        shell: true
+      - command: test -s expect.txt
+        shell: true
+      - command: cmp expect.txt got-git.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/old.jsonl"
+    commands:
+      diff:
+        command: [diff, -u, old.jsonl, new.jsonl]
+        stdout: out-diff.txt
+      git:
+        command: [git, diff, --no-index, --no-color, --no-ext-diff, old.jsonl, new.jsonl]
+        stdout: out-git.txt
+
+  - name: diff two 100MiB files
+    description: >-
+      The same diff over twenty times the input. The seed differs from the
+      5MiB benchmark, so the files are different bytes of the same shape.
+    tags: [thirdparty, diff, large]
+    baseline: diff
+    setup:
+      - command: ["${artifact}", -kind, jsonl, -size, 100MiB, -seed, "62", -o, old.jsonl]
+      - command: awk 'NR%100==0{sub(/"ok":true/,"\"ok\":false")}1' old.jsonl > new.jsonl
+        shell: true
+      - command: diff -u old.jsonl new.jsonl > diff.out || test $? -eq 1
+        shell: true
+      - command: git diff --no-index --no-color --no-ext-diff old.jsonl new.jsonl > git.out || test $? -eq 1
+        shell: true
+      - command: sed -n '/^@@/,$p' diff.out > expect.txt
+        shell: true
+      - command: sed -n '/^@@/,$p' git.out > got-git.txt
+        shell: true
+      - command: test -s expect.txt
+        shell: true
+      - command: cmp expect.txt got-git.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/old.jsonl"
+    commands:
+      diff:
+        command: [diff, -u, old.jsonl, new.jsonl]
+        stdout: out-diff.txt
+      git:
+        command: [git, diff, --no-index, --no-color, --no-ext-diff, old.jsonl, new.jsonl]
+        stdout: out-git.txt
