@@ -77,25 +77,28 @@ benchmarks:
         stdout: out-dash.txt
     # A command on a terminal cannot be run in setup, which has no terminal,
     # so the check that each shell did the job reads what the last measured
-    # run printed. A failing cleanup fails the benchmark. A terminal ends
-    # lines with a carriage return, which tr drops, and a line that is 42
-    # and nothing else is the result, not the echo of the typed command.
+    # run printed. A failing cleanup fails the benchmark. The typed keys
+    # never contain 42, so finding it means the shell printed the result.
+    # It is not always alone on its line: the terminal echoes keys typed
+    # ahead, such as the exit that follows, when the shell has not yet
+    # switched echo off, so they can land before the result.
     cleanup:
-      - command: tr -d '\r' < ${workdir}/out-bash.txt | grep -q -x 42
+      - command: grep -q 42 ${workdir}/out-bash.txt
         shell: true
-      - command: tr -d '\r' < ${workdir}/out-dash.txt | grep -q -x 42
+      - command: grep -q 42 ${workdir}/out-dash.txt
         shell: true
 
   - name: run a loop of 100000 iterations typed into an interactive shell
     description: >-
       The same start and exit around a typed POSIX loop that counts to 100000
-      with arithmetic expansion and prints the count, so evaluating the
-      command outweighs starting the shell. Cleanup checks that the last
-      measured run of each shell printed 100000.
+      with arithmetic expansion and prints it as count=100000, which the
+      typed keys do not contain, so evaluating the command outweighs starting
+      the shell. Cleanup checks that the last measured run of each shell
+      printed it.
     tags: [thirdparty, shell, large]
     baseline: bash
     terminal: true
-    stdin: {content: "i=0; while [ $i -lt 100000 ]; do i=$((i+1)); done; echo $i\nexit\n"}
+    stdin: {content: "i=0; while [ $i -lt 100000 ]; do i=$((i+1)); done; echo count=$i\nexit\n"}
     commands:
       bash:
         command: [bash, --norc, --noprofile, -i]
@@ -104,7 +107,7 @@ benchmarks:
         command: [dash, -i]
         stdout: out-dash.txt
     cleanup:
-      - command: tr -d '\r' < ${workdir}/out-bash.txt | grep -q -x 100000
+      - command: grep -q count=100000 ${workdir}/out-bash.txt
         shell: true
-      - command: tr -d '\r' < ${workdir}/out-dash.txt | grep -q -x 100000
+      - command: grep -q count=100000 ${workdir}/out-dash.txt
         shell: true
