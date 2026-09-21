@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -147,32 +146,17 @@ func reportPathsSame(a *App, input, output string) (bool, error) {
 	return false, nil
 }
 
-// writeSavedReport renders into memory first and then renames a temporary
-// file into place. A failed write therefore cannot truncate the source report.
+// writeSavedReport writes a report rendered in memory, the same way run
+// --output writes one: mode 0644 less the umask, through a symbolic link. The
+// input report cannot be truncated, because an output that resolves to it is
+// rejected before anything is read.
 func writeSavedReport(a *App, path string, data []byte) error {
 	abs, err := appAbsolutePath(a, path)
 	if err != nil {
 		return err
 	}
-	dir := filepath.Dir(abs)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return fmt.Errorf("create report directory %s: %w", dir, err)
-	}
-	tmp, err := os.CreateTemp(dir, ".himorime-report-*")
-	if err != nil {
-		return fmt.Errorf("create temporary report: %w", err)
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temporary report: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temporary report: %w", err)
-	}
-	if err := os.Rename(tmpName, abs); err != nil {
-		return fmt.Errorf("replace report: %w", err)
-	}
-	return nil
+	return writeFile(nil, abs, false, func(w io.Writer) error {
+		_, err := w.Write(data)
+		return err
+	})
 }

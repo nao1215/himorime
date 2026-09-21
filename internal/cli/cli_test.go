@@ -589,8 +589,9 @@ func TestCompare(t *testing.T) {
 	if r := run(t, dir, nil, "compare", "--against", "main", "--runs", "3", "--quiet"); r.code != exitcode.Usage || !strings.Contains(r.stderr, "--runs 3 is lower than regression.min_samples") {
 		t.Fatalf("--runs below min_samples: %+v", r)
 	}
-	write(t, filepath.Join(dir, "few.himorime.yaml"), strings.Replace(suite(t, compareSuite), "runs: 10", "runs: 3", 1))
-	if r := run(t, dir, nil, "compare", "--against", "main", "few.himorime.yaml"); r.code != exitcode.Config || !strings.Contains(r.stderr, "lower than regression.min_samples") {
+	// The suite exists in the base, so its settings must allow a comparison.
+	write(t, filepath.Join(dir, "himorime.yaml"), strings.Replace(suite(t, compareSuite), "runs: 10", "runs: 3", 1))
+	if r := run(t, dir, nil, "compare", "--against", "main", "himorime.yaml"); r.code != exitcode.Config || !strings.Contains(r.stderr, "lower than regression.min_samples") {
 		t.Fatalf("too few runs for a comparison: %+v", r)
 	}
 }
@@ -641,7 +642,7 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 	}
 	for _, want := range []string{
 		"suite: added (bench/himorime.yaml)",
-		"new in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked",
+		"new in this revision: bench/himorime.yaml does not exist in the base revision, so only this revision is measured and its budgets are checked",
 		"ERROR",
 		"build failed",
 		"1 suite new in this revision",
@@ -698,6 +699,21 @@ func TestCompareSuiteNewInHead(t *testing.T) {
 	write(t, filepath.Join(dir, "delay.txt"), "400ms\n")
 	if r := run(t, dir, nil, "compare", "--against", "main", "--quiet", "himorime.yaml", "bench"); r.code != exitcode.Failed || !strings.Contains(r.stdout, "REGRESSION") || !strings.Contains(r.stdout, "new in this revision") {
 		t.Fatalf("a regression next to a new suite: %+v", r)
+	}
+
+	// A suite file added next to files the base already has, as `himorime
+	// init` writes it at the repository root, is new too: it runs a file the
+	// same change adds, which the base revision does not have.
+	write(t, filepath.Join(dir, "delay.txt"), "1ms\n")
+	write(t, filepath.Join(dir, "added.yaml"), strings.Replace(suite(t, newSuite), "delay.txt", "added-delay.txt", 1))
+	write(t, filepath.Join(dir, "added-delay.txt"), "1ms\n")
+	r = run(t, dir, nil, "compare", "--against", "main", "--format", "json", "--quiet", "added.yaml")
+	rep = reportJSON{}
+	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
+		t.Fatalf("%v\n%s", err, r.stdout)
+	}
+	if r.code != exitcode.OK || len(rep.Suites) != 1 || !rep.Suites[0].NewInHead || rep.Suites[0].Error != nil || rep.Summary.NewSuites != 1 {
+		t.Fatalf("a suite file added at the root = %+v\n%s\n%s", rep, r.stdout, r.stderr)
 	}
 
 	// A plain run measures the new suite as usual and does not call it new.

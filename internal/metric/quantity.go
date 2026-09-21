@@ -3,6 +3,7 @@ package metric
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,15 +16,15 @@ import (
 // itself agree on every value.
 const (
 	// DurationPattern is a duration such as 250ms or 1m30s: no sign, no bare
-	// number, every component with a unit.
-	DurationPattern = `^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`
+	// number, every component with a unit, and nanoseconds whole.
+	DurationPattern = `^([0-9]+(\.[0-9]+)?(us|µs|ms|s|m|h)|[0-9]+ns)+$`
 	// BytesPattern is a byte size such as 64MiB or 512KB.
 	BytesPattern = `^[0-9]+(\.[0-9]+)?\s*(B|bytes|KB|MB|GB|TB|KiB|MiB|GiB|TiB)$`
 	// RatePattern is a rate such as 50MiB/s or 1000 records/s.
 	RatePattern = `^[0-9]+(\.[0-9]+)?\s*[A-Za-z][A-Za-z0-9_-]*/s$`
 
 	// DurationBudgetPattern is an upper bound on a duration, such as "< 20ms".
-	DurationBudgetPattern = `^\s*(<=|<)\s*(([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)\s*$`
+	DurationBudgetPattern = `^\s*(<=|<)\s*(([0-9]+(\.[0-9]+)?(us|µs|ms|s|m|h)|[0-9]+ns)+)\s*$`
 	// BytesBudgetPattern is an upper bound on a byte size, such as "<= 64MiB".
 	BytesBudgetPattern = `^\s*(<=|<)\s*([0-9]+(\.[0-9]+)?)\s*(B|bytes|KB|MB|GB|TB|KiB|MiB|GiB|TiB)\s*$`
 	// RateBudgetPattern is a lower bound on a rate, such as ">= 50MiB/s".
@@ -34,7 +35,11 @@ const (
 )
 
 var (
-	durationRE        = regexp.MustCompile(DurationPattern)
+	durationRE = regexp.MustCompile(DurationPattern)
+	// durationPartRE is one component of a duration, with a fraction on any
+	// unit, so that a fraction of a nanosecond can be named in the error.
+	durationPartRE    = regexp.MustCompile(`([0-9]+(\.[0-9]+)?)(ns|us|µs|ms|s|m|h)`)
+	looseDurationRE   = regexp.MustCompile(`^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`)
 	bytesRE           = regexp.MustCompile(`^([0-9]+(\.[0-9]+)?)\s*(B|bytes|KB|MB|GB|TB|KiB|MiB|GiB|TiB)$`)
 	rateRE            = regexp.MustCompile(`^([0-9]+(\.[0-9]+)?)\s*([A-Za-z][A-Za-z0-9_-]*)/s$`)
 	durationBudgetRE  = regexp.MustCompile(DurationBudgetPattern)
@@ -61,8 +66,11 @@ const MaxDuration = 24 * time.Hour
 
 // ParseDuration parses a suite duration such as "250ms" or "1m30s".
 func ParseDuration(s string) (time.Duration, error) {
-	if !durationRE.MatchString(s) {
+	if !durationRE.MatchString(s) && !looseDurationRE.MatchString(s) {
 		return 0, fmt.Errorf("invalid duration %q: write a number with a unit, such as 500ms, 2s or 1m30s", s)
+	}
+	if !durationRE.MatchString(s) || !wholeNanoseconds(s) {
+		return 0, fmt.Errorf("invalid duration %q: a fraction of a nanosecond cannot be kept; write whole nanoseconds, such as 2ns, or a value that comes to them, such as 1.5us", s)
 	}
 	d, err := time.ParseDuration(s)
 	if err != nil {
@@ -72,6 +80,24 @@ func ParseDuration(s string) (time.Duration, error) {
 		return 0, fmt.Errorf("duration %q exceeds the maximum of 24h", s)
 	}
 	return d, nil
+}
+
+// nanosecondsPer is the length of each duration unit in nanoseconds.
+var nanosecondsPer = map[string]int64{
+	"ns": 1, "us": 1e3, "µs": 1e3, "ms": 1e6, "s": 1e9, "m": 60e9, "h": 3600e9,
+}
+
+// wholeNanoseconds reports whether every component of a duration comes to a
+// whole number of nanoseconds. time.ParseDuration drops what is left over, so
+// such a value would silently be smaller than written.
+func wholeNanoseconds(s string) bool {
+	for _, m := range durationPartRE.FindAllStringSubmatch(s, -1) {
+		v, ok := new(big.Rat).SetString(m[1])
+		if !ok || !v.Mul(v, new(big.Rat).SetInt64(nanosecondsPer[m[3]])).IsInt() {
+			return false
+		}
+	}
+	return true
 }
 
 // parseBytes parses a byte size such as "64MiB" into bytes. KB, MB, GB and

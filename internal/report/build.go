@@ -24,7 +24,7 @@ type SuiteInput struct {
 	// BuildFailure is set when a side's build failed; no benchmark ran.
 	BuildFailure *runner.Failure
 	// NewInHead is set in a comparison when the base revision has no suite
-	// directory; only the head side was built and run.
+	// file; only the head side was built and run.
 	NewInHead  bool
 	Benchmarks []runner.BenchmarkResult
 }

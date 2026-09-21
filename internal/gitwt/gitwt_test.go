@@ -238,6 +238,45 @@ func TestWorktreeRemovedAfterCancellation(t *testing.T) {
 	}
 }
 
+// TestRemoveReadOnlyTree: a build that fills the worktree with a Go module
+// cache leaves directories without write permission. Removing the worktree
+// still succeeds and leaves no entry.
+func TestRemoveReadOnlyTree(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permissions do not stop removal on Windows")
+	}
+	t.Parallel()
+	dir := newRepo(t)
+	ctx := context.Background()
+	repo, err := Open(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt, err := repo.AddWorktree(ctx, t.TempDir(), repo.HeadSHA(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := filepath.Join(wt.Dir, ".modcache", "pkg@v1")
+	if err := os.MkdirAll(cache, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cache, "go.mod"), []byte("module pkg\n"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(cache, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	if err := wt.Remove(ctx); err != nil {
+		t.Fatalf("Remove of a read-only tree: %v", err)
+	}
+	if _, err := os.Stat(wt.Dir); !os.IsNotExist(err) {
+		t.Fatalf("the worktree directory remains: %v", err)
+	}
+	if list := git(t, dir, "worktree", "list", "--porcelain"); strings.Count(list, "worktree ") != 1 {
+		t.Fatalf("worktree entries remain:\n%s", list)
+	}
+}
+
 func TestAddWorktreeFailureCleansUp(t *testing.T) {
 	t.Parallel()
 	dir := newRepo(t)

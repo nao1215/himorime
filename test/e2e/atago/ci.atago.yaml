@@ -187,11 +187,11 @@ scenarios:
           exit_code: 1
           stdout:
             # The suite path uses the platform's separator.
-            matches: "(?m)^suite: adopted \\(bench[/\\\\]himorime\\.yaml\\)\\r?\\nnew in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked\\r?\\nTARGET +METRIC +VALUE +RESULT +REASON$"
+            matches: "(?m)^suite: adopted \\(bench[/\\\\]himorime\\.yaml\\)\\r?\\nnew in this revision: bench[/\\\\]himorime\\.yaml does not exist in the base revision, so only this revision is measured and its budgets are checked\\r?\\nTARGET +METRIC +VALUE +RESULT +REASON$"
             contains: ["OVER BUDGET", "1 over budget · 1 benchmark · 1 suite new in this revision · seed "]
             not_contains: ["BASE", "CONFIDENCE"]
           stderr:
-            matches: "(?m)^::notice file=bench[/\\\\]himorime\\.yaml,title=himorime%3A suite new in this revision::suite adopted: new in this revision: bench does not exist in the base revision"
+            matches: "(?m)^::notice file=bench[/\\\\]himorime\\.yaml,title=himorime%3A suite new in this revision::suite adopted: new in this revision: bench[/\\\\]himorime\\.yaml does not exist in the base revision"
             contains: "::error"
       - assert:
           file:

@@ -107,8 +107,8 @@ type Suite struct {
 	File        string `json:"file"`
 	Result      Result `json:"result"`
 	Error       *Error `json:"error"`
-	// NewInHead is true in a comparison when the suite directory does not
-	// exist in the base revision. Only the head side was built and run, as
+	// NewInHead is true in a comparison when the suite file does not exist
+	// in the base revision. Only the head side was built and run, as
 	// in a plain run: its commands have no base and no comparisons, and its
 	// budgets and failures decide the result.
 	NewInHead  bool        `json:"new_in_head"`
