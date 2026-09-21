@@ -27,6 +27,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [diff](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/diff) | GNU diff, git diff | Commands whose success is exit status 1, declared with `exit_codes`, outputs compared after dropping headers that differ by design, and git kept from reading the configuration files of whoever runs it |
 | [yaml](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/yaml) | yq, yj, gojq | Outputs that differ only in key order, which the job allows, normalized with jq, which is not measured, before they are compared |
 | [awk](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/awk) | GNU awk, mawk, GoAWK | Interpreters running one program kept as a file next to the suite, found by a path relative to the suite directory, which is where commands run unless `cwd` says otherwise |
+| [sort](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sort) | GNU sort, uutils sort | One program name installed by two packages, one of them reached through a multi-call binary and a subcommand, and a setup step that checks which implementation the name resolves to before anything is measured |
 
 ## JSON processors
 
@@ -151,3 +152,19 @@ The baseline is GNU awk, the oldest of the three, so `RELATIVE` reads as a multi
 The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. mawk comes from the pinned runner image, GoAWK is installed with `go install` at a pinned version, and GNU awk is built from a release tarball at a pinned version whose digest is checked.
 
 Suite: [bench/thirdparty/awk](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/awk)
+
+## sort
+
+Same job: write generated CSV ordered by its fourth field, the amount, read as a number, to a file, on one thread. Measured at 5MiB and at 100MiB.
+
+Made equal: the same file, the same key (`-t , -k 4,4n`), one thread (`--parallel=1`), and the same kind of destination, a file in the working directory. `LC_ALL` is set to `C`, so both tools compare bytes and read a dot as the decimal point, and `TMPDIR` points into the working directory for the temporary files a sort larger than its buffer writes. Lines with the same amount are ordered by their whole bytes, which both tools do when `-s` is not given. Setup compares the two outputs byte for byte.
+
+Two packages install a program named `sort`. GNU sort is the `sort` of most Linux systems; uutils coreutils is a Rust reimplementation that Ubuntu installs as its `sort` from 26.04 on. uutils also ships one multi-call binary, `coreutils`, that runs any of its programs named as its first argument, so the suite runs uutils as `coreutils sort`, a name that cannot be GNU sort. The name `sort` is whatever comes first on `PATH`, so setup checks that `sort --version` names GNU coreutils: on a system whose `sort` is uutils, the suite would otherwise compare uutils with itself and pass every check. `report.versions` records both.
+
+Not equal: how the tools hold the input. Both read the whole file before writing the first line, so peak RSS follows the input size for both, and the two keep the lines in different structures.
+
+The baseline is GNU sort, the reference that uutils aims to match, so `RELATIVE` reads as a multiple of it.
+
+The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. GNU sort comes from the pinned runner image, and uutils coreutils from a release archive at a pinned version whose digest is checked.
+
+Suite: [bench/thirdparty/sort](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sort)

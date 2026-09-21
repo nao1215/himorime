@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Added
 
 - `bench/thirdparty/awk` measures GNU awk, mawk and GoAWK running one awk program over generated CSV, at 5MiB and at 100MiB, as a worked example of a program file kept next to the suite and named by a path relative to it. The outputs are compared byte for byte after sorting before measuring.
+- `bench/thirdparty/sort` measures GNU sort and the sort of uutils coreutils ordering generated CSV by a numeric column on one thread, at 5MiB and at 100MiB, as a worked example of one program name installed by two packages: uutils is run through its multi-call binary as `coreutils sort`, and setup checks that `sort` is GNU sort before measuring. The two outputs are compared byte for byte.
 
 ## [0.5.0] - 2026-09-21
 
