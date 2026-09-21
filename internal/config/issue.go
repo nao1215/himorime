@@ -168,7 +168,8 @@ func child(node ast.Node, seg any) (ast.Node, ast.Node) {
 			return nil, nil
 		}
 		for _, mv := range n.Values {
-			if mv.Key != nil && keyName(mv.Key) == key {
+			// The token value is the key without the quotes it was written with.
+			if mv.Key != nil && mv.Key.GetToken() != nil && mv.Key.GetToken().Value == key {
 				if mv.Value != nil && mv.Value.Type() != ast.NullType {
 					return mv.Value, mv.Key
 				}
@@ -183,14 +184,6 @@ func child(node ast.Node, seg any) (ast.Node, ast.Node) {
 		return n.Values[i], nil
 	}
 	return nil, nil
-}
-
-// keyName is the text of a mapping key without the quotes it was written with.
-func keyName(key ast.MapKeyNode) string {
-	if s, ok := scalarString(key); ok {
-		return s
-	}
-	return key.String()
 }
 
 func unwrap(node ast.Node) ast.Node {

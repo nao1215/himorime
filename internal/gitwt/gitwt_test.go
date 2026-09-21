@@ -288,6 +288,19 @@ func TestAddWorktreePrunesStaleWorktrees(t *testing.T) {
 	if list := git(t, dir, "worktree", "list", "--porcelain"); strings.Contains(list, "stale") {
 		t.Fatalf("a worktree killed mid-run was not pruned:\n%s", list)
 	}
+	// An entry Git has not finished writing has no gitdir file; it is left
+	// alone, and so is a himorime worktree that is still in use.
+	if err := os.MkdirAll(filepath.Join(dir, ".git", "worktrees", "incomplete"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.pruneOrphans(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "worktrees", "incomplete")); err != nil {
+		t.Fatalf("an entry without gitdir was removed: %v", err)
+	}
+	// git fails in the worktree if its entry was pruned.
+	git(t, wt.Dir, "status", "--porcelain")
 	if err := wt.Remove(ctx); err != nil {
 		t.Fatal(err)
 	}

@@ -180,13 +180,7 @@ func extraDocument(display string, loc locator) (Issue, bool) {
 			Message: "a suite file holds one YAML document; this file has another one after ---",
 			Hint:    "merge the benchmarks into one benchmarks list, or move the second suite into its own file",
 		}
-		tk := d.Start
-		if tk == nil {
-			tk = d.Body.GetToken()
-		}
-		if tk != nil && tk.Position != nil {
-			is.Line, is.Column = tk.Position.Line, tk.Position.Column
-		}
+		is.Line, is.Column = tokenPosition(d)
 		return is, true
 	}
 	return Issue{}, false
