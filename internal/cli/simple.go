@@ -61,13 +61,13 @@ func runInit(_ context.Context, a *App, args []string) int {
 	return exitcode.OK
 }
 
-func runValidate(_ context.Context, a *App, args []string) int {
+func runValidate(ctx context.Context, a *App, args []string) int {
 	fs, _ := newFlagSet("validate")
 	operands, status, ok := parseFlags(fs, args, a.Stdout, a.Stderr)
 	if !ok {
 		return status
 	}
-	suites, status := loadSuites(operands, a.Stderr)
+	suites, status := loadSuites(ctx, operands, a.Stderr)
 	for _, ls := range suites {
 		commands := 0
 		for _, b := range ls.suite.Benchmarks {
@@ -98,7 +98,7 @@ type ListEntry struct {
 	Baseline  bool     `json:"baseline"`
 }
 
-func runList(_ context.Context, a *App, args []string) int {
+func runList(ctx context.Context, a *App, args []string) int {
 	fs, v := newFlagSet("list")
 	o, _ := v.(*listOptions)
 	operands, status, ok := parseFlags(fs, args, a.Stdout, a.Stderr)
@@ -113,7 +113,7 @@ func runList(_ context.Context, a *App, args []string) int {
 	if !ok {
 		return exitcode.Usage
 	}
-	suites, status := loadSuites(operands, a.Stderr)
+	suites, status := loadSuites(ctx, operands, a.Stderr)
 	if status != 0 {
 		return status
 	}

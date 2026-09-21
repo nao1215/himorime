@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `bench/thirdparty/cc` measures GCC and Clang compiling one generated C file with `-O2`, at 64KiB and at 512KiB, as a worked example of commands that take seconds: a fixed number of `runs` and a raised `timeout`. The outputs are programs, so setup builds and runs both and compares what they print. The generator in `bench/thirdparty/gen` gains a `c` shape for it.
 - `bench/thirdparty/js` measures Node.js, Bun and Deno running one JavaScript module over generated JSON Lines, at 5MiB and at 100MiB, as a worked example of runtimes whose settings and caches are kept in the working directory with `HOME` and `DENO_DIR`. The three outputs are compared byte for byte before measuring.
 
+### Fixed
+
+- `validate` finds the project a relative path may not leave the way `run` does, by asking Git, so a path `validate` accepts is no longer rejected by `run` after building. An empty or broken `.git` directory above the suite, or a missing Git, made `validate` accept a `..` path that `run` then failed with exit 4 instead of exit 2.
+
 ## [0.5.0] - 2026-09-21
 
 ### Added

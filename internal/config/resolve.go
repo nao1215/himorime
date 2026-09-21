@@ -17,13 +17,13 @@ import (
 type validator struct {
 	file string
 	loc  locator
-	// dir is the absolute directory holding the suite file, which a relative
-	// path is resolved from, and projectRoot is the directory such a path may
-	// not leave. Both are empty when the suite has no place on disk.
-	dir         string
-	projectRoot string
-	issues      []Issue
-	hasBuild    bool
+	// project returns the directory a relative path may not leave and the
+	// directory such a path is resolved from, the suite's, both with symbolic
+	// links resolved. It is looked up the first time a path needs it, and is
+	// nil when the suite has no place on disk.
+	project  func() (root, dir string)
+	issues   []Issue
+	hasBuild bool
 }
 
 func (v *validator) add(p path, hint, format string, args ...any) {
@@ -236,11 +236,12 @@ func (v *validator) checkPathTemplate(p path, s string, allowWorkdir bool) {
 // symbolic links, so a path rejected here is one the run would reject too,
 // after it had already built and started measuring.
 func (v *validator) leavesProject(s string) bool {
-	if v.dir == "" || v.projectRoot == "" {
+	if v.project == nil {
 		return false
 	}
-	target := filepath.Join(v.dir, filepath.FromSlash(s))
-	rel, err := filepath.Rel(v.projectRoot, target)
+	root, dir := v.project()
+	target := filepath.Join(dir, filepath.FromSlash(s))
+	rel, err := filepath.Rel(root, target)
 	if err != nil {
 		return true
 	}
