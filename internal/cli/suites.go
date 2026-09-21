@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -73,7 +74,7 @@ func suitePaths(args []string) ([]string, error) {
 
 // loadSuites loads every suite and prints all validation issues. It returns a
 // non-zero exit status when anything is wrong.
-func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
+func loadSuites(ctx context.Context, args []string, stderr io.Writer) ([]loadedSuite, int) {
 	paths, err := suitePaths(args)
 	if err != nil {
 		diag.PrintCode(stderr, diag.Input, "himorime: %v", err)
@@ -82,7 +83,7 @@ func loadSuites(args []string, stderr io.Writer) ([]loadedSuite, int) {
 	var suites []loadedSuite
 	status := 0
 	for _, p := range paths {
-		s, err := config.Load(p)
+		s, err := config.Load(ctx, p)
 		if err != nil {
 			var verr *config.ValidationError
 			if errors.As(err, &verr) {

@@ -1,9 +1,11 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -40,7 +42,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 func TestDogfoodSuiteKeepsMemoryForNonVersionBenchmarks(t *testing.T) {
 	t.Parallel()
 	suitePath := filepath.Join("..", "..", "bench", "himorime.yaml")
-	s, err := Load(suitePath)
+	s, err := Load(context.Background(), suitePath)
 	if err != nil {
 		t.Fatalf("Load(%q) failed: %v", suitePath, err)
 	}
@@ -467,24 +469,24 @@ benchmarks:
 func TestLoadFileErrors(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if _, err := Load(filepath.Join(dir, "missing.yaml")); !isValidation(err) || !strings.Contains(err.Error(), "does not exist") {
+	if _, err := Load(context.Background(), filepath.Join(dir, "missing.yaml")); !isValidation(err) || !strings.Contains(err.Error(), "does not exist") {
 		t.Errorf("missing file: %v", err)
 	}
-	if _, err := Load(dir); !isValidation(err) || !strings.Contains(err.Error(), "is a directory") {
+	if _, err := Load(context.Background(), dir); !isValidation(err) || !strings.Contains(err.Error(), "is a directory") {
 		t.Errorf("directory: %v", err)
 	}
 	empty := filepath.Join(dir, "empty.yaml")
 	if err := os.WriteFile(empty, []byte("\n  \n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(empty); !isValidation(err) || !strings.Contains(err.Error(), "empty") {
+	if _, err := Load(context.Background(), empty); !isValidation(err) || !strings.Contains(err.Error(), "empty") {
 		t.Errorf("empty file: %v", err)
 	}
 	big := filepath.Join(dir, "big.yaml")
 	if err := os.WriteFile(big, make([]byte, maxFileSize+1), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(big); !isValidation(err) || !strings.Contains(err.Error(), "larger than") {
+	if _, err := Load(context.Background(), big); !isValidation(err) || !strings.Contains(err.Error(), "larger than") {
 		t.Errorf("big file: %v", err)
 	}
 }
@@ -779,7 +781,7 @@ func TestLoadRejectsARelativePathThatLeavesTheProject(t *testing.T) {
 		if err := os.WriteFile(p, []byte(src), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		return Load(p)
+		return Load(context.Background(), p)
 	}
 	suite := func(cwd string) string {
 		return "version: \"1\"\nname: x\nbenchmarks:\n  - name: a\n    commands:\n      tool: {command: [tool], cwd: " + cwd + "}\n"
@@ -801,12 +803,25 @@ func TestLoadRejectsARelativePathThatLeavesTheProject(t *testing.T) {
 		}
 	})
 
-	t.Run("inside a repository", func(t *testing.T) {
+	t.Run("a .git entry that is not a repository", func(t *testing.T) {
 		t.Parallel()
+		// Git does not take an empty .git directory for a repository, and
+		// neither does the run, so validation must not widen the project to
+		// the directory holding it.
 		top := t.TempDir()
 		if err := os.MkdirAll(filepath.Join(top, ".git"), 0o750); err != nil {
 			t.Fatal(err)
 		}
+		_, err := write(t, filepath.Join(top, "a", "b"), suite("../.."))
+		if err == nil || !strings.Contains(err.Error(), "leaves the project") {
+			t.Errorf("a .. out of a directory that is not in a repository must be rejected, got %v", err)
+		}
+	})
+
+	t.Run("inside a repository", func(t *testing.T) {
+		t.Parallel()
+		top := t.TempDir()
+		gitInit(t, top)
 		if _, err := write(t, filepath.Join(top, "bench"), suite("..")); err != nil {
 			t.Errorf("a .. that stays in the repository must be accepted: %v", err)
 		}
@@ -842,7 +857,7 @@ func TestLoadRejectsARelativePathThatLeavesTheProject(t *testing.T) {
 
 func TestResolveHelperErrorsAndImplicitWorkUnit(t *testing.T) {
 	t.Parallel()
-	v := &validator{dir: t.TempDir(), projectRoot: t.TempDir()}
+	v := &validator{}
 	if got, unit := v.quantity(path{"budget"}, metric.KindDuration, "not-a-duration"); got != 0 || unit != "" || len(v.issues) != 1 {
 		t.Fatalf("invalid quantity = %v %q, issues = %+v", got, unit, v.issues)
 	}
@@ -860,5 +875,19 @@ func TestResolveHelperErrorsAndImplicitWorkUnit(t *testing.T) {
 	before := len(v.issues)
 	if _, ok := v.resolveBudget("tool", budgetEntry{metric: metric.Latency, agg: "unknown", expr: "< 1ms", path: path{"budget"}}, Metrics{}); ok || len(v.issues) != before+1 {
 		t.Fatalf("invalid aggregation issues = %+v", v.issues)
+	}
+}
+
+// gitInit makes dir the top of a Git repository, the way the run finds one.
+func gitInit(t *testing.T, dir string) {
+	t.Helper()
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+	cmd := exec.Command(git, "init", "-q", dir)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
 	}
 }

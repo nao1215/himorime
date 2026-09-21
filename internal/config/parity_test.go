@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
@@ -88,7 +89,7 @@ func TestSchemaParityValid(t *testing.T) {
 		if !schemaAccepts(t, s, src) {
 			t.Errorf("%s: rejected by the schema", name)
 		}
-		if _, err := Parse(name, filepath.Join(t.TempDir(), "himorime.yaml"), src); err != nil {
+		if _, err := Parse(context.Background(), name, filepath.Join(t.TempDir(), "himorime.yaml"), src); err != nil {
 			t.Errorf("%s: rejected by Go: %v", name, err)
 		}
 	}
@@ -101,7 +102,7 @@ func TestSchemaParitySchemaInvalid(t *testing.T) {
 		if schemaAccepts(t, s, src) {
 			t.Errorf("%s: accepted by the schema, but it is in the schema-invalid corpus", name)
 		}
-		if _, err := Parse(name, filepath.Join(t.TempDir(), "himorime.yaml"), src); !isValidation(err) {
+		if _, err := Parse(context.Background(), name, filepath.Join(t.TempDir(), "himorime.yaml"), src); !isValidation(err) {
 			t.Errorf("%s: Go did not reject it with a validation error: %v", name, err)
 		}
 	}
@@ -147,7 +148,7 @@ benchmarks:
 			if schemaAccepts(t, s, src) {
 				t.Fatal("disk schema accepted removed syntax")
 			}
-			_, err := Parse(tt.name, filepath.Join(t.TempDir(), "himorime.yaml"), src)
+			_, err := Parse(context.Background(), tt.name, filepath.Join(t.TempDir(), "himorime.yaml"), src)
 			var verr *ValidationError
 			if !errors.As(err, &verr) {
 				t.Fatalf("Parse() error = %v, want ValidationError", err)
@@ -174,7 +175,7 @@ func TestSchemaParitySemanticInvalid(t *testing.T) {
 		if !schemaAccepts(t, s, src) {
 			t.Errorf("%s: rejected by the schema; move it to testdata/parity/schema", name)
 		}
-		_, err := Parse(name, filepath.Join(t.TempDir(), "himorime.yaml"), src)
+		_, err := Parse(context.Background(), name, filepath.Join(t.TempDir(), "himorime.yaml"), src)
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: Go error = %v, want it to contain %q", name, err, want)
 		}
@@ -441,7 +442,7 @@ func FuzzLoad(f *testing.F) {
 	}
 	s := diskSchema(f)
 	f.Fuzz(func(t *testing.T, src []byte) {
-		suite, err := Parse("fuzz.yaml", filepath.Join(os.TempDir(), "fuzz", "himorime.yaml"), src)
+		suite, err := Parse(context.Background(), "fuzz.yaml", filepath.Join(os.TempDir(), "fuzz", "himorime.yaml"), src)
 		if err != nil {
 			return
 		}

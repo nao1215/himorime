@@ -1,6 +1,7 @@
 package docgen
 
 import (
+	"context"
 	"flag"
 	"os"
 	"path/filepath"
@@ -297,7 +298,7 @@ func TestCookbookRecipesAreRun(t *testing.T) {
 				t.Errorf("%s links to cookbook anchor #%s, which the index does not provide", rel, m[1])
 			}
 		}
-		if _, err := config.Load(file); err != nil {
+		if _, err := config.Load(context.Background(), file); err != nil {
 			t.Errorf("%s is not a valid suite: %v", rel, err)
 		}
 	}
@@ -424,7 +425,7 @@ func TestDocumentedSuitesAreValid(t *testing.T) {
 				continue
 			}
 			count++
-			if _, err := config.Parse(path, filepath.Join(t.TempDir(), "himorime.yaml"), []byte(body)); err != nil {
+			if _, err := config.Parse(context.Background(), path, filepath.Join(t.TempDir(), "himorime.yaml"), []byte(body)); err != nil {
 				t.Errorf("%s: a documented suite is invalid:\n%v\n%s", path, err, body)
 			}
 		}

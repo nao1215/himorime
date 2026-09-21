@@ -2,14 +2,19 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
+
+	"github.com/nao1215/himorime/internal/gitwt"
 )
 
 // maxFileSize bounds a suite file. A benchmark suite is hand-written text; a
@@ -20,7 +25,7 @@ const maxFileSize = 4 << 20
 // Load reads, validates and resolves the suite file at path. A problem with the
 // file's content is returned as a *ValidationError listing every issue found; a
 // problem reading the file is returned as a plain error.
-func Load(path string) (*Suite, error) {
+func Load(ctx context.Context, path string) (*Suite, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("resolve %s: %w", path, err)
@@ -46,12 +51,14 @@ func Load(path string) (*Suite, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	return Parse(path, abs, src)
+	return Parse(ctx, path, abs, src)
 }
 
 // Parse validates and resolves suite source. display is the path shown in
 // messages; abs is the absolute path the suite's relative paths resolve from.
-func Parse(display, abs string, src []byte) (*Suite, error) {
+// ctx bounds the Git process that finds the project, which runs only when a
+// relative path climbs out of the suite's directory with "..".
+func Parse(ctx context.Context, display, abs string, src []byte) (*Suite, error) {
 	if len(bytes.TrimSpace(src)) == 0 {
 		return nil, &ValidationError{Issues: []Issue{{
 			File:    display,
@@ -84,7 +91,9 @@ func Parse(display, abs string, src []byte) (*Suite, error) {
 		return nil, &ValidationError{Issues: []Issue{is}}
 	}
 	dir := filepath.Dir(abs)
-	v := &validator{file: display, loc: loc, dir: dir, projectRoot: projectRoot(dir)}
+	v := &validator{file: display, loc: loc, project: sync.OnceValues(func() (string, string) {
+		return projectRoot(ctx, dir)
+	})}
 	suite := v.resolve(&raw)
 	if len(v.issues) > 0 {
 		return nil, &ValidationError{Issues: v.issues}
@@ -94,22 +103,29 @@ func Parse(display, abs string, src []byte) (*Suite, error) {
 	return suite, nil
 }
 
-// projectRoot is the directory a relative path of the suite may not leave:
-// the top of the repository holding the suite, or the suite's own directory
-// when it is not in a repository. It is the same directory the run confines
-// paths to, found without asking Git, so that validation and the run agree.
-func projectRoot(dir string) string {
-	for cur := dir; ; {
-		if _, err := os.Lstat(filepath.Join(cur, ".git")); err == nil {
-			return cur
-		}
-		parent := filepath.Dir(cur)
-		if parent == cur {
-			return dir
-		}
-		cur = parent
+// projectRoot returns the directory a relative path of the suite may not
+// leave, and the suite's directory in the same frame. The root is found the way
+// the run finds it: the top of the repository as Git reports it, or the suite's
+// own directory when Git is missing or the directory is not in a repository, so
+// that validation never accepts a path the run would reject after building.
+// Git reports the top with symbolic links resolved, and the run resolves them
+// before it checks a path, so the suite's directory is resolved too.
+func projectRoot(ctx context.Context, dir string) (root, suiteDir string) {
+	suiteDir = dir
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		suiteDir = resolved
 	}
+	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
+	defer cancel()
+	repo, err := gitwt.Open(ctx, dir)
+	if err != nil {
+		return suiteDir, suiteDir
+	}
+	return repo.Top, suiteDir
 }
+
+// gitTimeout bounds the one Git process that finds the project root.
+const gitTimeout = 30 * time.Second
 
 // resolveAliases returns src with every YAML alias replaced by a copy of its
 // anchored value, and reports whether it rewrote the document. The typed

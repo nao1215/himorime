@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -28,7 +29,7 @@ func parseString(t *testing.T, src string) (*Suite, error) {
 	if err := os.WriteFile(p, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return Load(p)
+	return Load(context.Background(), p)
 }
 
 func mustParse(t *testing.T, src string) *Suite {

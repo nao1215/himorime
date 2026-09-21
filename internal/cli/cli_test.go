@@ -258,7 +258,7 @@ func TestInit(t *testing.T) {
 
 func TestInitTemplateIsValid(t *testing.T) {
 	t.Parallel()
-	s, err := config.Parse("init.yaml", filepath.Join(t.TempDir(), "himorime.yaml"), []byte(InitTemplate))
+	s, err := config.Parse(context.Background(), "init.yaml", filepath.Join(t.TempDir(), "himorime.yaml"), []byte(InitTemplate))
 	if err != nil {
 		t.Fatal(err)
 	}

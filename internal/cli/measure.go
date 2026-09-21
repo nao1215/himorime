@@ -136,7 +136,7 @@ func runMeasure(ctx context.Context, a *App, cmd string, args []string) int {
 		return exitcode.Usage
 	}
 
-	suites, status := loadSuites(operands, a.Stderr)
+	suites, status := loadSuites(ctx, operands, a.Stderr)
 	if status != 0 {
 		return status
 	}
