@@ -61,7 +61,7 @@ jobs:
 4. Prints an annotation for every missed budget, regression, inconclusive comparison and failure, so they show on the pull request. A regression of a metric with `gate: false` is a notice, not an error.
 5. Exits 1 on a confirmed regression of a gated metric or an exceeded budget, 0 otherwise. Add `--fail-on-inconclusive` to fail on inconclusive gated comparisons too. See [What fails the run](/regression-detection/#what-fails-the-run).
 
-On the pull request that adds the suite, the base revision has no suite directory yet. The log, the job summary and a notice annotation say the suite is new in this revision, the working tree is measured alone and its budgets are checked (see [What fails the run](/regression-detection/#what-fails-the-run)); comparisons start with the next pull request.
+On the pull request that adds the suite, the base revision has no suite file yet. The log, the job summary and a notice annotation say the suite is new in this revision, the working tree is measured alone and its budgets are checked (see [What fails the run](/regression-detection/#what-fails-the-run)); comparisons start with the next pull request.
 
 The same suite file and the same command work on a laptop: `himorime compare --against main` does steps 1 to 3 and 5 against a branch you name, and `himorime run` checks the budgets without a base revision.
 

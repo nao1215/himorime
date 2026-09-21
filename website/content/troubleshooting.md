@@ -54,7 +54,7 @@ The base revision is not in the clone. Fetch it (`git fetch origin main`), or in
 
 ## "new in this revision: ... does not exist in the base revision"
 
-The suite directory was added after the base revision, usually by the pull request that adopts himorime, so there is nothing to compare it with yet. Only the working tree is built and run, and its budgets and failures decide the exit status as in `himorime run`. Comparisons start once the suite is in the base branch.
+The suite file was added after the base revision, usually by the pull request that adopts himorime, so there is nothing to compare it with yet. Only the working tree is built and run, and its budgets and failures decide the exit status as in `himorime run`. Comparisons start once the suite is in the base branch.
 
 ## "the build ... did not write ${artifact}"
 

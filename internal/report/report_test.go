@@ -1029,7 +1029,7 @@ func TestJudgeSuiteNewInHead(t *testing.T) {
 func TestRenderSuiteNewInHead(t *testing.T) {
 	t.Parallel()
 	r := newSuiteReport(t, "<= 1s")
-	const line = "new in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked"
+	const line = "new in this revision: bench/himorime.yaml does not exist in the base revision, so only this revision is measured and its budgets are checked"
 
 	var term bytes.Buffer
 	if err := WriteTerminal(&term, r, TerminalOptions{}); err != nil {
@@ -1062,7 +1062,7 @@ func TestRenderSuiteNewInHead(t *testing.T) {
 	if err := WriteMarkdown(&md, r); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(md.String(), "## added\n\nNew in this revision: bench does not exist in the base revision, so only this revision is measured and its budgets are checked.\n\n") ||
+	if !strings.Contains(md.String(), "## added\n\nNew in this revision: bench/himorime.yaml does not exist in the base revision, so only this revision is measured and its budgets are checked.\n\n") ||
 		!strings.Contains(md.String(), "| fresh | app |") || strings.Contains(md.String(), "**") {
 		t.Errorf("markdown:\n%s", md.String())
 	}

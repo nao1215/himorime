@@ -484,7 +484,7 @@ func (g *gitState) checkComparable(suites []loadedSuite, runs int, stderr io.Wri
 			diag.PrintCode(stderr, diag.Git, "himorime: %v", err)
 			return exitcode.Execution
 		}
-		if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
+		if !ls.inBase(root) {
 			continue
 		}
 		if code := checkComparable(ls, runs, stderr); code != 0 {
@@ -560,8 +560,8 @@ func (m *measurement) measureSuite(ctx context.Context, r *runner.Runner, ls loa
 		// compare against, so the working tree is measured alone and judged
 		// as a plain run would judge it. A broken build or an exceeded
 		// budget fails the pull request that adds it, not the next one.
-		if _, err := os.Stat(sides[0].Root); errors.Is(err, fs.ErrNotExist) {
-			m.logf("suite %q (%s): new in this revision; %s does not exist in the base revision, so only this revision is measured", s.Name, ls.display, filepath.Dir(ls.display))
+		if !ls.inBase(sides[0].Root) {
+			m.logf("suite %q (%s): new in this revision; %s does not exist in the base revision, so only this revision is measured", s.Name, ls.display, ls.display)
 			in.NewInHead = true
 			sides = sides[1:]
 		}
@@ -618,6 +618,14 @@ func (ls loadedSuite) baseRoot(repo *gitwt.Repo, wt *gitwt.Worktree) (string, er
 		return "", fmt.Errorf("%s is outside the Git repository %s", ls.suite.Dir, repo.Top)
 	}
 	return filepath.Join(wt.Dir, rel), nil
+}
+
+// inBase reports whether the base revision has the suite file, given the
+// suite's directory in the base worktree. A suite file the change adds is new
+// even when its directory already exists, such as the repository root.
+func (ls loadedSuite) inBase(root string) bool {
+	_, err := os.Stat(filepath.Join(root, filepath.Base(ls.suite.Path)))
+	return !errors.Is(err, fs.ErrNotExist)
 }
 
 func (ls loadedSuite) suiteKey() string {

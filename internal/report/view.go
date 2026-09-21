@@ -3,7 +3,6 @@ package report
 import (
 	"fmt"
 	"math"
-	"path/filepath"
 	"strings"
 
 	"github.com/nao1215/himorime/internal/metric"
@@ -100,7 +99,7 @@ func suiteMode(mode Mode, s Suite) Mode {
 }
 
 func newInHeadLine(s Suite) string {
-	return fmt.Sprintf("new in this revision: %s does not exist in the base revision, so only this revision is measured and its budgets are checked", filepath.Dir(s.File))
+	return fmt.Sprintf("new in this revision: %s does not exist in the base revision, so only this revision is measured and its budgets are checked", s.File)
 }
 
 // newSuitesNote counts the suites the base revision does not have, or

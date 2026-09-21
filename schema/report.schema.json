@@ -276,7 +276,7 @@
           "$ref": "#/definitions/error"
         },
         "new_in_head": {
-          "description": "True in a comparison when the suite directory does not exist in the base revision. Only the working tree was built and run, as in a plain run: its commands have a null base and null comparisons, and its budgets and failures decide its result and the exit status.",
+          "description": "True in a comparison when the suite file does not exist in the base revision. Only the working tree was built and run, as in a plain run: its commands have a null base and null comparisons, and its budgets and failures decide its result and the exit status.",
           "type": "boolean"
         },
         "benchmarks": {

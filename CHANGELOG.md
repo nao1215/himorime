@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A percentile budget with so many decimals that it rounds to p100, such as `p99.99999999999999999`, is rejected by `validate`; before, it failed every run and made the JSON report fail to write.
 - In JSON and CSV reports, a metric of a command that never completed a run has status `failed` with a reason instead of `measured` with null statistics.
 - Validation errors under a quoted key, such as a command written as `"tool":`, point at the offending line instead of the enclosing `commands:` key.
+- A comparison treats a suite as new in this revision when its file is missing from the base revision, not only its directory. The pull request that adds `himorime.yaml` at the repository root, where `himorime init` writes it, no longer runs the new suite in the base revision and exits 4; the working tree is measured alone and judged by its budgets.
 
 ## [0.4.1] - 2026-09-21
 
