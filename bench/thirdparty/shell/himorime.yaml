@@ -24,7 +24,13 @@ defaults:
   # file, which bash also writes on exit, so each run would start from what
   # the last one left. The flags below skip the startup files; these
   # variables do the rest.
+  #
+  # TERM is set, because the terminal type of whoever runs the suite would
+  # otherwise decide what readline does: with a TERM such as xterm, bash 5.1
+  # and later switch on bracketed paste and write escape sequences around
+  # every command. A dumb terminal gets none of them from either shell.
   env:
+    TERM: dumb
     HOME: "${workdir}"
     ENV: ""
     INPUTRC: /dev/null
