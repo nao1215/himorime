@@ -118,6 +118,38 @@ jobs:
           "$RUNNER_TEMP/himorime" run bench/thirdparty/copy
           --format json --output "$RUNNER_TEMP/copy.json"
           --summary "$GITHUB_STEP_SUMMARY"
+      # Miller is a Go module pinned through go install. qsv and xan are Rust
+      # release archives with a pinned version and SHA256; the qsv archive
+      # also holds qsvlite and qsvdp, which are not installed.
+      - name: Install the CSV processors
+        env:
+          QSV_VERSION: "23.0.1"
+          QSV_SHA256: "e4175df7ecb74b91b5b481ffb96f5adbd7e9ea129c1954bfb280b21cba325433"
+          XAN_VERSION: "0.61.0"
+          XAN_SHA256: "04e4bb7da4345a9e39cd64b1c91c5b48eab9986b0e53981d425fe0ddd6019dae"
+        run: |
+          set -euo pipefail
+          bin="$(go env GOPATH)/bin"
+          mkdir -p "${bin}"
+          go install github.com/johnkerl/miller/v6/cmd/mlr@v6.21.0
+          curl -fsSL -o "${RUNNER_TEMP}/qsv.zip" \
+            "https://github.com/dathere/qsv/releases/download/${QSV_VERSION}/qsv-${QSV_VERSION}-x86_64-unknown-linux-musl.zip"
+          echo "${QSV_SHA256}  ${RUNNER_TEMP}/qsv.zip" | sha256sum --check -
+          unzip -o -q "${RUNNER_TEMP}/qsv.zip" qsv -d "${RUNNER_TEMP}/qsv"
+          install -m 0755 "${RUNNER_TEMP}/qsv/qsv" "${bin}/qsv"
+          curl -fsSL -o "${RUNNER_TEMP}/xan.tar.gz" \
+            "https://github.com/medialab/xan/releases/download/${XAN_VERSION}/xan-x86_64-unknown-linux-musl.tar.gz"
+          echo "${XAN_SHA256}  ${RUNNER_TEMP}/xan.tar.gz" | sha256sum --check -
+          tar -xzf "${RUNNER_TEMP}/xan.tar.gz" -C "${RUNNER_TEMP}"
+          install -m 0755 "${RUNNER_TEMP}/xan" "${bin}/xan"
+          mlr --version
+          qsv --version
+          xan --version
+      - name: Measure the CSV processors
+        run: >
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/csv
+          --format json --output "$RUNNER_TEMP/csv.json"
+          --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

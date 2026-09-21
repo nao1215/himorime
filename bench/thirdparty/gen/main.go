@@ -8,6 +8,7 @@
 //
 //	gen -kind jsonl -size 5MiB -seed 1 -o out.jsonl
 //	gen -kind tree -size 5MiB -seed 1 -o dir
+//	gen -kind csv -size 5MiB -seed 1 -o out.csv
 //
 // Add a shape here rather than writing a second generator for the next
 // category.
@@ -34,7 +35,7 @@ func main() {
 
 func run(args []string) error {
 	fs := flag.NewFlagSet("gen", flag.ContinueOnError)
-	kind := fs.String("kind", "jsonl", "shape of the generated input: jsonl, or tree for a directory of log files")
+	kind := fs.String("kind", "jsonl", "shape of the generated input: jsonl, csv, or tree for a directory of log files")
 	size := fs.String("size", "1MiB", "size of the output in bytes, with an optional KiB, MiB or GiB suffix")
 	seed := fs.Uint64("seed", 1, "seed of the random source; the same seed produces the same bytes")
 	out := fs.String("o", "", "path of the file to write, or of the directory to create for tree")
@@ -51,10 +52,12 @@ func run(args []string) error {
 	switch *kind {
 	case "jsonl":
 		return writeFile(*out, func(w *bufio.Writer) error { return writeJSONL(w, n, *seed) })
+	case "csv":
+		return writeFile(*out, func(w *bufio.Writer) error { return writeCSV(w, n, *seed) })
 	case "tree":
 		return writeTree(*out, n, *seed)
 	default:
-		return fmt.Errorf("unknown -kind %q; the shapes are: jsonl, tree", *kind)
+		return fmt.Errorf("unknown -kind %q; the shapes are: jsonl, csv, tree", *kind)
 	}
 }
 
@@ -112,8 +115,12 @@ var (
 // writeJSONL writes exactly total bytes of JSON Lines. Every line but the last
 // is a record of the same shape; the last one carries a pad field sized so the
 // file ends on the requested byte, because a benchmark that reports throughput
-// over a file size must measure the size it asked for.
+// over a file size must measure the size it asked for. It needs at least the
+// size of that last line.
 func writeJSONL(w *bufio.Writer, total int64, seed uint64) error {
+	if total < int64(minPadLen) {
+		return fmt.Errorf("bad -size for jsonl: want at least %d bytes", minPadLen)
+	}
 	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
 	written := int64(0)
 	for {
@@ -227,4 +234,55 @@ func logLine(r *rand.Rand) string {
 		1+r.IntN(12), 1+r.IntN(28), r.IntN(24), r.IntN(60), r.IntN(60),
 		level, components[r.IntN(len(components))], messages[r.IntN(len(messages))],
 		100000+r.IntN(900000), r.IntN(5000))
+}
+
+var (
+	cities = []string{"Tokyo", "Osaka", "Sapporo", "Fukuoka", "Nagoya", "Sendai"}
+	notes  = []string{"none", "gift", "express", "returned, refunded", `said "thanks"`, "left at door"}
+)
+
+const csvHeader = "id,user,city,amount,note\n"
+
+// writeCSV writes exactly total bytes of CSV with a header line. A field is
+// quoted only when it holds a comma or a double quote; about a third of the
+// rows have such a note. The last row carries a padded note so the file ends
+// on the requested byte, which needs at least a header and that row.
+func writeCSV(w *bufio.Writer, total int64, seed uint64) error {
+	if least := int64(len(csvHeader) + len(csvPadPrefix) + 1); total < least {
+		return fmt.Errorf("bad -size for csv: want at least %d bytes", least)
+	}
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
+	if _, err := w.WriteString(csvHeader); err != nil {
+		return err
+	}
+	written := int64(len(csvHeader))
+	for {
+		row := csvRow(r)
+		if written+int64(len(row))+int64(len(csvPadPrefix))+1 > total {
+			break
+		}
+		if _, err := w.WriteString(row); err != nil {
+			return err
+		}
+		written += int64(len(row))
+	}
+	_, err := w.WriteString(csvPadPrefix + strings.Repeat("x", int(total-written)-len(csvPadPrefix)-1) + "\n")
+	return err
+}
+
+const csvPadPrefix = "0,user-0,Tokyo,0.00,"
+
+func csvRow(r *rand.Rand) string {
+	return fmt.Sprintf("%d,user-%d,%s,%d.%02d,%s\n",
+		100000+r.IntN(900000), 1000+r.IntN(9000), cities[r.IntN(len(cities))],
+		r.IntN(100000), r.IntN(100), csvField(notes[r.IntN(len(notes))]))
+}
+
+// csvField quotes a field that holds a comma or a double quote, doubling the
+// quotes inside, and leaves every other field bare.
+func csvField(s string) string {
+	if !strings.ContainsAny(s, ",\"") {
+		return s
+	}
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }

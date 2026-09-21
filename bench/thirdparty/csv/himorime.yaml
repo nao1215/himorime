@@ -1,0 +1,117 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# Miller, qsv and xan selecting the same two columns from generated CSV read
+# on standard input.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: csv processors
+description: Miller, qsv and xan writing the id and note columns of generated CSV read from standard input.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  metrics:
+    cpu: true
+    memory: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    mlr: [mlr, --version]
+    # qsv appends details of the machine, such as its free memory, to its
+    # version, so this line differs between runs; the version comes first.
+    qsv: [qsv, --version]
+    xan: [xan, --version]
+
+benchmarks:
+  - name: select two columns from 5MiB of CSV on stdin
+    description: >-
+      Each command reads the CSV on standard input and writes its id and note
+      columns, as CSV, to a file in the working directory; setup compares the
+      three outputs byte for byte. About a third of the notes need quoting,
+      and the input quotes only those, so xan, which keeps the quotes of the
+      input, matches mlr and qsv, which quote only when needed. mlr reads,
+      processes and writes on separate goroutines and runs a Go garbage
+      collector, so its CPU time can exceed its wall-clock time.
+      mlr reads, processes and writes on separate goroutines, so its CPU time
+      can exceed its wall-clock time.
+    tags: [thirdparty, csv, small]
+    baseline: mlr
+    # Standard input is a file, reopened for every run, so each run reads the
+    # whole input from its first byte. The commands name no input file.
+    stdin: "${workdir}/input.csv"
+    setup:
+      - command: ["${artifact}", -kind, csv, -size, 5MiB, -seed, "41", -o, "${workdir}/input.csv"]
+      - command: mlr --csv cut -o -f id,note < ${workdir}/input.csv > ${workdir}/expect.csv
+        shell: true
+      - command: qsv select id,note < ${workdir}/input.csv > ${workdir}/got-qsv.csv
+        shell: true
+      - command: cmp ${workdir}/expect.csv ${workdir}/got-qsv.csv
+        shell: true
+      - command: xan select id,note < ${workdir}/input.csv > ${workdir}/got-xan.csv
+        shell: true
+      - command: cmp ${workdir}/expect.csv ${workdir}/got-xan.csv
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.csv"
+    commands:
+      mlr:
+        command: [mlr, --csv, cut, -o, -f, "id,note"]
+        stdout: out-mlr.csv
+      qsv:
+        command: [qsv, select, "id,note"]
+        stdout: out-qsv.csv
+      xan:
+        command: [xan, select, "id,note"]
+        stdout: out-xan.csv
+
+  - name: select two columns from 100MiB of CSV on stdin
+    description: >-
+      The same job over twenty times the input. The seed differs from the 5MiB
+      benchmark, so the two are different bytes of the same shape.
+    tags: [thirdparty, csv, large]
+    baseline: mlr
+    stdin: "${workdir}/input.csv"
+    setup:
+      - command: ["${artifact}", -kind, csv, -size, 100MiB, -seed, "42", -o, "${workdir}/input.csv"]
+      - command: mlr --csv cut -o -f id,note < ${workdir}/input.csv > ${workdir}/expect.csv
+        shell: true
+      - command: qsv select id,note < ${workdir}/input.csv > ${workdir}/got-qsv.csv
+        shell: true
+      - command: cmp ${workdir}/expect.csv ${workdir}/got-qsv.csv
+        shell: true
+      - command: xan select id,note < ${workdir}/input.csv > ${workdir}/got-xan.csv
+        shell: true
+      - command: cmp ${workdir}/expect.csv ${workdir}/got-xan.csv
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.csv"
+    commands:
+      mlr:
+        command: [mlr, --csv, cut, -o, -f, "id,note"]
+        stdout: out-mlr.csv
+      qsv:
+        command: [qsv, select, "id,note"]
+        stdout: out-qsv.csv
+      xan:
+        command: [xan, select, "id,note"]
+        stdout: out-xan.csv

@@ -22,6 +22,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [compression](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/compression) | gzip, bzip2, xz | Binary output commands writing to different formats, with decompression and byte comparison in setup before latency, throughput, CPU time and peak RSS are measured |
 | [search](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/search) | GNU grep, ripgrep | A directory tree as input, a pinned locale, outputs compared after sorting, throughput declared as a number of files, and one tool measured at two thread counts |
 | [copy](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/copy) | cp, rsync | A command that changes the state the next run starts from, reset by `prepare_each` outside the measured time, and CPU time taken over a tool that forks processes of its own |
+| [csv](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/csv) | Miller, qsv, xan | A program that reads standard input, given a generated file with `stdin` so every run reads it from the first byte, and outputs that match only because the input quotes as little as it can |
 
 ## JSON processors
 
@@ -74,3 +75,17 @@ Not equal: cp is one process. rsync forks processes of its own even when both en
 The baseline is cp, the copy POSIX specifies, so `RELATIVE` reads as a multiple of it. Throughput is declared in files, as in the text search suite; the tree comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed, and setup counts its files. Both tools come from the pinned runner image and their versions are recorded in the report.
 
 Suite: [bench/thirdparty/copy](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/copy)
+
+## CSV processors
+
+Same job: read generated CSV on standard input and write its `id` and `note` columns, as CSV, to a file. Measured at 5MiB and at 100MiB.
+
+Made equal: the same input, given to every command through `stdin`, which reopens the file for every run, so no command names an input file. The same two columns in the same order (`mlr --csv cut -o -f id,note`, `qsv select id,note`, `xan select id,note`), and the same kind of destination, a file in the working directory. A third of the notes hold a comma or a double quote and are quoted, so the outputs have to quote them the same way; setup compares the three outputs byte for byte.
+
+Not equal: xan keeps the quotes of a field as the input wrote them, while Miller and qsv write a field quoted only when it needs quoting. The generated input quotes only the fields that need it, so the outputs match; an input that quotes every field would not. Miller reads, processes and writes on separate goroutines and runs a Go garbage collector, so its CPU time can exceed its wall-clock time, and its peak RSS rose with the input size when the suite was written while those of qsv and xan did not.
+
+The baseline is Miller, the oldest of the three projects, so `RELATIVE` reads as a multiple of it.
+
+The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. Miller is installed with `go install` at a pinned version, and qsv and xan from release archives at pinned versions whose digests are checked.
+
+Suite: [bench/thirdparty/csv](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/csv)

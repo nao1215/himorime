@@ -41,6 +41,7 @@ himorime measures a command, so a program you did not write is measured like you
 | [compression](./bench/thirdparty/compression) | gzip, bzip2, xz |
 | [search](./bench/thirdparty/search) | GNU grep, ripgrep |
 | [copy](./bench/thirdparty/copy) | cp, rsync |
+| [csv](./bench/thirdparty/csv) | Miller, qsv, xan |
 
 ## Install
 

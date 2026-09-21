@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 
+- `bench/thirdparty/csv` measures Miller, qsv and xan writing two columns of generated CSV read from standard input, at 5MiB and at 100MiB, as a worked example of `stdin`. The three outputs are compared byte for byte before measuring, and the generator in `bench/thirdparty/gen` gains a `csv` shape for it.
 - `bench/thirdparty/copy` measures cp and rsync copying a generated tree of log files into a new directory, at 80 files and at 1600 files, as a worked example of `prepare_each` resetting the state a run leaves behind. Setup compares each copy with the tree using `diff -r`.
 - `bench/thirdparty/search` measures GNU grep and ripgrep writing every line that contains a fixed string from a generated tree of log files, at 80 files and at 1600 files, as a worked example of a directory tree as input. Outputs are compared after sorting, throughput is declared as a number of files, and ripgrep is measured with one thread and with its default thread count. The generator in `bench/thirdparty/gen` gains a `tree` shape for it, and the README lists the third-party suites.
 
