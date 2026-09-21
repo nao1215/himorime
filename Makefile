@@ -5,7 +5,7 @@ VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo d
 LDFLAGS    := -s -w -X github.com/nao1215/himorime/internal/buildinfo.Version=$(VERSION)
 PKGS       := ./...
 GOLANGCI   := v2.13.2
-ATAGO      := v0.22.0
+ATAGO      := v0.23.0
 GORELEASER := v2.16.0
 ACTIONLINT := v1.7.12
 FUZZTIME   ?= 10s
