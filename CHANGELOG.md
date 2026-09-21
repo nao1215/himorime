@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `bench/thirdparty/awk` measures GNU awk, mawk and GoAWK running one awk program over generated CSV, at 5MiB and at 100MiB, as a worked example of a program file kept next to the suite and named by a path relative to it. The outputs are compared byte for byte after sorting before measuring.
 - `bench/thirdparty/sort` measures GNU sort and the sort of uutils coreutils ordering generated CSV by a numeric column on one thread, at 5MiB and at 100MiB, as a worked example of one program name installed by two packages: uutils is run through its multi-call binary as `coreutils sort`, and setup checks that `sort` is GNU sort before measuring. The two outputs are compared byte for byte.
 - `bench/thirdparty/shell` measures bash and dash started as interactive shells on a pseudo-terminal, evaluating one typed command and a typed loop, as a worked example of `terminal: true` with keys typed from `stdin`. Cleanup checks what the last measured run printed, and a failing check fails the benchmark.
+- `bench/thirdparty/cc` measures GCC and Clang compiling one generated C file with `-O2`, at 64KiB and at 512KiB, as a worked example of commands that take seconds: a fixed number of `runs` and a raised `timeout`. The outputs are programs, so setup builds and runs both and compares what they print. The generator in `bench/thirdparty/gen` gains a `c` shape for it.
 
 ## [0.5.0] - 2026-09-21
 

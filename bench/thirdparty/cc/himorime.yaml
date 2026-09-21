@@ -1,0 +1,115 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# GCC and Clang compiling the same generated C file into a program.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: c compilers
+description: GCC and Clang compiling one generated C file with -O2 into an executable.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  # A compile takes seconds, where the other suites measure milliseconds.
+  # Adaptive runs would stop at max_runs anyway, so the number is fixed:
+  # five measured runs after one warmup, whatever their total time.
+  warmup: 1
+  runs: 5
+  # A run that exceeds timeout is stopped and fails the benchmark. The
+  # default, one minute, is close to what the larger file takes on a slow
+  # machine, so the limit is raised rather than left to fail at random.
+  timeout: 5m
+  # gcc writes its assembly and object files under TMPDIR before linking,
+  # and clang its object file.
+  env:
+    TMPDIR: "${workdir}"
+  metrics:
+    cpu: true
+    memory: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    gcc: [gcc, --version]
+    clang: [clang, --version]
+
+benchmarks:
+  - name: compile 64KiB of C
+    description: >-
+      Each command compiles the same generated C file with -O2 and links it
+      into an executable in the working directory. The outputs are programs
+      built by different compilers, so their bytes differ; setup builds and
+      runs both, and compares what they print. The file chains functions of
+      unsigned arithmetic, which wraps by definition, so a correct build
+      prints the same number from either compiler. -O2 names a different set
+      of optimizations in each compiler, and how fast the programs run is not
+      measured. Both drivers call the system linker. gcc runs its compiler
+      and assembler as separate processes, while clang assembles inside its
+      own process; CPU time is summed over the process tree, and peak RSS is
+      that of its largest process.
+    tags: [thirdparty, cc, small]
+    baseline: gcc
+    setup:
+      - command: ["${artifact}", -kind, c, -size, 64KiB, -seed, "101", -o, "${workdir}/input.c"]
+      - command: gcc -O2 -o ${workdir}/check-gcc ${workdir}/input.c
+        shell: true
+      - command: ${workdir}/check-gcc > ${workdir}/expect.txt
+        shell: true
+      - command: grep -q -x '[0-9][0-9]*' ${workdir}/expect.txt
+        shell: true
+      - command: clang -O2 -o ${workdir}/check-clang ${workdir}/input.c
+        shell: true
+      - command: ${workdir}/check-clang > ${workdir}/got-clang.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-clang.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.c"
+    commands:
+      gcc:
+        command: [gcc, -O2, -o, "${workdir}/prog-gcc", "${workdir}/input.c"]
+      clang:
+        command: [clang, -O2, -o, "${workdir}/prog-clang", "${workdir}/input.c"]
+
+  - name: compile 512KiB of C
+    description: >-
+      The same job over eight times the source, where optimizing the
+      functions outweighs starting the compiler. The seed differs from the
+      64KiB benchmark, so the two are different functions of the same shape.
+    tags: [thirdparty, cc, large]
+    baseline: gcc
+    setup:
+      - command: ["${artifact}", -kind, c, -size, 512KiB, -seed, "102", -o, "${workdir}/input.c"]
+      - command: gcc -O2 -o ${workdir}/check-gcc ${workdir}/input.c
+        shell: true
+      - command: ${workdir}/check-gcc > ${workdir}/expect.txt
+        shell: true
+      - command: grep -q -x '[0-9][0-9]*' ${workdir}/expect.txt
+        shell: true
+      - command: clang -O2 -o ${workdir}/check-clang ${workdir}/input.c
+        shell: true
+      - command: ${workdir}/check-clang > ${workdir}/got-clang.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-clang.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.c"
+    commands:
+      gcc:
+        command: [gcc, -O2, -o, "${workdir}/prog-gcc", "${workdir}/input.c"]
+      clang:
+        command: [clang, -O2, -o, "${workdir}/prog-clang", "${workdir}/input.c"]

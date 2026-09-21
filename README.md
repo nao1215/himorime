@@ -48,6 +48,7 @@ himorime measures a command, so a program you did not write is measured like you
 | [awk](./bench/thirdparty/awk) | GNU awk, mawk, GoAWK |
 | [sort](./bench/thirdparty/sort) | GNU sort, uutils sort |
 | [shell](./bench/thirdparty/shell) | bash, dash |
+| [cc](./bench/thirdparty/cc) | GCC, Clang |
 
 ## Install
 

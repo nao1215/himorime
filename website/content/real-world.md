@@ -29,6 +29,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [awk](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/awk) | GNU awk, mawk, GoAWK | Interpreters running one program kept as a file next to the suite, found by a path relative to the suite directory, which is where commands run unless `cwd` says otherwise |
 | [sort](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sort) | GNU sort, uutils sort | One program name installed by two packages, one of them reached through a multi-call binary and a subcommand, and a setup step that checks which implementation the name resolves to before anything is measured |
 | [shell](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/shell) | bash, dash | Interactive programs run on a pseudo-terminal with `terminal: true` and keys typed from `stdin`, checked in `cleanup`, which reads what the last measured run printed, because a command that needs a terminal cannot run in setup |
+| [cc](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/cc) | GCC, Clang | Commands that take seconds, with a fixed number of `runs` and a raised `timeout`, and outputs that are programs, checked by running them rather than by comparing their bytes |
 
 ## JSON processors
 
@@ -185,3 +186,19 @@ The baseline is bash, the interactive shell most Linux systems give a new user, 
 Both shells come from the pinned runner image. dash has no option that prints its version, so the report records where it was found and the workflow prints its package version. `terminal: true` is not available on Windows, where the suite does not run.
 
 Suite: [bench/thirdparty/shell](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/shell)
+
+## C compilers
+
+Same job: compile one generated C file with `-O2` and link it into an executable in the working directory. Measured at 64KiB and at 512KiB of source.
+
+Made equal: the same file, the same optimization flag and the same kind of destination. `TMPDIR` points into the working directory for the assembly and object files the drivers write before linking. The outputs are executables built by different compilers, so their bytes differ; setup builds both, runs them and compares what they print. The generated file chains functions of unsigned arithmetic, which wraps by definition, so a correct build prints the same number from either compiler, and setup checks that it is a number.
+
+A compile takes seconds where the other suites take milliseconds, so the suite fixes `runs: 5` after one warmup instead of measuring adaptively, and raises `timeout` from one minute to five, so a slow machine does not stop a run that would have finished.
+
+Not equal: `-O2` names a different set of optimizations in each compiler, and how fast the resulting programs run is not measured. gcc runs its compiler, assembler and linker as separate processes, while clang assembles inside its own process, with no separate `as`, before calling the linker; CPU time is summed over the process tree, and peak RSS is that of its largest process.
+
+The baseline is GCC, the compiler of most Linux distributions, so `RELATIVE` reads as a multiple of it.
+
+The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed; its size is approximate, because C cannot be padded without changing what a compiler does with it, and throughput reads the size of the file. Both compilers come from the pinned runner image and their versions are recorded in the report.
+
+Suite: [bench/thirdparty/cc](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/cc)

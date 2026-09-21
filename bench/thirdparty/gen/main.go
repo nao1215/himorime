@@ -10,6 +10,7 @@
 //	gen -kind tree -size 5MiB -seed 1 -o dir
 //	gen -kind csv -size 5MiB -seed 1 -o out.csv
 //	gen -kind yaml -size 5MiB -seed 1 -o out.yaml
+//	gen -kind c -size 256KiB -seed 1 -o out.c
 //
 // Add a shape here rather than writing a second generator for the next
 // category.
@@ -36,7 +37,7 @@ func main() {
 
 func run(args []string) error {
 	fs := flag.NewFlagSet("gen", flag.ContinueOnError)
-	kind := fs.String("kind", "jsonl", "shape of the generated input: jsonl, csv, yaml, or tree for a directory of log files")
+	kind := fs.String("kind", "jsonl", "shape of the generated input: jsonl, csv, yaml, c, or tree for a directory of log files")
 	size := fs.String("size", "1MiB", "size of the output in bytes, with an optional KiB, MiB or GiB suffix")
 	seed := fs.Uint64("seed", 1, "seed of the random source; the same seed produces the same bytes")
 	out := fs.String("o", "", "path of the file to write, or of the directory to create for tree")
@@ -57,10 +58,12 @@ func run(args []string) error {
 		return writeFile(*out, func(w *bufio.Writer) error { return writeCSV(w, n, *seed) })
 	case "yaml":
 		return writeFile(*out, func(w *bufio.Writer) error { return writeYAML(w, n, *seed) })
+	case "c":
+		return writeFile(*out, func(w *bufio.Writer) error { return writeC(w, n, *seed) })
 	case "tree":
 		return writeTree(*out, n, *seed)
 	default:
-		return fmt.Errorf("unknown -kind %q; the shapes are: jsonl, csv, yaml, tree", *kind)
+		return fmt.Errorf("unknown -kind %q; the shapes are: jsonl, csv, yaml, c, tree", *kind)
 	}
 }
 
@@ -324,4 +327,61 @@ func yamlRecord(r *rand.Rand) string {
 		100000+r.IntN(900000), 1000+r.IntN(9000), events[r.IntN(len(events))],
 		verbs[r.IntN(len(verbs))], nouns[r.IntN(len(nouns))], r.IntN(1000),
 		r.IntN(5000), r.IntN(10) != 0)
+}
+
+const cHeader = "#include <stdio.h>\n\n"
+
+// writeC writes one C translation unit of about total bytes: functions of
+// the same shape with different constants, and a main that chains them and
+// prints the result. Unsigned arithmetic wraps by definition, so every
+// conforming compiler builds a program that prints the same number. The
+// size is approximate: a C file cannot be padded without changing what a
+// compiler does with it, and a benchmark over a program reads its size from
+// the file, not from the request.
+func writeC(w *bufio.Writer, total int64, seed uint64) error {
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
+	if _, err := w.WriteString(cHeader); err != nil {
+		return err
+	}
+	written := int64(len(cHeader))
+	n := 0
+	for written < total || n == 0 {
+		fn := cFunction(r, n)
+		if _, err := w.WriteString(fn); err != nil {
+			return err
+		}
+		written += int64(len(fn))
+		n++
+	}
+	var b strings.Builder
+	b.WriteString("int main(void)\n{\n\tunsigned long s = 1;\n")
+	for i := range n {
+		fmt.Fprintf(&b, "\ts = f%05d(s);\n", i)
+	}
+	b.WriteString("\tprintf(\"%lu\\n\", s);\n\treturn 0;\n}\n")
+	_, err := w.WriteString(b.String())
+	return err
+}
+
+func cFunction(r *rand.Rand, i int) string {
+	return fmt.Sprintf(`static unsigned long f%05d(unsigned long x)
+{
+	unsigned long t[%d];
+	unsigned long a = %dUL;
+	for (int i = 0; i < %d; i++) {
+		t[i] = a * %dUL + (x ^ (unsigned long)i);
+		a = t[i] %% %dUL == %dUL ? t[i] + %dUL : t[i] >> %d;
+	}
+	for (int i = %d - 1; i > 0; i--)
+		a ^= t[i] + t[i - 1] * %dUL;
+	switch (a %% 4) {
+	case 0: return a + %dUL;
+	case 1: return a * %dUL;
+	case 2: return a ^ %dUL;
+	default: return a - x;
+	}
+}
+
+`, i, 8+r.IntN(8), 1+r.IntN(1<<20), 8, 3+2*r.IntN(1000), 2+r.IntN(97), r.IntN(2), 1+r.IntN(1000), 1+r.IntN(7),
+		8, 1+r.IntN(1000), r.IntN(1<<16), 3+2*r.IntN(1000), r.IntN(1<<30))
 }
