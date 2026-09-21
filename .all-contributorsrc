@@ -1,0 +1,33 @@
+{
+  "projectName": "himorime",
+  "projectOwner": "nao1215",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [],
+  "imageSize": 75,
+  "commit": false,
+  "commitConvention": "angular",
+  "contributorsPerLine": 7,
+  "linkToUsage": false,
+  "contributors": [
+    {
+      "avatar_url": "https://avatars.githubusercontent.com/u/22737008?v=4",
+      "contributions": [
+        "code",
+        "doc"
+      ],
+      "login": "nao1215",
+      "name": "CHIKAMATSU Naohiro",
+      "profile": "https://debimate.jp/"
+    },
+    {
+      "avatar_url": "https://avatars.githubusercontent.com/u/1180808?v=4",
+      "contributions": [
+        "platform"
+      ],
+      "login": "Dominiquini",
+      "name": "Rafael Baboni Dominiquini",
+      "profile": "https://rafaeldominiquini.ddns.net/"
+    }
+  ]
+}
