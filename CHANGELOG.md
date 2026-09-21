@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Validation errors under a quoted key, such as a command written as `"tool":`, point at the offending line instead of the enclosing `commands:` key.
 - A comparison treats a suite as new in this revision when its file is missing from the base revision, not only its directory. The pull request that adds `himorime.yaml` at the repository root, where `himorime init` writes it, no longer runs the new suite in the base revision and exits 4; the working tree is measured alone and judged by its budgets.
 - `himorime report --output` writes the file as `run --output` does, with mode 0644 less the umask and through a symbolic link; it wrote mode 0600 and replaced a link with a regular file.
+- `--section` ignores marker lines indented by four spaces or a tab, such as an example of the markers in a code block inside a list item; the report was written into the example, or the real markers were reported as duplicated.
 
 ## [0.4.1] - 2026-09-21
 

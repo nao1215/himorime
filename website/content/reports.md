@@ -100,4 +100,4 @@ old report
 $ himorime run --format markdown --output docs/benchmarks.md --section speed
 ```
 
-The section name uses lowercase letters, digits and hyphens. The same fields are available in `report.outputs` so a normal run can update the page.
+The section name uses lowercase letters, digits and hyphens. Each marker is a line of its own, indented by at most three spaces; markers inside a code block or indented as code are examples and are ignored. The same fields are available in `report.outputs` so a normal run can update the page.

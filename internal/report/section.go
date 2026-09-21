@@ -57,7 +57,8 @@ func endMarker(name string) string   { return "<!-- himorime:end " + name + " --
 // lines of the section replaced by render's output, surrounded by one blank
 // line on each side. render receives the heading level of the report: one
 // below the nearest heading above the begin marker, or 2 without one. Lines
-// inside fenced code blocks are neither markers nor headings. The line
+// inside fenced code blocks are neither markers nor headings, and neither is a
+// marker indented by four spaces or a tab, which Markdown shows as code. The line
 // endings of the begin marker line are used for the new content.
 func ReplaceSection(doc []byte, name string, render func(level int) string) ([]byte, error) {
 	lines := splitLines(doc)
@@ -81,7 +82,7 @@ func ReplaceSection(doc []byte, name string, render func(level int) string) ([]b
 			inFence = f
 			continue
 		}
-		switch strings.TrimSpace(text) {
+		switch markerText(text) {
 		case begin:
 			if beginAt >= 0 {
 				return nil, fmt.Errorf("the line %q appears on lines %d and %d; keep exactly one", begin, beginAt+1, i+1)
@@ -169,6 +170,17 @@ func splitLines(doc []byte) []line {
 		}
 	}
 	return lines
+}
+
+// markerText returns the text of a line that can be a marker: indented by up
+// to three spaces, as a fence can be. A line indented further, or by a tab, is
+// code in Markdown, such as an example of the markers inside a list item.
+func markerText(text string) string {
+	trimmed := strings.TrimLeft(text, " ")
+	if len(text)-len(trimmed) > 3 {
+		return ""
+	}
+	return strings.TrimRight(trimmed, " \t")
 }
 
 // fence is an open fenced code block: its character and length.

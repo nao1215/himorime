@@ -70,6 +70,21 @@ func TestReplaceSection(t *testing.T) {
 			want: "```md\n<!-- himorime:begin bench -->\n<!-- himorime:end bench -->\n```\n<!-- himorime:begin bench -->\n\n## suite\n\n| a |\n|---|\n| 1 |\n\n<!-- himorime:end bench -->\n",
 		},
 		{
+			name:    "indented markers in a list item's code block do not count",
+			doc:     "- Add these lines:\n\n    ```markdown\n    <!-- himorime:begin bench -->\n    <!-- himorime:end bench -->\n    ```\n\n- Then run himorime.\n",
+			wantErr: `no line "<!-- himorime:begin bench -->"`,
+		},
+		{
+			name: "an indented example does not collide with the real markers",
+			doc:  "- Add these lines:\n\n    ```markdown\n    <!-- himorime:begin bench -->\n    <!-- himorime:end bench -->\n    ```\n\n<!-- himorime:begin bench -->\nold\n   <!-- himorime:end bench -->  \n",
+			want: "- Add these lines:\n\n    ```markdown\n    <!-- himorime:begin bench -->\n    <!-- himorime:end bench -->\n    ```\n\n<!-- himorime:begin bench -->\n\n## suite\n\n| a |\n|---|\n| 1 |\n\n   <!-- himorime:end bench -->  \n",
+		},
+		{
+			name:    "a tab-indented marker is code, not a marker",
+			doc:     "\t<!-- himorime:begin bench -->\n\t<!-- himorime:end bench -->\n",
+			wantErr: `no line "<!-- himorime:begin bench -->"`,
+		},
+		{
 			name:    "unclosed code block hides markers",
 			doc:     "```md\n<!-- himorime:begin bench -->\n<!-- himorime:end bench -->\n",
 			wantErr: `no line "<!-- himorime:begin bench -->"`,
