@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-21
+
 ### Added
 
 - The README and the installation page list the AUR package `himorime-bin`, maintained by Rafael Baboni Dominiquini, who is credited in a new Contributors section. The documentation guard now counts `yay -S` as a published channel.
