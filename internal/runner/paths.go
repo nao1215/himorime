@@ -113,4 +113,3 @@ func removeTemp(base, dir string) error {
 	}
 	return rmtree.RemoveAll(absDir)
 }
-
