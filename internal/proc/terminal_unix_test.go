@@ -267,3 +267,17 @@ func TestTerminalInternalStateAndIOFailures(t *testing.T) {
 		t.Fatal("waitReady did not observe terminal output")
 	}
 }
+
+func TestTerminalPauseNeverOutlivesTheStop(t *testing.T) {
+	t.Parallel()
+	// The poll is shorter than a goroutine can be descheduled for, so the
+	// timer is often ready when the stop is: the stop must still win.
+	stop := make(chan struct{})
+	close(stop)
+	term := &Terminal{stop: stop}
+	for i := range 200000 {
+		if term.pause() {
+			t.Fatalf("pause returned true after the stop, on call %d", i+1)
+		}
+	}
+}

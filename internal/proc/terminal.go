@@ -227,7 +227,10 @@ func (t *Terminal) waitRead() bool {
 	}
 }
 
-// pause waits typingPoll. It returns false when the run ended meanwhile.
+// pause waits typingPoll. It returns false when the run ended meanwhile. The
+// poll is short enough for the timer to be ready by the time the select runs,
+// and select picks among ready cases at random, so the stop is checked again
+// after the timer fires.
 func (t *Terminal) pause() bool {
 	timer := time.NewTimer(typingPoll)
 	defer timer.Stop()
@@ -235,7 +238,7 @@ func (t *Terminal) pause() bool {
 	case <-t.stop:
 		return false
 	case <-timer.C:
-		return true
+		return !stopped(t.stop)
 	}
 }
 
