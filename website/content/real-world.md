@@ -28,6 +28,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [yaml](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/yaml) | yq, yj, gojq | Outputs that differ only in key order, which the job allows, normalized with jq, which is not measured, before they are compared |
 | [awk](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/awk) | GNU awk, mawk, GoAWK | Interpreters running one program kept as a file next to the suite, found by a path relative to the suite directory, which is where commands run unless `cwd` says otherwise |
 | [sort](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sort) | GNU sort, uutils sort | One program name installed by two packages, one of them reached through a multi-call binary and a subcommand, and a setup step that checks which implementation the name resolves to before anything is measured |
+| [shell](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/shell) | bash, dash | Interactive programs run on a pseudo-terminal with `terminal: true` and keys typed from `stdin`, checked in `cleanup`, which reads what the last measured run printed, because a command that needs a terminal cannot run in setup |
 
 ## JSON processors
 
@@ -168,3 +169,19 @@ The baseline is GNU sort, the reference that uutils aims to match, so `RELATIVE`
 The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. GNU sort comes from the pinned runner image, and uutils coreutils from a release archive at a pinned version whose digest is checked.
 
 Suite: [bench/thirdparty/sort](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sort)
+
+## Interactive shells
+
+Same job: start an interactive shell without startup files on an 80 by 24 pseudo-terminal, read a typed command, evaluate it, print the result and exit. Measured with `echo $((6*7))`, where starting the shell dominates, and with a POSIX loop that counts to 100000, where evaluating dominates.
+
+Made equal: the same keys, typed from `stdin` one at a time, each once the shell has read the one before, and ending with `exit`. No startup files: `bash --norc --noprofile -i` and `dash -i`, with `ENV` empty. `HOME` points into the working directory, `INPUTRC` to `/dev/null` so readline reads neither `~/.inputrc` nor `/etc/inputrc`, and `HISTFILE` is empty so bash neither reads nor writes a history file; if it did, each run would start from what the last one left.
+
+A command that needs a terminal cannot run in setup, which has none, so the check that each shell did the job is in `cleanup`. It reads what the last measured run of each shell printed, the terminal's output kept with `stdout`, and looks for a line that is only the result. A failing cleanup fails the benchmark.
+
+Not equal: how the keys are read. bash reads them one at a time through readline, so the wait for each key counts toward its latency, which is why its latency is above its CPU time; dash has no line editor and reads a whole line at once. The prompts differ, and are not compared.
+
+The baseline is bash, the interactive shell most Linux systems give a new user, so `RELATIVE` reads as a multiple of it.
+
+Both shells come from the pinned runner image. dash has no option that prints its version, so the report records where it was found and the workflow prints its package version. `terminal: true` is not available on Windows, where the suite does not run.
+
+Suite: [bench/thirdparty/shell](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/shell)
