@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A comparison treats a suite as new in this revision when its file is missing from the base revision, not only its directory. The pull request that adds `himorime.yaml` at the repository root, where `himorime init` writes it, no longer runs the new suite in the base revision and exits 4; the working tree is measured alone and judged by its budgets.
 - `himorime report --output` writes the file as `run --output` does, with mode 0644 less the umask and through a symbolic link; it wrote mode 0600 and replaced a link with a regular file.
 - `--section` ignores marker lines indented by four spaces or a tab, such as an example of the markers in a code block inside a list item; the report was written into the example, or the real markers were reported as duplicated.
+- `compare` and `ci` remove a base worktree that holds directories without write permission, such as a Go module cache a build left there; a passing comparison exited 4 with "remove the temporary worktree: permission denied" while its report said exit 0.
 
 ## [0.4.1] - 2026-09-21
 

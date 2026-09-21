@@ -23,6 +23,7 @@ import (
 	"github.com/nao1215/himorime/internal/proc"
 	"github.com/nao1215/himorime/internal/redact"
 	"github.com/nao1215/himorime/internal/report"
+	"github.com/nao1215/himorime/internal/rmtree"
 	"github.com/nao1215/himorime/internal/runner"
 )
 
@@ -236,7 +237,7 @@ func (m *measurement) execute(ctx context.Context, suites []loadedSuite) (code i
 	}
 	m.tempDir = tempDir
 	defer func() {
-		if err := runner.RemoveAll(tempDir); err != nil {
+		if err := rmtree.RemoveAll(tempDir); err != nil {
 			diag.PrintCode(a.Stderr, diag.Internal, "himorime: remove temporary directory %s: %v", tempDir, err)
 			code = cleanupFailed(code)
 		}

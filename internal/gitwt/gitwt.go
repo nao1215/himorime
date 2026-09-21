@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/nao1215/himorime/internal/rmtree"
 )
 
 // ErrNotRepository is returned when a directory is not inside a Git work tree.
@@ -185,11 +187,12 @@ func (w *Worktree) Remove(ctx context.Context) error {
 	defer cancel()
 	var errs []error
 	if _, err := os.Stat(w.Dir); err == nil {
-		if _, err := w.repo.run(cctx, w.repo.Top, "worktree", "remove", "--force", w.Dir); err != nil {
-			errs = append(errs, err)
-		}
+		// Git cannot delete a directory without write permission, such as a
+		// Go module cache a build left in the worktree. Its error is not
+		// kept: the tree is removed below, and its entry is pruned after.
+		_, _ = w.repo.run(cctx, w.repo.Top, "worktree", "remove", "--force", w.Dir)
 	}
-	if err := os.RemoveAll(w.base); err != nil {
+	if err := rmtree.RemoveAll(w.base); err != nil {
 		errs = append(errs, err)
 	}
 	if err := w.repo.pruneOrphans(cctx); err != nil {
