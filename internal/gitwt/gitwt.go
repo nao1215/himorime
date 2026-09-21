@@ -3,9 +3,10 @@
 //
 // The only lasting trace a comparison could leave is the worktree's
 // administrative entry under .git/worktrees; Remove deletes it, and
-// AddWorktree runs `git worktree prune` first so an entry orphaned by a killed
-// process is cleared by the next comparison. Opening a repository only reads
-// it.
+// AddWorktree first clears the entries of himorime's own worktrees whose
+// directories are gone, so an entry orphaned by a killed process is cleared by
+// the next comparison. Entries of the user's worktrees are never touched, even
+// when their directories are missing. Opening a repository only reads it.
 package gitwt
 
 import (
@@ -109,9 +110,9 @@ type Worktree struct {
 //
 // The checkout is settled before it is returned: see settleIndex.
 func (r *Repo) AddWorktree(ctx context.Context, tempBase, sha string) (*Worktree, error) {
-	// Clear entries of worktrees whose directories no longer exist, such as
-	// one left behind by a himorime that was killed with SIGKILL.
-	_, _ = r.run(ctx, r.Top, "worktree", "prune")
+	// Clear entries of himorime worktrees whose directories no longer exist,
+	// such as one left behind by a himorime that was killed with SIGKILL.
+	_ = r.pruneOrphans(ctx)
 	if err := os.MkdirAll(tempBase, 0o700); err != nil {
 		return nil, err
 	}
@@ -191,11 +192,56 @@ func (w *Worktree) Remove(ctx context.Context) error {
 	if err := os.RemoveAll(w.base); err != nil {
 		errs = append(errs, err)
 	}
-	if _, err := w.repo.run(cctx, w.repo.Top, "worktree", "prune"); err != nil {
+	if err := w.repo.pruneOrphans(cctx); err != nil {
 		errs = append(errs, err)
 	}
 	w.base = ""
 	return errors.Join(errs...)
+}
+
+// pruneOrphans deletes the administrative entries of himorime worktrees whose
+// directories no longer exist. `git worktree prune` is not used because it
+// also deletes the entry of any worktree of the user's whose directory is
+// missing for now, such as one on an unmounted disk, and with it that
+// worktree's index and branch lock.
+func (r *Repo) pruneOrphans(ctx context.Context) error {
+	out, err := r.run(ctx, r.Top, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return err
+	}
+	admin := filepath.Join(filepath.FromSlash(strings.TrimSpace(out)), "worktrees")
+	entries, err := os.ReadDir(admin)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	var errs []error
+	for _, e := range entries {
+		entry := filepath.Join(admin, e.Name())
+		gitdir, err := os.ReadFile(filepath.Join(entry, "gitdir")) //nolint:gosec // G304: a file Git keeps in its own directory
+		if err != nil {
+			continue
+		}
+		dir := filepath.Dir(filepath.FromSlash(strings.TrimSpace(string(gitdir))))
+		if !isOwnWorktree(dir) {
+			continue
+		}
+		if _, err := os.Lstat(dir); !errors.Is(err, os.ErrNotExist) { //nolint:gosec // G703: only checks whether the checkout Git recorded still exists
+			continue
+		}
+		if err := os.RemoveAll(entry); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// isOwnWorktree reports whether dir has the shape AddWorktree gives a
+// checkout: a directory named tree inside a worktree-* directory.
+func isOwnWorktree(dir string) bool {
+	return filepath.Base(dir) == "tree" && strings.HasPrefix(filepath.Base(filepath.Dir(dir)), "worktree-")
 }
 
 func (r *Repo) run(ctx context.Context, dir string, args ...string) (string, error) {
