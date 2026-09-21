@@ -1,0 +1,11 @@
+version: "1"
+name: merge
+benchmarks:
+  - &base
+    name: a
+    runs: 3
+    commands:
+      t: {command: [t, "x\ty", ".inf", "? q"]}
+  - <<: *base
+    name: b
+    runs: 5

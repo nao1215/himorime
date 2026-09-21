@@ -207,6 +207,28 @@ benchmarks:
 	}
 }
 
+func TestLoadAliasesKeepValues(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join("testdata", "parity", "valid", "merge-key.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := mustParse(t, string(data))
+	if len(s.Benchmarks) != 2 {
+		t.Fatalf("benchmarks = %d, want 2", len(s.Benchmarks))
+	}
+	a, b := s.Benchmarks[0], s.Benchmarks[1]
+	if a.Name != "a" || a.Runs != 3 || b.Name != "b" || b.Runs != 5 {
+		t.Errorf("merged benchmarks = %s/%d %s/%d, want a/3 b/5", a.Name, a.Runs, b.Name, b.Runs)
+	}
+	want := []string{"t", "x\ty", ".inf", "? q"}
+	for _, bench := range s.Benchmarks {
+		if got := bench.Commands[0].Argv; !reflect.DeepEqual(got, want) {
+			t.Errorf("%s argv = %q, want %q", bench.Name, got, want)
+		}
+	}
+}
+
 func TestLoadStdinForms(t *testing.T) {
 	t.Parallel()
 	for src, want := range map[string]Stdin{
@@ -300,6 +322,8 @@ benchmarks:
 		{"escaping stdout", minimal("stdout: ../escape.txt"), "relative path inside ${workdir}", "benchmarks[0].stdout"},
 		{"bad statistic", minimal("regression: {latency: {statistic: p95}}"), "must be one of: median, mean", "benchmarks[0].regression.latency.statistic"},
 		{"zero max_percent", minimal("regression: {latency: {max_percent: 0}}"), "percentage greater than 0", "benchmarks[0].regression.latency.max_percent"},
+		{"zero max_percent string", minimal("regression: {latency: {max_percent: \"0%\"}}"), "percentage greater than 0", "benchmarks[0].regression.latency.max_percent"},
+		{"too large max_percent string", minimal("regression: {latency: {max_percent: \"1001%\"}}"), "percentage greater than 0", "benchmarks[0].regression.latency.max_percent"},
 		{"latency tolerance at the top level", minimal("regression: {max_percent: 10}"), `unknown key "max_percent"`, "benchmarks[0].regression.max_percent"},
 		{"gate is a boolean", minimal("regression: {cpu_total: {gate: \"no\"}}"), "expected true or false", "benchmarks[0].regression.cpu_total.gate"},
 		{"low confidence", minimal("regression: {confidence: 0.3}"), "must be at least 0.5, got 0.3", "benchmarks[0].regression.confidence"},
@@ -416,6 +440,27 @@ func TestIssuePositions(t *testing.T) {
 	}
 	if !strings.HasPrefix(is.String(), filepath.Join(filepath.Dir(is.File), "himorime.yaml")+":8:15: benchmarks[0].baseline:") {
 		t.Fatalf("String() = %q", is.String())
+	}
+}
+
+func TestIssuePositionsBehindQuotedKeys(t *testing.T) {
+	t.Parallel()
+	src := `version: "1"
+name: x
+benchmarks:
+  - name: a
+    commands:
+      "t":
+        command: [t]
+        budget: {peak_rss: {max: "< 1MiB"}}
+`
+	_, err := parseString(t, src)
+	var verr *ValidationError
+	if !errors.As(err, &verr) || len(verr.Issues) != 1 {
+		t.Fatalf("err = %v", err)
+	}
+	if is := verr.Issues[0]; is.Line != 8 || is.Column != 34 {
+		t.Fatalf("issue at %d:%d, want 8:34: %v", is.Line, is.Column, is)
 	}
 }
 

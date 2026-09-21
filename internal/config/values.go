@@ -20,6 +20,10 @@ const percentPattern = `^([0-9]+(\.[0-9]+)?)%$`
 
 var percentRE = regexp.MustCompile(percentPattern)
 
+// maxPercent is the largest tolerance a suite may write, as a number or as a
+// string; the schema holds the same bound.
+const maxPercent = 1000
+
 // ParseDuration parses a suite duration such as "250ms" or "1m30s".
 func ParseDuration(s string) (time.Duration, error) {
 	return metric.ParseDuration(s)
@@ -136,6 +140,9 @@ func (p *Percent) UnmarshalYAML(_ context.Context, node ast.Node) error {
 	v, err := ParsePercent(s)
 	if err != nil {
 		return errAt(node, "%v", err)
+	}
+	if v <= 0 || v > maxPercent {
+		return errAt(node, "expected a percentage greater than 0 and at most %g, got %q", float64(maxPercent), s)
 	}
 	p.Value, p.Set = v, true
 	return nil
