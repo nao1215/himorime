@@ -150,6 +150,42 @@ jobs:
           "$RUNNER_TEMP/himorime" run bench/thirdparty/csv
           --format json --output "$RUNNER_TEMP/csv.json"
           --summary "$GITHUB_STEP_SUMMARY"
+      # csvq and sqly are Go modules pinned through go install. DuckDB and
+      # trdsql come from release archives with a pinned version and SHA256;
+      # trdsql is not installed with go install because a binary built that
+      # way reports its version as "devel".
+      - name: Install the SQL engines
+        env:
+          DUCKDB_VERSION: "1.5.5"
+          DUCKDB_SHA256: "08c0ca117111fcede14239d0093792352befdc174218c344d232c13279643d05"
+          TRDSQL_VERSION: "1.2.3"
+          TRDSQL_SHA256: "812d1e81f98b6a8b6e7c5f1d8ef8e451d6ea75a14bd8a72c1c2334d7c78d9305"
+        run: |
+          set -euo pipefail
+          bin="$(go env GOPATH)/bin"
+          mkdir -p "${bin}"
+          go install github.com/mithrandie/csvq@v1.18.1
+          go install github.com/nao1215/sqly@v1.7.0
+          curl -fsSL -o "${RUNNER_TEMP}/duckdb.zip" \
+            "https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
+          echo "${DUCKDB_SHA256}  ${RUNNER_TEMP}/duckdb.zip" | sha256sum --check -
+          unzip -o -q "${RUNNER_TEMP}/duckdb.zip" duckdb -d "${RUNNER_TEMP}/duckdb"
+          install -m 0755 "${RUNNER_TEMP}/duckdb/duckdb" "${bin}/duckdb"
+          archive="trdsql_v${TRDSQL_VERSION}_linux_amd64"
+          curl -fsSL -o "${RUNNER_TEMP}/trdsql.zip" \
+            "https://github.com/noborus/trdsql/releases/download/v${TRDSQL_VERSION}/${archive}.zip"
+          echo "${TRDSQL_SHA256}  ${RUNNER_TEMP}/trdsql.zip" | sha256sum --check -
+          unzip -o -q "${RUNNER_TEMP}/trdsql.zip" "${archive}/trdsql" -d "${RUNNER_TEMP}"
+          install -m 0755 "${RUNNER_TEMP}/${archive}/trdsql" "${bin}/trdsql"
+          duckdb --version
+          trdsql -version
+          csvq --version
+          sqly --version
+      - name: Measure the SQL engines
+        run: >
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/sql
+          --format json --output "$RUNNER_TEMP/sql.json"
+          --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

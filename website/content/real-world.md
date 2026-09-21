@@ -23,6 +23,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [search](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/search) | GNU grep, ripgrep | A directory tree as input, a pinned locale, outputs compared after sorting, throughput declared as a number of files, and one tool measured at two thread counts |
 | [copy](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/copy) | cp, rsync | A command that changes the state the next run starts from, reset by `prepare_each` outside the measured time, and CPU time taken over a tool that forks processes of its own |
 | [csv](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/csv) | Miller, qsv, xan | A program that reads standard input, given a generated file with `stdin` so every run reads it from the first byte, and outputs that match only because the input quotes as little as it can |
+| [sql](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sql) | DuckDB, trdsql, csvq, sqly | Peak RSS as the metric that separates the programs, a tool from this repository's author measured without being the baseline, and `HOME` and `TMPDIR` pointed into the working directory so no tool reads or writes the reader's files |
 
 ## JSON processors
 
@@ -89,3 +90,17 @@ The baseline is Miller, the oldest of the three projects, so `RELATIVE` reads as
 The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. Miller is installed with `go install` at a pinned version, and qsv and xan from release archives at pinned versions whose digests are checked.
 
 Suite: [bench/thirdparty/csv](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/csv)
+
+## SQL over CSV
+
+Same job: run `SELECT city, count(*) AS n ... GROUP BY city ORDER BY city` over generated CSV and write the result, as CSV with a header, to a file. Measured at 5MiB and at 100MiB.
+
+Made equal: the same file, the same query, and the same kind of destination, a file in the working directory. Each tool names a table after a file in its own way (`FROM 'input.csv'` for DuckDB, `FROM input.csv` for trdsql, `FROM input` for csvq and sqly), so the commands run in the working directory and name the file without a path. DuckDB is told to use one thread (`SET threads=1`) and csvq one CPU (`--cpu 1`). `HOME` points into the working directory, so no tool reads or writes the settings of whoever runs the suite: DuckDB reads `~/.duckdbrc`, trdsql reads a `config.json` that can switch its database driver, and sqly appends to a history even with `--sql`. `TMPDIR` points there too, for the temporary files SQLite writes. Setup compares the four outputs byte for byte.
+
+Not equal: trdsql imports the file into a temporary SQLite table, which SQLite keeps in a temporary file behind a small page cache; sqly imports it into an in-memory SQLite database; csvq reads the file into memory; DuckDB scans the file. How much of the file each tool holds is what peak RSS shows, which is why this suite measures it. trdsql, csvq and sqly are written in Go and run a garbage collector on threads of their own, so their CPU time can exceed their wall-clock time even with one query thread.
+
+sqly is written by the author of himorime. It is measured like the others and is not the baseline. The baseline is DuckDB, the most widely used of the four, so `RELATIVE` reads as a multiple of it.
+
+The input comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. csvq and sqly are installed with `go install` at pinned versions, and DuckDB and trdsql from release archives at pinned versions whose digests are checked.
+
+Suite: [bench/thirdparty/sql](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/sql)
