@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-21
+
 ### Added
 
 - `bench/thirdparty/yaml` measures yq, yj and gojq converting a generated YAML document on standard input to compact JSON, at 1MiB and at 10MiB, as a worked example of outputs normalized before they are compared: gojq sorts object keys, so each output passes through `jq -S -c` first. The generator in `bench/thirdparty/gen` gains a `yaml` shape for it.
