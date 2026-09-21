@@ -1,0 +1,129 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# Node.js, Bun and Deno running the same JavaScript module, kept next to this
+# file, over generated JSON Lines.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: javascript runtimes
+description: Node.js, Bun and Deno running count.mjs, which counts the events of generated JSON Lines and totals their durations.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  # A runtime reads settings and keeps caches of its own: Bun reads
+  # ~/.bunfig.toml, Deno keeps compiled modules under DENO_DIR (by default
+  # in the home directory) and checks online for a newer release, and
+  # NODE_OPTIONS can pass flags to Node.js. HOME and DENO_DIR point into the
+  # working directory, so no runtime reads or fills the files of whoever runs
+  # the suite and every benchmark starts with an empty cache; the warmup runs
+  # are what fill it.
+  env:
+    HOME: "${workdir}"
+    DENO_DIR: "${workdir}/deno"
+    DENO_NO_UPDATE_CHECK: "1"
+    NODE_OPTIONS: ""
+  metrics:
+    # The runtimes compile JavaScript and collect garbage on threads of their
+    # own, so CPU time can exceed wall-clock time; the module reads the
+    # whole file into one string, so peak RSS follows the input size.
+    cpu: true
+    memory: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    node: [node, --version]
+    bun: [bun, --version]
+    deno: [deno, --version]
+
+benchmarks:
+  - name: count events in 5MiB of JSON Lines
+    description: >-
+      Each runtime runs count.mjs, named relative to this suite's directory,
+      over the same file and writes one line per event to a file in the
+      working directory; setup compares the three outputs byte for byte.
+      Deno reads a file only when it is allowed to, so it gets --allow-read,
+      and --no-config keeps it from reading a deno.json of the directory.
+      Node.js and Bun read files without asking.
+    tags: [thirdparty, js, small]
+    baseline: node
+    setup:
+      - command: ["${artifact}", -kind, jsonl, -size, 5MiB, -seed, "111", -o, "${workdir}/input.jsonl"]
+      - command: node count.mjs ${workdir}/input.jsonl > ${workdir}/expect.txt
+        shell: true
+      # Seven events and the pad event of the last record, one line each; an
+      # empty output would compare equal to another empty one.
+      - command: test $(wc -l < ${workdir}/expect.txt) -eq 8
+        shell: true
+      - command: bun count.mjs ${workdir}/input.jsonl > ${workdir}/got-bun.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-bun.txt
+        shell: true
+      - command: deno run --no-config --allow-read count.mjs ${workdir}/input.jsonl > ${workdir}/got-deno.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-deno.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.jsonl"
+    commands:
+      node:
+        command: [node, count.mjs, "${workdir}/input.jsonl"]
+        stdout: out-node.txt
+      bun:
+        command: [bun, count.mjs, "${workdir}/input.jsonl"]
+        stdout: out-bun.txt
+      deno:
+        command: [deno, run, --no-config, --allow-read, count.mjs, "${workdir}/input.jsonl"]
+        stdout: out-deno.txt
+
+  - name: count events in 100MiB of JSON Lines
+    description: >-
+      The same module over twenty times the input. The seed differs from the
+      5MiB benchmark, so the two are different bytes of the same shape.
+    tags: [thirdparty, js, large]
+    baseline: node
+    setup:
+      - command: ["${artifact}", -kind, jsonl, -size, 100MiB, -seed, "112", -o, "${workdir}/input.jsonl"]
+      - command: node count.mjs ${workdir}/input.jsonl > ${workdir}/expect.txt
+        shell: true
+      - command: test $(wc -l < ${workdir}/expect.txt) -eq 8
+        shell: true
+      - command: bun count.mjs ${workdir}/input.jsonl > ${workdir}/got-bun.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-bun.txt
+        shell: true
+      - command: deno run --no-config --allow-read count.mjs ${workdir}/input.jsonl > ${workdir}/got-deno.txt
+        shell: true
+      - command: cmp ${workdir}/expect.txt ${workdir}/got-deno.txt
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.jsonl"
+    commands:
+      node:
+        command: [node, count.mjs, "${workdir}/input.jsonl"]
+        stdout: out-node.txt
+      bun:
+        command: [bun, count.mjs, "${workdir}/input.jsonl"]
+        stdout: out-bun.txt
+      deno:
+        command: [deno, run, --no-config, --allow-read, count.mjs, "${workdir}/input.jsonl"]
+        stdout: out-deno.txt

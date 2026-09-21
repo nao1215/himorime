@@ -49,6 +49,7 @@ himorime measures a command, so a program you did not write is measured like you
 | [sort](./bench/thirdparty/sort) | GNU sort, uutils sort |
 | [shell](./bench/thirdparty/shell) | bash, dash |
 | [cc](./bench/thirdparty/cc) | GCC, Clang |
+| [js](./bench/thirdparty/js) | Node.js, Bun, Deno |
 
 ## Install
 
