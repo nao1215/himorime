@@ -45,7 +45,7 @@ report:
     # multi-call binary, coreutils, that runs any of its programs named as
     # the first argument, and that name cannot be mistaken for GNU sort. The
     # name sort is whatever comes first on PATH: GNU sort on most systems,
-    # uutils on Ubuntu 26.04 and later. Setup checks which one it is.
+    # uutils on Ubuntu 25.10 and later. Setup checks which one it is.
     gnu: [sort, --version]
     uutils: [coreutils, sort, --version]
 
