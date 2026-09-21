@@ -190,7 +190,9 @@ func ParseAggregation(s string) (Aggregation, error) {
 	case AggMin, AggMax, AggMean, AggMedian:
 		return Aggregation(s), nil
 	}
-	if percentileKeyRE.MatchString(s) {
+	// A name with so many nines that it rounds to p100 has no percentile to
+	// compute, so it is rejected here rather than judged as NaN later.
+	if _, ok := Aggregation(s).Percentile(); ok {
 		return Aggregation(s), nil
 	}
 	return "", fmt.Errorf("unknown aggregation %q: use min, max, mean, median or a percentile such as p95 (p1 to p99.9)", s)
