@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 
+- `bench/thirdparty/diff` measures GNU diff and `git diff --no-index` writing a unified diff of two generated files, at 5MiB and at 100MiB, as a worked example of commands whose success is exit status 1, declared with `exit_codes`. The hunks are compared byte for byte before measuring.
 - `bench/thirdparty/sql` measures DuckDB, trdsql, csvq and sqly running one GROUP BY query over generated CSV, at 5MiB and at 100MiB, as a worked example of a suite where peak RSS separates the programs. The four outputs are compared byte for byte before measuring, and `HOME` and `TMPDIR` point into the working directory.
 - `bench/thirdparty/csv` measures Miller, qsv and xan writing two columns of generated CSV read from standard input, at 5MiB and at 100MiB, as a worked example of `stdin`. The three outputs are compared byte for byte before measuring, and the generator in `bench/thirdparty/gen` gains a `csv` shape for it.
 - `bench/thirdparty/copy` measures cp and rsync copying a generated tree of log files into a new directory, at 80 files and at 1600 files, as a worked example of `prepare_each` resetting the state a run leaves behind. Setup compares each copy with the tree using `diff -r`.

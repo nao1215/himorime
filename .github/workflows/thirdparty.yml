@@ -186,6 +186,16 @@ jobs:
           "$RUNNER_TEMP/himorime" run bench/thirdparty/sql
           --format json --output "$RUNNER_TEMP/sql.json"
           --summary "$GITHUB_STEP_SUMMARY"
+      # GNU diff and git come from the pinned image, like the compression tools.
+      - name: Check the diff tools
+        run: |
+          diff --version
+          git --version
+      - name: Measure the diff tools
+        run: >
+          "$RUNNER_TEMP/himorime" run bench/thirdparty/diff
+          --format json --output "$RUNNER_TEMP/diff.json"
+          --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
