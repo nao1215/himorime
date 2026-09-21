@@ -40,6 +40,7 @@ himorime measures a command, so a program you did not write is measured like you
 | [json](./bench/thirdparty/json) | jq, gojq, jaq |
 | [compression](./bench/thirdparty/compression) | gzip, bzip2, xz |
 | [search](./bench/thirdparty/search) | GNU grep, ripgrep |
+| [copy](./bench/thirdparty/copy) | cp, rsync |
 
 ## Install
 

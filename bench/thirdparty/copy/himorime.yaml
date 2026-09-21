@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# cp and rsync copying the same generated directory tree into a directory that
+# does not exist yet.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: tree copy
+description: cp and rsync copying a generated tree of log files into a new directory.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  # Commands and hooks run in the working directory, so "tree" and "dest"
+  # below are relative to it.
+  cwd: "${workdir}"
+  metrics:
+    # rsync copies with more than one process even on one machine. CPU time
+    # is taken over the whole process tree, so every one of them is counted.
+    # Peak RSS is left out: every command stayed at what starting a process
+    # already costs when this suite was written.
+    cpu: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    cp: [cp, --version]
+    rsync: [rsync, --version]
+
+benchmarks:
+  - name: copy a tree of 80 files, 5MiB
+    description: >-
+      Each command copies the tree into dest, a directory that does not
+      exist when it starts. Neither command keeps timestamps or ownership
+      (cp -R, rsync -r); both give each file the source's permission bits
+      masked by the umask. Setup copies once with each tool and compares the
+      copy with the tree using diff -r. Neither command syncs to disk; the
+      copies land in the page cache.
+    tags: [thirdparty, copy, small]
+    baseline: cp
+    setup:
+      - command: ["${artifact}", -kind, tree, -size, 5MiB, -seed, "31", -o, tree]
+      - command: test "$(find tree -type f | wc -l)" -eq 80
+        shell: true
+      - command: [cp, -R, tree, check-cp]
+      - command: [diff, -r, tree, check-cp]
+      - command: [rsync, -r, tree/, check-rsync]
+      - command: [diff, -r, tree, check-rsync]
+    # The state a copy leaves behind is the input of the next run: with dest
+    # still there, cp -R tree dest would copy into dest/tree, and rsync would
+    # compare every file with the one already there. Removing dest here,
+    # outside the measured time, makes every run the same job.
+    prepare_each:
+      - command: [rm, -rf, dest]
+    metrics:
+      throughput:
+        work:
+          value: 80
+          unit: files
+    commands:
+      cp:
+        command: [cp, -R, tree, dest]
+      rsync:
+        command: [rsync, -r, tree/, dest]
+
+  - name: copy a tree of 1600 files, 100MiB
+    description: >-
+      The same copy over twenty times as many files. The seed differs from
+      the 5MiB benchmark, so the files are different bytes of the same
+      shape.
+    tags: [thirdparty, copy, large]
+    baseline: cp
+    setup:
+      - command: ["${artifact}", -kind, tree, -size, 100MiB, -seed, "32", -o, tree]
+      - command: test "$(find tree -type f | wc -l)" -eq 1600
+        shell: true
+      - command: [cp, -R, tree, check-cp]
+      - command: [diff, -r, tree, check-cp]
+      - command: [rsync, -r, tree/, check-rsync]
+      - command: [diff, -r, tree, check-rsync]
+    prepare_each:
+      - command: [rm, -rf, dest]
+    metrics:
+      throughput:
+        work:
+          value: 1600
+          unit: files
+    commands:
+      cp:
+        command: [cp, -R, tree, dest]
+      rsync:
+        command: [rsync, -r, tree/, dest]

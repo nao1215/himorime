@@ -21,6 +21,7 @@ No suite here carries a budget. The speed of a program this repository does not 
 | [json](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/json) | jq, gojq, jaq | Several implementations of one job in a single benchmark, input generated from a fixed seed, throughput declared from that input file, and a setup hook that proves the outputs match before anything is measured |
 | [compression](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/compression) | gzip, bzip2, xz | Binary output commands writing to different formats, with decompression and byte comparison in setup before latency, throughput, CPU time and peak RSS are measured |
 | [search](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/search) | GNU grep, ripgrep | A directory tree as input, a pinned locale, outputs compared after sorting, throughput declared as a number of files, and one tool measured at two thread counts |
+| [copy](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/copy) | cp, rsync | A command that changes the state the next run starts from, reset by `prepare_each` outside the measured time, and CPU time taken over a tool that forks processes of its own |
 
 ## JSON processors
 
@@ -61,3 +62,15 @@ The baseline is GNU grep, the reference implementation that `grep -r` scripts as
 Throughput is declared as a fixed `value` in files, because the input is a directory rather than one file whose size could be read; setup counts the files so the number cannot drift from the tree. The tree comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed. GNU grep comes from the pinned runner image and ripgrep is installed at a pinned version whose digest is checked.
 
 Suite: [bench/thirdparty/search](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/search)
+
+## Tree copy
+
+Same job: copy a generated tree of 64KiB log files into a directory that does not exist yet, without keeping timestamps or ownership; both tools give each file the source's permission bits masked by the umask. Measured on 80 files (5MiB) and on 1600 files (100MiB).
+
+Made equal: the same tree, the same destination path in the working directory, and the same kind of copy, `cp -R tree dest` and `rsync -r tree/ dest`. A copy leaves `dest` behind: the next `cp -R tree dest` would copy into `dest/tree`, and rsync would compare every file with the one already there. `prepare_each` removes `dest` before every warmup and measured run, outside the measured time. Setup copies once with each tool and compares the copy with the tree using `diff -r`.
+
+Not equal: cp is one process. rsync forks processes of its own even when both ends are on one machine; CPU time is taken over the process tree, so all of them are counted. Neither command syncs to disk, so the copies land in the page cache and the numbers do not describe the disk. Peak RSS is not measured, because every command stayed at what starting a process costs when the suite was written.
+
+The baseline is cp, the copy POSIX specifies, so `RELATIVE` reads as a multiple of it. Throughput is declared in files, as in the text search suite; the tree comes from [bench/thirdparty/gen](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/gen) from a fixed seed, and setup counts its files. Both tools come from the pinned runner image and their versions are recorded in the report.
+
+Suite: [bench/thirdparty/copy](https://github.com/nao1215/himorime/tree/main/bench/thirdparty/copy)
