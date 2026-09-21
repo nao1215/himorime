@@ -5,7 +5,7 @@ The suite under `test/e2e/atago` runs a built `himorime` as a real process, the 
 The `stability` suite covers separated noisy revisions, reciprocal throughput verdicts, rejected legacy settings, RSS floors and required-budget metric errors under both inconclusive policies. `e2ehelper capture-report NAME COMMAND ...` preserves stdout and exit status while writing the full report to `HIMORIME_E2E_REPORT_DIR/NAME.json`. The runner prints that directory (a persistent temporary directory by default); CI uploads it for every OS, including failures. The CPU-regression cookbook scenario uses this wrapper so the next intermittent failure retains its reason, all samples, seed and environment. Keep the regression assertion strict; the original CI failure has not been reproduced or diagnosed.
 
 ```shell
-go install github.com/nao1215/atago@v0.22.0
+go install github.com/nao1215/atago@v0.23.0
 go run ./test/e2e/run                                      # every spec
 go run ./test/e2e/run test/e2e/atago/compare.atago.yaml    # one spec
 HIMORIME_BINARY=dist/himorime_linux_amd64_v1/himorime go run ./test/e2e/run   # a prebuilt binary

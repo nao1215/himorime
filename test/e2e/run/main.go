@@ -39,7 +39,7 @@ func run(args []string) (int, error) {
 	}
 	atago, err := exec.LookPath("atago")
 	if err != nil {
-		return 127, errors.New("atago is not installed: go install github.com/nao1215/atago@v0.22.0")
+		return 127, errors.New("atago is not installed: go install github.com/nao1215/atago@v0.23.0")
 	}
 	bin, err := os.MkdirTemp("", "himorime-e2e-bin-")
 	if err != nil {
