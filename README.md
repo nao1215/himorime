@@ -46,6 +46,7 @@ himorime measures a command, so a program you did not write is measured like you
 | [diff](./bench/thirdparty/diff) | GNU diff, git diff |
 | [yaml](./bench/thirdparty/yaml) | yq, yj, gojq |
 | [awk](./bench/thirdparty/awk) | GNU awk, mawk, GoAWK |
+| [sort](./bench/thirdparty/sort) | GNU sort, uutils sort |
 
 ## Install
 

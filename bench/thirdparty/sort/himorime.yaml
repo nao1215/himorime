@@ -1,0 +1,114 @@
+# yaml-language-server: $schema=../../../schema/himorime.schema.json
+#
+# GNU sort and the sort of uutils coreutils ordering the same generated CSV
+# by a numeric column.
+#
+# This suite is an example as much as a measurement: copy it, replace the
+# commands with yours, and it measures your program. It is described on the
+# Real-world suites page of the documentation site, and
+# .github/workflows/thirdparty.yml runs it weekly to keep it correct. Nothing
+# here is a budget: the speed of a program nobody here maintains is not a
+# reason to fail this repository's CI.
+version: "1"
+
+name: sort
+description: GNU sort and uutils sort writing generated CSV ordered by its amount column, on one thread.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", ./gen]
+  cwd: ..
+
+defaults:
+  warmup: 2
+  min_runs: 10
+  min_time: 3s
+  max_runs: 50
+  # The C locale makes both tools compare bytes, and read a number with a
+  # dot as the decimal point, whatever the locale of whoever runs the suite.
+  # An input larger than the sort buffer is sorted in runs written to
+  # temporary files; TMPDIR keeps them in the working directory.
+  env:
+    LC_ALL: C
+    TMPDIR: "${workdir}"
+  metrics:
+    # sort reads its whole input before it writes the first line, so peak
+    # RSS follows the input size; CPU time shows that --parallel=1 held.
+    cpu: true
+    memory: true
+    # The suite is meant to be run on the reader's machine too; a metric that
+    # cannot be measured there is left out instead of failing the run.
+    unsupported: skip
+
+report:
+  versions:
+    # Two packages install a program named sort. uutils also ships one
+    # multi-call binary, coreutils, that runs any of its programs named as
+    # the first argument, and that name cannot be mistaken for GNU sort. The
+    # name sort is whatever comes first on PATH: GNU sort on most systems,
+    # uutils on Ubuntu 25.10 and later. Setup checks which one it is.
+    gnu: [sort, --version]
+    uutils: [coreutils, sort, --version]
+
+benchmarks:
+  - name: sort 5MiB of CSV by a numeric column
+    description: >-
+      Each command writes the generated CSV ordered by its fourth field read
+      as a number (-t , -k 4,4n), on one thread (--parallel=1), to a file in
+      the working directory; lines with the same amount are ordered by their
+      whole bytes, which both tools do when -s is not given. The header line
+      has no number in that field and sorts first. Setup compares the two
+      outputs byte for byte. Both tools keep the whole input in memory.
+    tags: [thirdparty, sort, small]
+    baseline: gnu
+    setup:
+      - command: ["${artifact}", -kind, csv, -size, 5MiB, -seed, "91", -o, "${workdir}/input.csv"]
+      # "sort" names GNU sort on most systems but uutils sort on some, and a
+      # comparison of uutils with itself would pass every check below. On
+      # such a system, put GNU sort first on PATH under the name sort.
+      - command: sort --version | grep -q 'GNU coreutils'
+        shell: true
+      - command: sort --parallel=1 -t , -k 4,4n ${workdir}/input.csv > ${workdir}/expect.csv
+        shell: true
+      - command: coreutils sort --parallel=1 -t , -k 4,4n ${workdir}/input.csv > ${workdir}/got-uutils.csv
+        shell: true
+      - command: cmp ${workdir}/expect.csv ${workdir}/got-uutils.csv
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.csv"
+    commands:
+      gnu:
+        command: [sort, --parallel=1, -t, ",", -k, "4,4n", "${workdir}/input.csv"]
+        stdout: out-gnu.csv
+      uutils:
+        command: [coreutils, sort, --parallel=1, -t, ",", -k, "4,4n", "${workdir}/input.csv"]
+        stdout: out-uutils.csv
+
+  - name: sort 100MiB of CSV by a numeric column
+    description: >-
+      The same job over twenty times the input. The seed differs from the
+      5MiB benchmark, so the two are different bytes of the same shape.
+    tags: [thirdparty, sort, large]
+    baseline: gnu
+    setup:
+      - command: ["${artifact}", -kind, csv, -size, 100MiB, -seed, "92", -o, "${workdir}/input.csv"]
+      - command: sort --version | grep -q 'GNU coreutils'
+        shell: true
+      - command: sort --parallel=1 -t , -k 4,4n ${workdir}/input.csv > ${workdir}/expect.csv
+        shell: true
+      - command: coreutils sort --parallel=1 -t , -k 4,4n ${workdir}/input.csv > ${workdir}/got-uutils.csv
+        shell: true
+      - command: cmp ${workdir}/expect.csv ${workdir}/got-uutils.csv
+        shell: true
+    metrics:
+      throughput:
+        work:
+          file_size: "${workdir}/input.csv"
+    commands:
+      gnu:
+        command: [sort, --parallel=1, -t, ",", -k, "4,4n", "${workdir}/input.csv"]
+        stdout: out-gnu.csv
+      uutils:
+        command: [coreutils, sort, --parallel=1, -t, ",", -k, "4,4n", "${workdir}/input.csv"]
+        stdout: out-uutils.csv
