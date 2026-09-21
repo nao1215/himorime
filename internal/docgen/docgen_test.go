@@ -438,11 +438,11 @@ func TestDocumentedSuitesAreValid(t *testing.T) {
 // available through. A README or install page that tells people to use any
 // other package manager would promise something that does not exist; add a
 // channel here only once the package is published.
-var publishedChannels = []string{"go install", "GitHub Releases", "brew install", "setup-himorime"}
+var publishedChannels = []string{"go install", "GitHub Releases", "brew install", "setup-himorime", "yay -S"}
 
 func TestDocsDoNotPromiseUnpublishedPackages(t *testing.T) {
 	t.Parallel()
-	unpublished := []string{"aqua g", "mise use", "yay -S", "paru -S", "winget install", "scoop install", "apt install himorime", "nix-env", "choco install"}
+	unpublished := []string{"aqua g", "mise use", "winget install", "scoop install", "apt install himorime", "nix-env", "choco install"}
 	for _, path := range []string{filepath.Join(root, "README.md"), filepath.Join(root, "website", "content", "install.md")} {
 		text := read(t, path)
 		for _, u := range unpublished {

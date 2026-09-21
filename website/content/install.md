@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Install himorime with go install, Homebrew, GitHub Releases or the setup-himorime GitHub Action, and verify the checksums, signature, SBOM and provenance of a release.
+description: Install himorime with go install, Homebrew, the AUR, GitHub Releases or the setup-himorime GitHub Action, and verify the checksums, signature, SBOM and provenance of a release.
 toc: true
 ---
 
@@ -23,6 +23,14 @@ $ brew install --cask nao1215/tap/himorime
 ```
 
 The cask installs the shell completions for bash, zsh and fish.
+
+## Arch Linux
+
+The [`himorime-bin`](https://aur.archlinux.org/packages/himorime-bin) package in the AUR, maintained by [Rafael Baboni Dominiquini](https://github.com/Dominiquini), installs the release binary:
+
+```console
+$ yay -S himorime-bin
+```
 
 ## GitHub Actions
 
