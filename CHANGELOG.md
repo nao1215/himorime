@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-22
+
 ### Added
 
 - `bench/thirdparty/awk` measures GNU awk, mawk and GoAWK running one awk program over generated CSV, at 5MiB and at 100MiB, as a worked example of a program file kept next to the suite and named by a path relative to it. The outputs are compared byte for byte after sorting before measuring.
