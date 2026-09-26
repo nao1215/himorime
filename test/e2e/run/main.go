@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -67,7 +68,15 @@ func run(args []string) (int, error) {
 		return 1, err
 	}
 
-	atagoArgs := append([]string{"run"}, args...)
+	atagoArgs := []string{"run"}
+	if !hasParallel(args) {
+		// Several scenarios measure CPU time and utilization, which drop when
+		// other scenarios compete for the CPUs. atago v0.25.0 runs four
+		// scenarios per CPU by default; the suite keeps one per CPU, the
+		// concurrency its thresholds were set under.
+		atagoArgs = append(atagoArgs, "--parallel", strconv.Itoa(runtime.NumCPU()))
+	}
+	atagoArgs = append(atagoArgs, args...)
 	if !hasSpecPath(args) {
 		atagoArgs = append(atagoArgs, filepath.Join(root, "test", "e2e", "atago"))
 	}
@@ -112,6 +121,16 @@ func run(args []string) (int, error) {
 		return 1, fmt.Errorf("the E2E suite modified the repository:\n%s", changed)
 	}
 	return code, nil
+}
+
+// hasParallel reports whether the caller chose the concurrency.
+func hasParallel(args []string) bool {
+	for _, a := range args {
+		if a == "--parallel" || strings.HasPrefix(a, "--parallel=") {
+			return true
+		}
+	}
+	return false
 }
 
 func hasSpecPath(args []string) bool {
