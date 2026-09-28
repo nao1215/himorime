@@ -37,7 +37,7 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       # ACCEPTED lists advisories himorime is known to reach and defends
       # against on its own side, one ID each, with why, which test holds the
-      # defence, and when to remove it. Empty today. JSON mode exits 0 even
+      # defense, and when to remove it. Empty today. JSON mode exits 0 even
       # with findings, so the verdict is made here: any other reachable
       # advisory fails the job and prints the text report.
       - name: govulncheck
