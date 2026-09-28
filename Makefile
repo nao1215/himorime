@@ -4,7 +4,7 @@ APP        := himorime
 VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS    := -s -w -X github.com/nao1215/himorime/internal/buildinfo.Version=$(VERSION)
 PKGS       := ./...
-GOLANGCI   := v2.13.2
+GOLANGCI   := v2.14.0
 ATAGO      := v0.23.0
 GORELEASER := v2.16.0
 ACTIONLINT := v1.7.12
