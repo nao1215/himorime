@@ -94,4 +94,14 @@ Every release is built by GoReleaser in GitHub Actions from the tag. `checksums.
    $ gh attestation verify "himorime_${VERSION}_linux_amd64.tar.gz" --repo nao1215/himorime
    ```
 
+   Releases after v0.5.1 also attach the SLSA provenance to the release as `multiple.intoto.jsonl`, so an archive can be checked offline with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier):
+
+   ```console
+   $ curl -fsSLO "https://github.com/nao1215/himorime/releases/download/v${VERSION}/multiple.intoto.jsonl"
+   $ slsa-verifier verify-artifact "himorime_${VERSION}_linux_amd64.tar.gz" \
+       --provenance-path multiple.intoto.jsonl \
+       --source-uri github.com/nao1215/himorime \
+       --source-tag "v${VERSION}"
+   ```
+
 Each archive has an SPDX SBOM next to it, `<archive>.sbom.json`, listing the Go modules compiled into the binary.

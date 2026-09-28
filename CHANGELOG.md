@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Changed
+
+- Release artifacts now ship with SLSA build provenance as a release asset (`multiple.intoto.jsonl`), which `slsa-verifier verify-artifact` checks offline against a downloaded archive. The release run verifies every published archive against it before finishing. The GitHub attestation checked by `gh attestation verify` is still published.
+
 ## [0.5.1] - 2026-09-22
 
 ### Added
