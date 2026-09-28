@@ -491,6 +491,11 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 			if strings.HasPrefix(m[1], "./") {
 				continue
 			}
+			// The SLSA generator cannot be pinned by SHA: slsa-verifier checks
+			// the reusable workflow's ref. TestReleaseSLSAProvenance checks it.
+			if strings.HasPrefix(m[1], slsaGenerator+"@") {
+				continue
+			}
 			if !pinned.MatchString(m[1]) || !strings.Contains(m[2], "# v") {
 				t.Errorf("%s: %s is not pinned to a commit SHA with a version comment", f, m[1])
 			}
@@ -510,14 +515,16 @@ func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 		"coverage.yml":  {"actions", "pull-requests"},
 		"codeql.yml":    {"security-events"},
 		"scorecard.yml": {"security-events", "id-token"},
+		// contents: the GitHub Release and its files, and the SLSA provenance
+		// uploaded to it; id-token: cosign, the attestation, the SLSA
+		// provenance and Pages; attestations: the GitHub attestation;
+		// pages: the documentation site.
+		"release.yml": {"contents", "id-token", "attestations", "pages"},
 	}
 	for _, f := range files {
 		text := read(t, f)
 		if !strings.Contains(text, "\npermissions:") {
 			t.Errorf("%s does not declare top-level permissions", f)
-		}
-		if filepath.Base(f) == "release.yml" {
-			continue
 		}
 		for _, m := range write.FindAllStringSubmatch(text, -1) {
 			if !slices.Contains(allowedWrites[filepath.Base(f)], m[1]) {
@@ -527,6 +534,124 @@ func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 		if strings.Contains(text, "pull_request_target") {
 			t.Errorf("%s uses pull_request_target", f)
 		}
+	}
+}
+
+// slsaGenerator is the reusable workflow that writes the SLSA build provenance
+// attached to every release.
+const slsaGenerator = "slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml"
+
+// TestReleaseSLSAProvenance requires every release to ship SLSA provenance as
+// a release asset (multiple.intoto.jsonl) and the release run to verify it.
+// The GitHub attestation is not a release asset, so without this a user who
+// only has the downloaded files has no provenance to check. The chain has
+// three links: goreleaser exports the base64 of checksums.txt, provenance
+// hands it to the generator with upload-assets, and verification runs
+// slsa-verifier against what was published.
+func TestReleaseSLSAProvenance(t *testing.T) {
+	t.Parallel()
+	type step struct {
+		ID   string `yaml:"id"`
+		Uses string `yaml:"uses"`
+		Run  string `yaml:"run"`
+	}
+	var wf struct {
+		Jobs map[string]struct {
+			Needs       any               `yaml:"needs"`
+			Uses        string            `yaml:"uses"`
+			Outputs     map[string]string `yaml:"outputs"`
+			Permissions map[string]string `yaml:"permissions"`
+			With        map[string]any    `yaml:"with"`
+			Steps       []step            `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal([]byte(read(t, filepath.Join(root, ".github", "workflows", "release.yml"))), &wf); err != nil {
+		t.Fatal(err)
+	}
+	needs := func(v any) []string {
+		switch n := v.(type) {
+		case string:
+			return []string{n}
+		case []any:
+			var out []string
+			for _, s := range n {
+				if str, ok := s.(string); ok {
+					out = append(out, str)
+				}
+			}
+			return out
+		}
+		return nil
+	}
+	hasStep := func(steps []step, id string) bool {
+		return slices.ContainsFunc(steps, func(s step) bool { return s.ID == id })
+	}
+
+	build, ok := wf.Jobs["goreleaser"]
+	if !ok {
+		t.Fatal("release workflow has no goreleaser job")
+	}
+	if !strings.Contains(build.Outputs["hashes"], "steps.hash.outputs.hashes") {
+		t.Errorf("goreleaser job's hashes output is %q, want it from the hash step", build.Outputs["hashes"])
+	}
+	if !hasStep(build.Steps, "run-goreleaser") || !hasStep(build.Steps, "hash") {
+		t.Error("goreleaser job needs steps with id run-goreleaser and hash")
+	}
+
+	prov, ok := wf.Jobs["provenance"]
+	if !ok {
+		t.Fatal("release workflow has no provenance job")
+	}
+	if !regexp.MustCompile(`^` + regexp.QuoteMeta(slsaGenerator) + `@v\d+\.\d+\.\d+$`).MatchString(prov.Uses) {
+		t.Errorf("provenance job uses %q, want %s@vX.Y.Z (a release tag, not a SHA)", prov.Uses, slsaGenerator)
+	}
+	if !slices.Contains(needs(prov.Needs), "goreleaser") {
+		t.Errorf("provenance job does not need goreleaser: %v", prov.Needs)
+	}
+	if s, _ := prov.With["base64-subjects"].(string); !strings.Contains(s, "needs.goreleaser.outputs.hashes") {
+		t.Errorf("provenance base64-subjects is %q", s)
+	}
+	if prov.With["upload-assets"] != true {
+		t.Errorf("provenance job must set upload-assets: true, got %v", prov.With["upload-assets"])
+	}
+	want := map[string]string{"actions": "read", "id-token": "write", "contents": "write"}
+	if len(prov.Permissions) != len(want) {
+		t.Errorf("provenance job permissions are %v, want %v", prov.Permissions, want)
+	}
+	for scope, level := range want {
+		if prov.Permissions[scope] != level {
+			t.Errorf("provenance job needs %s: %s, got %q", scope, level, prov.Permissions[scope])
+		}
+	}
+
+	verify, ok := wf.Jobs["verification"]
+	if !ok {
+		t.Fatal("release workflow has no verification job")
+	}
+	for _, n := range []string{"goreleaser", "provenance"} {
+		if !slices.Contains(needs(verify.Needs), n) {
+			t.Errorf("verification job does not need %s: %v", n, verify.Needs)
+		}
+	}
+	if verify.Permissions["contents"] != "read" || len(verify.Permissions) != 1 {
+		t.Errorf("verification job must run with exactly contents: read, got %v", verify.Permissions)
+	}
+	var installs, runs, downloadsBoth, filtersBoth bool
+	for _, s := range verify.Steps {
+		installs = installs || strings.HasPrefix(s.Uses, "slsa-framework/slsa-verifier/actions/installer@")
+		if strings.Contains(s.Run, "release download") && strings.Contains(s.Run, `-p "*.tar.gz"`) && strings.Contains(s.Run, `-p "*.zip"`) {
+			downloadsBoth = true
+		}
+		if strings.Contains(s.Run, "slsa-verifier verify-artifact") {
+			runs = true
+			filtersBoth = strings.Contains(s.Run, "*.tar.gz|*.zip)")
+		}
+	}
+	if !installs || !runs {
+		t.Error("verification job must install slsa-verifier and run verify-artifact")
+	}
+	if !downloadsBoth || !filtersBoth {
+		t.Error("verification job must download and verify both the .tar.gz and the .zip archives")
 	}
 }
 
