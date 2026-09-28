@@ -94,7 +94,7 @@ Every release is built by GoReleaser in GitHub Actions from the tag. `checksums.
    $ gh attestation verify "himorime_${VERSION}_linux_amd64.tar.gz" --repo nao1215/himorime
    ```
 
-   Releases after v0.5.1 also attach the SLSA provenance to the release as `multiple.intoto.jsonl`, so an archive can be checked offline with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier):
+   Releases after v0.5.1 also attach the SLSA provenance to the release as `multiple.intoto.jsonl`, so a downloaded archive can be checked against that file with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier):
 
    ```console
    $ curl -fsSLO "https://github.com/nao1215/himorime/releases/download/v${VERSION}/multiple.intoto.jsonl"
