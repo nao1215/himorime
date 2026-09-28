@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -498,11 +499,18 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 }
 
 // TestWorkflowPermissionsAreReadOnly reserves writes for releasing, coverage
-// history/comments, and the separately validated benchmark comments.
+// history/comments, the separately validated benchmark comments, and the
+// CodeQL and OpenSSF Scorecard uploads to code scanning.
 func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 	t.Parallel()
 	files, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
 	write := regexp.MustCompile(`(?m)^\s+([a-z-]+):\s*write`)
+	allowedWrites := map[string][]string{
+		"benchmark.yml": {"pull-requests"},
+		"coverage.yml":  {"actions", "pull-requests"},
+		"codeql.yml":    {"security-events"},
+		"scorecard.yml": {"security-events", "id-token"},
+	}
 	for _, f := range files {
 		text := read(t, f)
 		if !strings.Contains(text, "\npermissions:") {
@@ -512,9 +520,7 @@ func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 			continue
 		}
 		for _, m := range write.FindAllStringSubmatch(text, -1) {
-			allowed := filepath.Base(f) == "benchmark.yml" && m[1] == "pull-requests"
-			allowed = allowed || (filepath.Base(f) == "coverage.yml" && (m[1] == "actions" || m[1] == "pull-requests"))
-			if !allowed {
+			if !slices.Contains(allowedWrites[filepath.Base(f)], m[1]) {
 				t.Errorf("%s grants unexpected %s: write", f, m[1])
 			}
 		}
