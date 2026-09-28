@@ -26,7 +26,7 @@ make check     # fmt, vet, lint, test, test-race, e2e
 
 ## Rules of thumb
 
-- Every behavior change comes with a test. Unit tests live next to the code; anything a user observes as a process (exit codes, output, files, Git worktrees, interrupts) gets an E2E scenario in `test/e2e/atago`.
+- Add or update tests with every new feature, bug fix and behavior change; a bug fix comes with a test that fails without it. Unit tests live next to the code; anything a user observes as a process (exit codes, output, files, Git worktrees, interrupts) gets an E2E scenario in `test/e2e/atago`.
 - E2E scenarios never assert on millisecond differences. Use the helper in `test/e2e/helper`, with differences of tens of milliseconds, and assert on classifications, table structure, report schemas and exit codes.
 - The suite schema (`schema/himorime.schema.json`) and the Go loader must agree. When you add a key, add it to both, and extend `internal/config/testdata/parity`.
 - The JSON report is a contract: once released, add fields, never rename or remove them within `schema_version` `"1"`, and update `schema/report.schema.json`.
