@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Changed
+
+- Building from source now needs Go 1.26.9 or later (was 1.26.6). Go 1.26.9 fixes GO-2026-6604 in the `os` package, which himorime reaches. Prebuilt binaries are unaffected.
+
 ## [0.5.2] - 2026-09-28
 
 ### Changed
