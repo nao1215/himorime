@@ -6,9 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-09
+
 ### Changed
 
-- Building from source now needs Go 1.26.9 or later (was 1.26.6). Go 1.26.9 fixes GO-2026-6604 in the `os` package, which himorime reaches. Prebuilt binaries are unaffected.
+- Building from source now needs Go 1.26.9 or later (was 1.26.6). Go 1.26.9 fixes GO-2026-6604 in the `os` package, which himorime reaches.
+- The prebuilt binaries are built with Go 1.27.3. The v0.5.2 binaries were built with Go 1.27.1, before the standard library fixes released with Go 1.27.2 and 1.27.3, such as GO-2026-6617 in `net/http` and GO-2026-6809 in `crypto/x509`.
+- Dependencies: golang.org/x/sys v0.49.0, golang.org/x/text v0.43.0.
 
 ## [0.5.2] - 2026-09-28
 
