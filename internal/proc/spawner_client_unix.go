@@ -141,8 +141,13 @@ func startSpawner() (*spawner, error) {
 	case err = <-hello:
 	case <-timer.C:
 		_ = sp.process.Kill()
-		<-hello
-		err = errors.New("the spawner did not answer")
+		// The reader returns once the kill closes the connection. What it
+		// saw is kept as the cause; a reply that raced the kill is still late.
+		if late := <-hello; late != nil {
+			err = fmt.Errorf("the spawner did not answer: %w", late)
+		} else {
+			err = errors.New("the spawner did not answer")
+		}
 	}
 	if err != nil {
 		sp.discard()
@@ -180,24 +185,11 @@ func newSpawnIO(s Spec) (*spawnIO, error) {
 		if f, ok := s.Stdin.(*os.File); ok {
 			sio.stdin = add(f)
 		} else {
-			pr, pw, err := os.Pipe()
+			pr, err := sio.inputPipe(s.Stdin)
 			if err != nil {
 				return nil, err
 			}
 			sio.stdin = add(pr)
-			sio.afterSend = append(sio.afterSend, pr)
-			sio.afterWait = append(sio.afterWait, pw)
-			r := s.Stdin
-			sio.copies = append(sio.copies, func() error {
-				_, err := io.Copy(pw, r)
-				if errors.Is(err, syscall.EPIPE) || errors.Is(err, os.ErrClosed) {
-					err = nil
-				}
-				if cerr := pw.Close(); err == nil && !errors.Is(cerr, os.ErrClosed) {
-					err = cerr
-				}
-				return err
-			})
 		}
 	}
 	output := func(w io.Writer) (int, error) {
@@ -238,6 +230,28 @@ func newSpawnIO(s Spec) (*spawnIO, error) {
 		}
 	}
 	return sio, nil
+}
+
+// inputPipe makes a pipe whose read end is the child's standard input and
+// whose write end is fed from r by a copy. It returns the read end to send.
+func (sio *spawnIO) inputPipe(r io.Reader) (*os.File, error) {
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return nil, err
+	}
+	sio.afterSend = append(sio.afterSend, pr)
+	sio.afterWait = append(sio.afterWait, pw)
+	sio.copies = append(sio.copies, func() error {
+		_, err := io.Copy(pw, r)
+		if errors.Is(err, syscall.EPIPE) || errors.Is(err, os.ErrClosed) {
+			err = nil
+		}
+		if cerr := pw.Close(); err == nil && !errors.Is(cerr, os.ErrClosed) {
+			err = cerr
+		}
+		return err
+	})
+	return pr, nil
 }
 
 func interfaceEqual(a, b any) (equal bool) {
