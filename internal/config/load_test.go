@@ -30,7 +30,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 		t.Errorf("command defaults = %+v", c)
 	}
 	metricDefault := MetricRegression{Metric: MetricMedian, MaxPercent: 10, Gate: true}
-	want := Regression{Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Latency: metricDefault, CPU: metricDefault, Memory: metricDefault}
+	want := Regression{Confidence: 0.95, MinSamples: 10, MaxCV: 0.5, Pairing: PairingIndependent, Latency: metricDefault, CPU: metricDefault, Memory: metricDefault}
 	if !reflect.DeepEqual(b.Regression, want) {
 		t.Errorf("regression defaults = %+v, want %+v", b.Regression, want)
 	}

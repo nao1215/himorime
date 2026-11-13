@@ -987,14 +987,14 @@
           ]
         },
         "difference": {
-          "description": "head - base; null when skipped.",
+          "description": "head - base, or with pairing rounds base * change_percent / 100; null when skipped.",
           "type": [
             "number",
             "null"
           ]
         },
         "change_percent": {
-          "description": "(head - base) / base * 100. Its sign is the direction of the change, not whether it is better.",
+          "description": "(head - base) / base * 100, or with pairing rounds (the statistic of the per-round ratios head / base - 1) * 100. Its sign is the direction of the change, not whether it is better.",
           "type": "number"
         },
         "ci_low_percent": {
@@ -1030,6 +1030,13 @@
         },
         "max_cv": {
           "type": "number"
+        },
+        "pairing": {
+          "description": "independent compares the statistic of each side; rounds compares the statistic of the per-round ratios head / base, so change_percent can differ from head / base - 1. Missing in reports written before the field existed.",
+          "enum": [
+            "independent",
+            "rounds"
+          ]
         },
         "verdict": {
           "enum": [

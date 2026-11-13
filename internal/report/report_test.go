@@ -1418,3 +1418,32 @@ func TestTailBudgetsComplementMedianComparison(t *testing.T) {
 		})
 	}
 }
+
+func TestJudgeComparePairRounds(t *testing.T) {
+	t.Parallel()
+	// Every other round is twice as slow on both sides, and head is 20%
+	// slower in every round.
+	var base, head []time.Duration
+	for i := range 20 {
+		d := 10 * time.Millisecond
+		if i%2 == 1 {
+			d *= 2
+		}
+		base = append(base, d)
+		head = append(head, d*12/10)
+	}
+	b := compareResult("paired", base, head)
+	b.Benchmark.Regression.Pairing = config.PairingRounds
+	r := judge(ModeCompare, false, b)
+	lat := r.Suites[0].Benchmarks[0].Commands[0].Comparisons["latency"]
+	if lat.Pairing != string(config.PairingRounds) || lat.Verdict != string(stats.VerdictRegression) {
+		t.Fatalf("latency = %+v, want a rounds regression", lat)
+	}
+	if math.Abs(lat.ChangePercent-20) > 1e-9 || math.Abs(*lat.Difference-*lat.Base*lat.ChangePercent/100) > 1e-6 {
+		t.Fatalf("change = %v, difference = %v, base = %v", lat.ChangePercent, *lat.Difference, *lat.Base)
+	}
+	ind := judge(ModeCompare, false, compareResult("independent", base, head))
+	if p := ind.Suites[0].Benchmarks[0].Commands[0].Comparisons["latency"].Pairing; p != string(config.PairingIndependent) {
+		t.Fatalf("default pairing = %q", p)
+	}
+}

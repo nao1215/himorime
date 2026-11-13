@@ -49,14 +49,17 @@ It then runs a percentile bootstrap: 2,000 times, it draws as many samples as ea
 
 The bootstrap's random generator is seeded from `--seed` and the benchmark, command and metric names, so the same samples always produce the same verdict. The seed of every run is printed and stored in the JSON report.
 
+With `regression.pairing: rounds`, the comparison pairs the samples of one round instead. Round i ran base and head once each, so it takes the ratios head_i / base_i, and the bootstrap draws rounds rather than samples. A slowdown that hits both runs of a round, such as a busy machine, cancels out of the ratio. `change_percent` is then (the statistic of the ratios - 1) × 100, which can differ from the ratio of the two side statistics reported as `base` and `head`. `difference` is that change in the metric's unit, so `min_difference` applies to it, and `max_cv` applies to the spread of the ratios. Every comparison records its pairing in the JSON field `pairing`.
+
 ## The verdict
 
 In order:
 
 | Verdict | When |
 |---|---|
+| `inconclusive` | With `pairing: rounds`, the sides do not have one sample per round, or a base sample is zero so its ratio is undefined; one such sample makes the whole metric inconclusive. |
 | `inconclusive` | Either side has fewer than `min_samples` samples. |
-| `inconclusive` | Either side's spread exceeds `max_cv` and the observed ranges overlap or touch: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (stddev / mean) when the statistic is `mean`. |
+| `inconclusive` | Either side's spread exceeds `max_cv` and the observed ranges overlap or touch: the interquartile range divided by 1.349 and by the median, or the coefficient of variation (stddev / mean) when the statistic is `mean`. With `pairing: rounds`, the spread of the per-round ratios exceeds `max_cv`, whatever the ranges. |
 | `inconclusive` | A bootstrap draw has a zero base statistic, so its relative change is undefined; confidence and interval estimates are unavailable (their numeric fields remain zero). |
 | `pass` | `min_difference` is set and the absolute difference is smaller. |
 | `regression` | The observed degradation exceeds `max_percent` and `probability_regression` ≥ `confidence`. |
@@ -128,11 +131,12 @@ Ways to get conclusive results:
 - A wider tolerance for noisy benchmarks, such as `max_percent: 20`, and a `min_difference` below which changes do not matter.
 - CPU time or peak RSS as the gate, with `latency: {gate: false}`, when waiting time is not what you care about.
 - A lower `confidence`, such as `0.9`, if an occasional false alarm is acceptable.
+- On a machine whose load changes during the run, such as a busy desktop or a self-hosted runner shared with other work, `pairing: rounds`.
 - A quieter machine: a dedicated or larger runner.
 
 ## How reliable the verdict is
 
-`internal/stats/calibration_test.go` runs the classifier on synthetic samples from fixed seeds, many trials per scenario, with the default settings (median, `max_percent` 10, `confidence` 0.95, `min_samples` 10, `max_cv` 0.5). It is deterministic and part of `go test`; `make calibration` runs 1,000 trials per scenario and prints the table. On that data:
+`internal/stats/calibration_test.go` runs the classifier on synthetic samples from fixed seeds, many trials per scenario, with the default settings (median, `max_percent` 10, `confidence` 0.95, `min_samples` 10, `max_cv` 0.5), once with each pairing. It is deterministic and part of `go test`; `make calibration` runs 1,000 trials per scenario and prints the table. On that data, with the default independent pairing unless stated:
 
 - Identical distributions were called a regression in at most 0.4% of trials (10 samples, 25% coefficient of variation), and an improvement in at most 0.3%. An improvement was never called a regression, and throughput's direction was never confused.
 - Degradations of 25% and 50% were called regressions in 99.6 to 100% of trials with 10 or 30 samples and up to 10% noise.
@@ -140,12 +144,23 @@ Ways to get conclusive results:
 - `inconclusive` grows with noise and shrinks with samples: at 10% noise, 46.7% of identical comparisons with 10 samples, 8.9% with 30 and none with 100.
 - Rare slow runs do not hide a verdict. With one, three of 30 or three on each side made 3 to 10 times slower, an unchanged pair passed in 100% of trials, and a real +20% change was called a regression in 99.9 to 100%, with the same numbers as with the gate turned off. With two of 10 the outliers left too few samples for the bootstrap and 33.8% of unchanged trials were inconclusive, none a false alarm.
 - How rare is rare depends on `runs`. Three slow runs of 10 are 30% of the samples, they move the quartiles, and the gate fired in every trial. Raise `runs` when a benchmark is short enough that a noisy machine slows a large share of its runs.
-- The gate still fires on a distribution that is genuinely wide. With half the samples in a mode five times slower, every trial was inconclusive on the gate, with and without a real +25% change underneath.
-- The bootstrap resamples base and head independently, although the runner pairs them by round. When the machine drifted during the run by the same factor for both revisions, the independent bootstrap produced no false regression, but lost power: a step of 30% in the middle of the run made every comparison inconclusive, a real +20% change included, where a paired resampling of rounds, evaluated in the test for comparison, detected it in 82 to 95% of trials. Without drift both behaved the same within the Monte Carlo error. himorime keeps the independent bootstrap: it errs toward `inconclusive`, and whether pairing is worth its assumptions depends on how much real runners drift, which synthetic data cannot tell.
+- The gate still fires on a distribution that is genuinely wide. With half the samples in a mode five times slower, every trial was inconclusive on the gate, with and without a real +25% change underneath. `pairing: rounds` applies the gate to the per-round ratios instead, so it judged some of these: 27.3% of unchanged pairs passed and 20.6% of the +25% pairs were a regression, never in the wrong direction.
+- The independent bootstrap ignores that the runner pairs base and head by round. When the machine drifted during the run by the same factor for both revisions, it produced no false regression but lost power: a step of 30% in the middle of the run made every comparison inconclusive, a real +20% change included. With `pairing: rounds` the same +20% was a regression in 94.1% of trials with 10 samples and 99.9% with 30, and unchanged pairs passed in 96.4 to 100%.
+- A slowdown shared by both runs of a round, 25% on top of 3% of each run's own, is what a busy machine does. The independent bootstrap was inconclusive in 94 to 98% of unchanged pairs and found a real +20% in 1.6 to 3.8% of trials; `pairing: rounds` passed every unchanged pair and found the +20% in 99.9 to 100%.
+- Without shared noise or drift the two pairings mostly agree within a few points. Bimodal samples are the exception, where rounds was more decisive: 90.3% of unchanged pairs passed against 75.0% with independent, and 97.5% of +25% pairs were a regression against 85.3%. Rounds is less sure where only one side has outliers: with two slow head runs of 10, 46.2% of unchanged pairs passed against 66.2% independent, none a false alarm. At 25% noise and 10 samples, unchanged pairs were a regression in 1.2% of trials with rounds against 0.4% independent. The default stays independent, so existing gates keep their verdicts.
 
 `ci_low_percent` and `ci_high_percent` describe the central interval of the bootstrap distribution. The verdict uses one-sided probabilities, so the interval of a regression can reach below the tolerance, and that of a pass above it; the probabilities, not the interval, decide.
 
 None of this calibrates himorime for a particular CI provider. Real runners have heavier tails, autocorrelated noise, CPU frequency scaling and thermal limits that synthetic data does not model. Before relying on a gate there, compare a revision with itself on that runner (an A/A test) a number of times to see how often it is inconclusive or, rarely, a regression, and compare a change with a known slowdown to see that it is caught.
+
+### One measurement on GitHub-hosted runners
+
+The numbers below are one such A/A test, not a calibration of every runner. On 2026-11-13 a CPU-bound program that sorts numbers for about 110 ms was compared with itself and with builds made 2 to 20% slower, each comparison in a fresh `ubuntu-latest` job, with himorime v0.5.3, the default settings and 20 runs. The workflow and the program are in [ci-bench-noise](https://github.com/nao1215/ci-bench-noise), and a write-up in Japanese with every sample is on [debimate](https://debimate.jp/notes/software-testing/ci-benchmark/).
+
+- In the same job, all 30 A/A comparisons passed, with changes from -0.56% to +0.39%. Slowdowns of 12, 15 and 20% were regressions in all 30 jobs, and 10% was half pass, half inconclusive.
+- Across jobs the hardware changes. The 90 jobs ran on seven CPU models, and the median time of the same build ranged from 99 to 143 ms, 29% apart within one model. Comparing the base of one A/A job with the base of another, as a gate against a result stored by an earlier run does, was called a regression or an improvement in 18% of pairs with the same CPU model and 60% with different ones. `compare` and `ci` measure base and head in the same job for this reason.
+- Within a job the runners were quiet, with a median coefficient of variation of 0.6%. Re-judged at `max_percent: 3`, the same samples still passed every A/A comparison and caught every 5% slowdown. A CPU-bound suite on these runners can afford a tighter tolerance than the default 10%, after an A/A test of its own; process start-up, I/O and allocation make most real benchmarks noisier.
+- On a busy desktop with an 18% median coefficient of variation, 10 A/A comparisons and 10 with a 20% slowdown were measured with `himorime compare` and their samples judged again with each pairing. Independent caught 2 or 3 of the slowdowns, depending on the seed, and was inconclusive in 5 A/A comparisons; rounds caught 8 and passed all 10. Neither raised a false alarm. On the hosted runners, where base and head of a round were only weakly correlated (median 0.19), the two pairings gave nearly the same verdicts.
 
 ## What himorime does not claim
 

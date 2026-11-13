@@ -31,6 +31,8 @@ const (
 	ReasonNoisy             = "measurements are noisier than max_cv"
 	ReasonTooClose          = "the change is too close to the tolerance to call"
 	ReasonBelowMinDiff      = "the difference is smaller than min_difference"
+	ReasonUnpaired          = "base and head do not have one sample per round"
+	ReasonZeroBaseSample    = "a base sample is zero, so a per-round ratio is undefined"
 )
 
 // CompareOptions configures Compare.
@@ -55,6 +57,15 @@ type CompareOptions struct {
 	// dispersion follows Metric: Summary.RobustCV for an order statistic,
 	// Summary.CV for the mean. 0 disables the check.
 	MaxCV float64
+	// PairRounds compares the per-round ratios head[i] / base[i] instead of
+	// resampling each side on its own. It needs base[i] and head[i] taken in
+	// the same round: the runner runs every unit once per round and appends
+	// its samples in round order. A slowdown that hits both runs of a round
+	// then cancels out of the ratio. MaxCV applies to the dispersion of the
+	// ratios, and the observed change is the statistic of the ratios (Min and
+	// Max are order statistics of the ratios), which can differ from the ratio
+	// of the two side statistics.
+	PairRounds bool
 	// Resamples is the bootstrap iteration count; DefaultResamples when 0.
 	Resamples int
 	// Seed makes the bootstrap reproducible.
@@ -68,7 +79,8 @@ type Comparison struct {
 	// BaseValue and HeadValue are the compared statistic of each side.
 	BaseValue float64
 	HeadValue float64
-	// Difference is HeadValue - BaseValue in the metric's unit.
+	// Difference is HeadValue - BaseValue in the metric's unit, or with
+	// PairRounds BaseValue * Change / 100.
 	Difference float64
 	// Change is the observed relative change of the metric in percent:
 	// (head - base) / base * 100. Its sign is the direction the value moved,
@@ -107,6 +119,9 @@ type Comparison struct {
 //     the classic coefficient of variation for the mean, the robust one for
 //     the median and the other order statistics.
 //
+// With PairRounds the same rules apply to the per-round ratios head[i] /
+// base[i], resampled by round; see CompareOptions.PairRounds.
+//
 // An observed absolute difference below MinDifference is a pass whatever the
 // relative change. A regression therefore needs an observed degradation
 // beyond the tolerance and enough evidence that it is not noise; a single
@@ -118,6 +133,9 @@ func Compare(base, head []float64, o CompareOptions) Comparison {
 		c.Reason = ReasonNoSamples
 		return c
 	}
+	if o.PairRounds {
+		return compareRounds(base, head, o, c)
+	}
 	bv := c.Base.Value(o.Metric)
 	hv := c.Head.Value(o.Metric)
 	c.BaseValue, c.HeadValue, c.Difference = bv, hv, hv-bv
@@ -127,16 +145,53 @@ func Compare(base, head []float64, o CompareOptions) Comparison {
 		return c
 	}
 	c.Change = (hv/bv - 1) * 100
+	changes := bootstrapChanges(base, head, o.Metric, resamplesOf(o), o.Seed)
+	noisy := o.MaxCV > 0 && (c.Base.Dispersion(o.Metric) > o.MaxCV || c.Head.Dispersion(o.Metric) > o.MaxCV) && !separated(c.Base, c.Head)
+	return classify(c, changes, noisy, o)
+}
+
+// compareRounds is Compare with PairRounds: it resamples rounds, not samples,
+// and judges the statistic of the per-round ratios.
+func compareRounds(base, head []float64, o CompareOptions, c Comparison) Comparison {
+	c.BaseValue, c.HeadValue = c.Base.Value(o.Metric), c.Head.Value(o.Metric)
+	c.Difference = c.HeadValue - c.BaseValue
+	if len(base) != len(head) {
+		c.Verdict, c.Reason = VerdictInconclusive, ReasonUnpaired
+		return c
+	}
+	ratios := make([]float64, len(base))
+	for i := range base {
+		if base[i] <= 0 {
+			c.Verdict, c.Reason = VerdictInconclusive, ReasonZeroBaseSample
+			return c
+		}
+		ratios[i] = head[i] / base[i]
+	}
+	r := Summarize(ratios)
+	c.Change = (r.Value(o.Metric) - 1) * 100
+	// min_difference is an absolute threshold, so the paired change is
+	// expressed in the metric's unit through the base statistic.
+	c.Difference = c.BaseValue * c.Change / 100
+	changes := roundChanges(ratios, o.Metric, resamplesOf(o), o.Seed)
+	noisy := o.MaxCV > 0 && r.Dispersion(o.Metric) > o.MaxCV
+	return classify(c, changes, noisy, o)
+}
+
+func resamplesOf(o CompareOptions) int {
+	if o.Resamples <= 0 {
+		return DefaultResamples
+	}
+	return o.Resamples
+}
+
+// classify sets the interval, the probabilities and the verdict of c from the
+// bootstrap distribution of the change. noisy marks a comparison too
+// dispersed to judge.
+func classify(c Comparison, changes []float64, noisy bool, o CompareOptions) Comparison {
 	sign := 1.0
 	if o.HigherIsBetter {
 		sign = -1
 	}
-
-	resamples := o.Resamples
-	if resamples <= 0 {
-		resamples = DefaultResamples
-	}
-	changes := bootstrapChanges(base, head, o.Metric, resamples, o.Seed)
 	alpha := (1 - o.Confidence) / 2
 	if len(changes) > 0 {
 		c.Low = percentile(changes, alpha)
@@ -165,7 +220,7 @@ func Compare(base, head []float64, o CompareOptions) Comparison {
 	case c.Base.Count < o.MinSamples || c.Head.Count < o.MinSamples:
 		c.Verdict = VerdictInconclusive
 		c.Reason = ReasonFewSamples
-	case o.MaxCV > 0 && (c.Base.Dispersion(o.Metric) > o.MaxCV || c.Head.Dispersion(o.Metric) > o.MaxCV) && !separated(c.Base, c.Head):
+	case noisy:
 		c.Verdict = VerdictInconclusive
 		c.Reason = ReasonNoisy
 	case len(changes) == 0:
@@ -221,6 +276,23 @@ func bootstrapChanges(base, head []float64, m Metric, resamples int, seed uint64
 			return nil
 		}
 		out = append(out, (h/b-1)*100)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// roundChanges resamples round indices with replacement and returns the
+// sorted changes (statistic of the drawn ratios - 1) * 100. Every ratio is
+// positive, so every change is defined.
+func roundChanges(ratios []float64, m Metric, resamples int, seed uint64) []float64 {
+	rng := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15)) //nolint:gosec // a reproducible bootstrap needs a seeded generator, not a secure one
+	buf := make([]float64, len(ratios))
+	out := make([]float64, 0, resamples)
+	for range resamples {
+		for i := range buf {
+			buf[i] = ratios[rng.IntN(len(ratios))]
+		}
+		out = append(out, (metricOf(buf, m)-1)*100)
 	}
 	slices.Sort(out)
 	return out

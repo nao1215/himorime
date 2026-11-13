@@ -131,6 +131,7 @@ scenarios:
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.reason", equals: ""}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.gate", equals: true}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.pairing", equals: "independent"}
               - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.change_percent", gt: 100}
               - {path: "$.suites[0].benchmarks[0].commands[0].base.metrics.latency.samples", length: 10}
               - {path: "$.suites[0].benchmarks[0].commands[0].head.metrics.latency.samples", length: 10}
@@ -151,6 +152,37 @@ scenarios:
           stdout: {equals: "* main\n"}
       - assert:
           file: {path: repo/delay.txt, equals: "250ms\n"}
+
+  - name: pairing rounds judges the per-round ratios and records the pairing in the report
+    steps:
+      - fixture: {file: repo/delay.txt, content: "40ms\n"}
+      - fixture:
+          file: repo/himorime.yaml
+          content: |
+            version: "1"
+            name: compare
+            build:
+              command: [e2ehelper, copy, delay.txt, "$${artifact}"]
+            defaults: {warmup: 1, runs: 10, regression: {pairing: rounds}}
+            benchmarks:
+              - name: sleepy
+                commands:
+                  app: {command: [e2ehelper, sleep-from, "$${artifact}"]}
+      - run: {command: git init -q -b main, cwd: repo}
+      - run: {command: git add -A, cwd: repo}
+      - run: {command: git -c commit.gpgsign=false commit -q -m base, cwd: repo}
+      - fixture: {file: repo/delay.txt, content: "250ms\n"}
+      - run:
+          command: himorime compare --against main --format json
+          cwd: repo
+      - assert:
+          exit_code: 1
+          stdout:
+            json:
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.pairing", equals: "rounds"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.verdict", equals: "regression"}
+              - {path: "$.suites[0].benchmarks[0].commands[0].comparisons.latency.change_percent", gt: 100}
+              - {path: "$.summary.regression", equals: 1}
 
   - name: a committed speedup is an improvement and exits 0
     steps:

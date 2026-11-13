@@ -27,8 +27,14 @@ func FuzzCompare(f *testing.F) {
 		if math.IsNaN(maxPercent) || math.IsNaN(confidence) || len(a) > 400 || len(b) > 400 {
 			return
 		}
-		o := CompareOptions{Metric: Metric(int(seed % 4)), HigherIsBetter: seed%2 == 1, MaxPercent: math.Abs(maxPercent), Confidence: confidence, MinSamples: minSamples, MaxCV: 0.5, Resamples: 50, Seed: seed}
+		o := CompareOptions{Metric: Metric(int(seed % 4)), HigherIsBetter: seed%2 == 1, MaxPercent: math.Abs(maxPercent), Confidence: confidence, MinSamples: minSamples, MaxCV: 0.5, PairRounds: seed&4 != 0, Resamples: 50, Seed: seed}
 		base, head := decodeSamples(a), decodeSamples(b)
+		if o.PairRounds && seed&8 != 0 {
+			// Mostly paired inputs, so the per-round path runs, not only the
+			// unpaired rejection.
+			n := min(len(base), len(head))
+			base, head = base[:n], head[:n]
+		}
 		c := Compare(base, head, o)
 		for _, p := range []float64{c.ProbRegression, c.ProbImprovement} {
 			if p < 0 || p > 1 || math.IsNaN(p) {

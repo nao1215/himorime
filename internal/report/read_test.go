@@ -151,3 +151,45 @@ func TestReadPreservesWaivedRequiredBudgetAndPassingExit(t *testing.T) {
 		t.Fatal("waived report rendering changed after a validated save/load round trip")
 	}
 }
+
+func TestReadAcceptsReportsWithoutPairing(t *testing.T) {
+	r := judge(ModeCompare, false, compareResult("old", samples(10*time.Millisecond, 20, 0.02), samples(10*time.Millisecond, 20, 0.02)))
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A report written before the pairing field existed has no such key.
+	var doc any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	var drop func(v any)
+	drop = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			delete(x, "pairing")
+			for _, c := range x {
+				drop(c)
+			}
+		case []any:
+			for _, c := range x {
+				drop(c)
+			}
+		}
+	}
+	drop(doc)
+	old, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(old, []byte(`"pairing"`)) {
+		t.Fatal("pairing was not removed")
+	}
+	got, err := Read(old)
+	if err != nil {
+		t.Fatalf("Read report without pairing: %v", err)
+	}
+	if p := got.Suites[0].Benchmarks[0].Commands[0].Comparisons["latency"].Pairing; p != "" {
+		t.Fatalf("pairing = %q, want empty", p)
+	}
+}

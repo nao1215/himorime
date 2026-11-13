@@ -496,3 +496,58 @@ func TestCompareZeroBootstrapBase(t *testing.T) {
 		})
 	}
 }
+
+func TestComparePairRounds(t *testing.T) {
+	t.Parallel()
+	// Every round alternates between a quiet and a busy machine, and both
+	// runs of a round see the same machine.
+	machine := []float64{100, 200, 100, 200, 100, 200, 100, 200, 100, 200}
+	scaled := func(f float64, xs []float64) []float64 {
+		out := make([]float64, len(xs))
+		for i, x := range xs {
+			out[i] = x * f
+		}
+		return ms(out...)
+	}
+	tests := []struct {
+		name       string
+		base, head []float64
+		opts       func(*CompareOptions)
+		want       Verdict
+		reason     string
+		change     float64
+	}{
+		{name: "shared slowdown cancels in an A/A", base: scaled(1, machine), head: scaled(1, machine), want: VerdictPass, change: 0},
+		{name: "a real +20% shows through a shared slowdown", base: scaled(1, machine), head: scaled(1.2, machine), want: VerdictRegression, change: 20},
+		{name: "a real -20% is an improvement", base: scaled(1, machine), head: scaled(0.8, machine), want: VerdictImproved, change: -20},
+		{name: "lower throughput is a regression", base: scaled(1, machine), head: scaled(0.8, machine),
+			opts: func(o *CompareOptions) { o.HigherIsBetter = true }, want: VerdictRegression, change: -20},
+		{name: "unequal lengths are not paired", base: scaled(1, machine), head: scaled(1.2, machine[:9]),
+			want: VerdictInconclusive, reason: ReasonUnpaired},
+		{name: "a zero base sample has no ratio", base: append(scaled(1, machine[:9]), 0), head: scaled(1.2, machine),
+			want: VerdictInconclusive, reason: ReasonZeroBaseSample},
+		{name: "min_difference uses the paired change", base: scaled(1, machine), head: scaled(1.2, machine),
+			opts: func(o *CompareOptions) { o.MinDifference = 50e6 }, want: VerdictPass, reason: ReasonBelowMinDiff, change: 20},
+		{name: "the mean of the ratios", base: scaled(1, machine), head: scaled(1.2, machine),
+			opts: func(o *CompareOptions) { o.Metric = Mean }, want: VerdictRegression, change: 20},
+		{name: "max_cv applies to the ratios", base: scaled(1, machine), head: ms(100, 400, 110, 210, 90, 500, 105, 190, 300, 200),
+			want: VerdictInconclusive, reason: ReasonNoisy},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			o := defaultOptions()
+			o.PairRounds = true
+			if tt.opts != nil {
+				tt.opts(&o)
+			}
+			c := Compare(tt.base, tt.head, o)
+			if c.Verdict != tt.want || c.Reason != tt.reason {
+				t.Fatalf("verdict = %s (%q), want %s (%q): %+v", c.Verdict, c.Reason, tt.want, tt.reason, c)
+			}
+			if (tt.reason == "" || tt.reason == ReasonBelowMinDiff) && math.Abs(c.Change-tt.change) > 1e-9 {
+				t.Fatalf("change = %v, want %v", c.Change, tt.change)
+			}
+		})
+	}
+}

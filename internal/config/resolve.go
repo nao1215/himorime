@@ -98,6 +98,7 @@ func defaultRegression() Regression {
 		Confidence: DefaultConfidence,
 		MinSamples: DefaultMinSamples,
 		MaxCV:      DefaultMaxCV,
+		Pairing:    DefaultPairing,
 		Latency:    metricDefault,
 		CPU:        metricDefault,
 		Memory:     metricDefault,
@@ -117,6 +118,9 @@ func (v *validator) applyRegression(base Regression, raw *RawRegression, p path)
 	}
 	if raw.MaxCV != nil {
 		r.MaxCV = *raw.MaxCV
+	}
+	if raw.Pairing != nil {
+		r.Pairing = Pairing(*raw.Pairing)
 	}
 	if raw.Commands != nil {
 		r.Commands = raw.Commands

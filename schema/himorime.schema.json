@@ -518,6 +518,13 @@
           "minimum": 0,
           "maximum": 10
         },
+        "pairing": {
+          "description": "How base and head samples are compared. independent (default) resamples each side separately and compares their statistics. rounds pairs the samples of one round, takes head / base per round and compares the statistic of those ratios, which cancels a slowdown shared by both runs of a round; use it on noisy machines. The change it reports can differ from the ratio of the two side statistics.",
+          "enum": [
+            "independent",
+            "rounds"
+          ]
+        },
         "latency": {
           "$ref": "#/definitions/latencyRegression"
         },
@@ -551,6 +558,13 @@
           "type": "number",
           "minimum": 0,
           "maximum": 10
+        },
+        "pairing": {
+          "description": "How base and head samples are compared. independent (default) resamples each side separately and compares their statistics. rounds pairs the samples of one round, takes head / base per round and compares the statistic of those ratios, which cancels a slowdown shared by both runs of a round; use it on noisy machines. The change it reports can differ from the ratio of the two side statistics.",
+          "enum": [
+            "independent",
+            "rounds"
+          ]
         },
         "commands": {
           "description": "Compare only these commands. Default: every command.",
