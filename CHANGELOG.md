@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-13
+
 ### Added
 
 - `regression.pairing: rounds` compares the per-round ratios head / base instead of resampling each side on its own, so a slowdown that hits both runs of a round cancels out. On a busy machine it turns comparisons that were inconclusive into verdicts; the default stays `independent`, so existing gates keep their verdicts. Every comparison in the JSON report now records its `pairing`; earlier versions of `himorime report` reject reports that carry the field, while this version still reads reports without it.
