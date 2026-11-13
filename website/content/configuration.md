@@ -198,6 +198,7 @@ Commands and hooks inherit himorime's environment. `env` from `defaults`, the be
 | `regression.confidence` | `0.95` |
 | `regression.min_samples` | `10` |
 | `regression.max_cv` | `0.5` |
+| `regression.pairing` | `independent` |
 | `regression.latency, cpu_total, peak_rss: statistic` | `median` |
 | `regression.latency, cpu_total, peak_rss: max_percent` | `10` |
 | `regression.latency, cpu_total, peak_rss: min_difference` | `unset (none)` |
@@ -355,6 +356,7 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | `confidence` |  | Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95. |
 | `min_samples` |  | Fewest samples per side for a verdict. In a comparison, adaptive runs keep measuring until every compared command has this many; fewer is inconclusive. Default 10. |
 | `max_cv` |  | Overlapping or touching sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. Completely separated ranges still need the sample count, tolerance and bootstrap confidence checks. 0 disables the noise check. Default 0.5. |
+| `pairing` |  | How base and head samples are compared. independent (default) resamples each side separately and compares their statistics. rounds pairs the samples of one round, takes head / base per round and compares the statistic of those ratios, which cancels a slowdown shared by both runs of a round; use it on noisy machines. The change it reports can differ from the ratio of the two side statistics. |
 | `commands` |  | Compare only these commands. Default: every command. |
 | `latency` |  | How latency (wall-clock time; lower is better) is compared. |
 | `cpu_total` |  | How total CPU time (lower is better) is compared. |

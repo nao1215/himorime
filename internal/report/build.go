@@ -509,6 +509,10 @@ func deriveThroughput(c *Command, cfg config.Benchmark) *MetricComparison {
 	}
 	b, h := *base.Work.MeasuredMin/(*lat.Base/1e9), *head.Work.MeasuredMin/(*lat.Head/1e9)
 	d := h - b
+	if mc.Pairing == string(config.PairingRounds) {
+		// As for latency, the paired difference follows the change.
+		d = b * mc.ChangePercent / 100
+	}
 	mc.Base, mc.Head, mc.Difference = &b, &h, &d
 	return &mc
 }
@@ -524,6 +528,10 @@ func reciprocalChange(percent float64) float64 {
 
 func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64) *MetricComparison {
 	reg, _ := cfg.Regression.For(def.Name)
+	pairing := cfg.Regression.Pairing
+	if pairing == "" {
+		pairing = config.DefaultPairing
+	}
 	mc := &MetricComparison{
 		Metric:             string(def.Name),
 		Statistic:          string(reg.Metric),
@@ -534,6 +542,7 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 		RequiredConfidence: cfg.Regression.Confidence,
 		MinSamples:         cfg.Regression.MinSamples,
 		MaxCV:              cfg.Regression.MaxCV,
+		Pairing:            string(pairing),
 		Gate:               reg.Gate,
 	}
 	base, head := c.Base.Metrics[string(def.Name)], c.Head.Metrics[string(def.Name)]
@@ -564,6 +573,7 @@ func compareMetric(c *Command, def metric.Def, cfg config.Benchmark, seed uint64
 		Confidence:     cfg.Regression.Confidence,
 		MinSamples:     cfg.Regression.MinSamples,
 		MaxCV:          cfg.Regression.MaxCV,
+		PairRounds:     pairing == config.PairingRounds,
 		Seed:           seed,
 	})
 	if res.Base.Count > 0 && res.Head.Count > 0 {

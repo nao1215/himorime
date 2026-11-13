@@ -6,7 +6,6 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -16,10 +15,11 @@ import (
 // PCG stream and no clock is read, so the tallies, and therefore the
 // assertions, are identical on every run.
 //
-// It also runs pairedCompare, a variant that resamples round indices instead
-// of each side independently. The runner interleaves base and head in rounds,
-// so sample i of both sides was taken close in time; the paired variant shows
-// what that pairing would change when the machine drifts during a run.
+// It also runs every scenario with PairRounds (pairing: rounds), which
+// resamples rounds and judges the per-round ratios head[i] / base[i]. The
+// runner interleaves base and head in rounds, so sample i of both sides was
+// taken close in time; the paired column shows what that pairing changes when
+// the machine drifts during a run or slows both runs of a round together.
 //
 // HIMORIME_CALIBRATION=full raises the trial count; any non-empty value logs the
 // table of verdict rates.
@@ -231,15 +231,19 @@ type calibrationScenario struct {
 	// drift is a slowdown factor shared by base and head at the same round
 	// index; nil means none.
 	drift func(i, n int) float64
+	// sharedCV is the dispersion of a random factor shared by base and head
+	// at the same round, like a noisy machine that slows both runs of a
+	// round; 0 means none.
+	sharedCV float64
 	// baseOutliers and headOutliers are counts of samples made 3-10x slower.
 	baseOutliers, headOutliers int
 	// noCVGate disables MaxCV to show the bootstrap alone on outliers.
 	noCVGate bool
-	// independent bounds Compare; paired bounds pairedCompare and defaults to
-	// independent.
+	// independent bounds Compare; paired bounds Compare with PairRounds and
+	// defaults to independent.
 	independent, paired expect
-	// pairedNoLessDecisive requires pairedCompare to be inconclusive no more
-	// often than Compare.
+	// pairedNoLessDecisive requires PairRounds to be inconclusive no more
+	// often than the independent comparison.
 	pairedNoLessDecisive bool
 }
 
@@ -249,10 +253,20 @@ func (s calibrationScenario) generate(r *rand.Rand) (base, head []float64) {
 	if s.higherIsBetter {
 		center = 1000 // work per second
 	}
+	var shared []float64
+	if s.sharedCV > 0 {
+		shared = make([]float64, s.n)
+		for i := range shared {
+			shared[i] = lognormal(r, s.sharedCV)
+		}
+	}
 	side := func(scale float64, outliers int) []float64 {
 		out := make([]float64, s.n)
 		for i := range out {
 			f := s.noise(r, s.cv)
+			if shared != nil {
+				f *= shared[i]
+			}
 			if s.drift != nil {
 				d := s.drift(i, s.n)
 				if s.higherIsBetter {
@@ -307,101 +321,13 @@ func (s calibrationScenario) run(trials int) (independent, paired rates) {
 		base, head := s.generate(r)
 		o := calibrationOptions(s, key^(trial*0x9e3779b97f4a7c15))
 		ind.add(Compare(base, head, o))
-		pair.add(pairedCompare(base, head, o))
+		o.PairRounds = true
+		pair.add(Compare(base, head, o))
 	}
 	return ind.rates(), pair.rates()
 }
 
-// pairedCompare mirrors Compare with one difference: each resample draws
-// round indices and takes base[i] and head[i] together, so drift shared by
-// both sides at the same round cancels out of the change instead of widening
-// it. base and head must have the same length. It exists to evaluate the
-// independence assumption of Compare and is not used by himorime.
-func pairedCompare(base, head []float64, o CompareOptions) Comparison {
-	c := Comparison{Base: Summarize(base), Head: Summarize(head)}
-	if c.Base.Count == 0 || c.Head.Count == 0 {
-		c.Verdict, c.Reason = VerdictInconclusive, ReasonNoSamples
-		return c
-	}
-	bv, hv := c.Base.Value(o.Metric), c.Head.Value(o.Metric)
-	c.BaseValue, c.HeadValue, c.Difference = bv, hv, hv-bv
-	if bv <= 0 {
-		c.Verdict, c.Reason = VerdictInconclusive, ReasonZeroBase
-		return c
-	}
-	c.Change = (hv/bv - 1) * 100
-	sign := 1.0
-	if o.HigherIsBetter {
-		sign = -1
-	}
-	resamples := o.Resamples
-	if resamples <= 0 {
-		resamples = DefaultResamples
-	}
-	changes := pairedChanges(base, head, o.Metric, resamples, o.Seed)
-	alpha := (1 - o.Confidence) / 2
-	c.Low, c.High = percentile(changes, alpha), percentile(changes, 1-alpha)
-	const epsilon = 1e-9
-	var worse, better int
-	for _, ch := range changes {
-		d := sign * ch
-		if d > o.MaxPercent+epsilon {
-			worse++
-		}
-		if d < -o.MaxPercent-epsilon {
-			better++
-		}
-	}
-	c.ProbRegression = float64(worse) / float64(len(changes))
-	c.ProbImprovement = float64(better) / float64(len(changes))
-	degradation := sign * c.Change
-	switch {
-	case c.Base.Count < o.MinSamples || c.Head.Count < o.MinSamples:
-		c.Verdict, c.Reason = VerdictInconclusive, ReasonFewSamples
-	case o.MaxCV > 0 && (c.Base.Dispersion(o.Metric) > o.MaxCV || c.Head.Dispersion(o.Metric) > o.MaxCV):
-		c.Verdict, c.Reason = VerdictInconclusive, ReasonNoisy
-	case o.MinDifference > 0 && math.Abs(c.Difference) < o.MinDifference:
-		c.Verdict, c.Reason = VerdictPass, ReasonBelowMinDiff
-	case degradation > o.MaxPercent+epsilon && c.ProbRegression >= o.Confidence:
-		c.Verdict = VerdictRegression
-	case degradation < -o.MaxPercent-epsilon && c.ProbImprovement >= o.Confidence:
-		c.Verdict = VerdictImproved
-	case 1-c.ProbRegression >= o.Confidence:
-		c.Verdict = VerdictPass
-	default:
-		c.Verdict, c.Reason = VerdictInconclusive, ReasonTooClose
-	}
-	return c
-}
-
-// pairedChanges is bootstrapChanges with one index drawn per round for both
-// sides.
-func pairedChanges(base, head []float64, m Metric, resamples int, seed uint64) []float64 {
-	rng := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15))
-	n := len(base)
-	bbuf := make([]float64, n)
-	hbuf := make([]float64, n)
-	out := make([]float64, 0, resamples)
-	for range resamples {
-		for i := range n {
-			k := rng.IntN(n)
-			bbuf[i], hbuf[i] = base[k], head[k]
-		}
-		b := metricOf(bbuf, m)
-		h := metricOf(hbuf, m)
-		if b <= 0 {
-			continue
-		}
-		out = append(out, (h/b-1)*100)
-	}
-	if len(out) == 0 {
-		out = append(out, 0)
-	}
-	slices.Sort(out)
-	return out
-}
-
-func TestPairedCompareMatchesCompareWithoutNoise(t *testing.T) {
+func TestPairRoundsMatchesIndependentWithoutNoise(t *testing.T) {
 	t.Parallel()
 	// Without noise every resample of either variant equals the observed
 	// change, so both must agree exactly, including at the tolerance.
@@ -413,9 +339,17 @@ func TestPairedCompareMatchesCompareWithoutNoise(t *testing.T) {
 		ms(89, 89, 89, 89, 89, 89, 89, 89, 89, 89),
 	} {
 		o := defaultOptions()
-		want, got := Compare(base, head, o), pairedCompare(base, head, o)
+		want := Compare(base, head, o)
+		o.PairRounds = true
+		got := Compare(base, head, o)
+		// PairRounds derives Difference from the change, which differs from
+		// head - base only by rounding.
+		if math.Abs(got.Difference-want.Difference) > 1e-6*math.Abs(want.BaseValue) {
+			t.Fatalf("PairRounds Difference = %v, independent = %v", got.Difference, want.Difference)
+		}
+		got.Difference = want.Difference
 		if got != want {
-			t.Fatalf("pairedCompare = %+v, Compare = %+v", got, want)
+			t.Fatalf("PairRounds = %+v, independent = %+v", got, want)
 		}
 	}
 }
@@ -503,7 +437,10 @@ func calibrationScenarios() []calibrationScenario {
 	add(calibrationScenario{name: "outliers both 3/30 cv=5%", n: 30, cv: 0.05, baseOutliers: 3, headOutliers: 3,
 		independent: expect{regression: never, improved: never, pass: mostly}})
 	add(calibrationScenario{name: "outliers head 2/10 cv=5%", n: 10, cv: 0.05, headOutliers: 2,
-		independent: expect{regression: never, improved: never, pass: atLeast(0.5)}})
+		independent: expect{regression: never, improved: never, pass: atLeast(0.5)},
+		// Two slow head runs are also two outlying ratios out of ten, so
+		// the paired bootstrap is less sure of a pass; it still never fails.
+		paired: expect{regression: never, improved: never, pass: atLeast(0.35)}})
 	// Three of ten is 30% of the samples, not a rare outlier: the quartiles
 	// move with them and the gate fires, as it does for any wide spread.
 	add(calibrationScenario{name: "outliers head 3/10 cv=5%", n: 10, cv: 0.05, headOutliers: 3, independent: cvGated})
@@ -519,15 +456,19 @@ func calibrationScenarios() []calibrationScenario {
 	// Two modes 5x apart is what the gate exists for: half the samples are
 	// far from the other half, so neither side describes one workload and no
 	// verdict is offered, with or without a real change underneath.
-	add(calibrationScenario{name: "wide bimodal identical n=30", n: 30, cv: 0.05, noise: wideBimodal, independent: cvGated})
-	add(calibrationScenario{name: "wide bimodal +25% n=30", n: 30, cv: 0.05, change: 25, noise: wideBimodal, independent: cvGated})
+	// PairRounds judges the dispersion of the per-round ratios instead, so it
+	// may call these; it must not call them in the wrong direction.
+	add(calibrationScenario{name: "wide bimodal identical n=30", n: 30, cv: 0.05, noise: wideBimodal, independent: cvGated,
+		paired: expect{regression: rarely, improved: rarely}})
+	add(calibrationScenario{name: "wide bimodal +25% n=30", n: 30, cv: 0.05, change: 25, noise: wideBimodal, independent: cvGated,
+		paired: expect{pass: never, improved: never}})
 	add(calibrationScenario{name: "bimodal +25% n=30 cv=5%", n: 30, cv: 0.05, change: 25, noise: bimodal,
 		independent: expect{regression: atLeast(0.5), pass: rarely, improved: never}})
 
 	// Drift shared by both sides at the same round. Compare treats the sides
 	// as independent, so shared drift widens its interval: it may become
 	// inconclusive but must not raise a false alarm or pass a real +20%.
-	// pairedCompare cancels the drift and must stay at least as decisive.
+	// PairRounds cancels the drift and must stay at least as decisive.
 	for _, d := range []struct {
 		name  string
 		drift func(i, n int) float64
@@ -549,6 +490,20 @@ func calibrationScenarios() []calibrationScenario {
 		}
 		add(calibrationScenario{name: fmt.Sprintf("%s drift +8%% n=30", d.name), n: 30, cv: 0.05, change: 8, drift: d.drift,
 			independent: expect{regression: rarely, improved: never}, pairedNoLessDecisive: true})
+	}
+
+	// A random slowdown shared by both runs of a round, as on a busy desktop
+	// or a shared self-hosted runner: each side varies by about 25% but the
+	// two runs of one round move together. The independent comparison sees
+	// two wide distributions and is mostly inconclusive; the per-round ratio
+	// removes the shared factor and keeps only the 3% of each run.
+	for _, n := range []int{10, 20} {
+		add(calibrationScenario{name: fmt.Sprintf("shared 25%% identical n=%d", n), n: n, cv: 0.03, sharedCV: 0.25,
+			independent: quiet, pairedNoLessDecisive: true})
+		add(calibrationScenario{name: fmt.Sprintf("shared 25%% +20%% n=%d", n), n: n, cv: 0.03, sharedCV: 0.25, change: 20,
+			independent:          expect{pass: never, improved: never},
+			paired:               expect{regression: mostly, pass: never, improved: never},
+			pairedNoLessDecisive: true})
 	}
 	return out
 }
@@ -577,10 +532,10 @@ func TestCalibration(t *testing.T) {
 				t.Errorf("Compare: %s over %d trials", msg, trials)
 			}
 			for _, msg := range s.paired.check(pair) {
-				t.Errorf("pairedCompare: %s over %d trials", msg, trials)
+				t.Errorf("Compare with PairRounds: %s over %d trials", msg, trials)
 			}
 			if s.pairedNoLessDecisive && pair.inconclusive > ind.inconclusive {
-				t.Errorf("pairedCompare is inconclusive in %.3f of %d trials, Compare in %.3f", pair.inconclusive, trials, ind.inconclusive)
+				t.Errorf("PairRounds is inconclusive in %.3f of %d trials, independent in %.3f", pair.inconclusive, trials, ind.inconclusive)
 			}
 		})
 	}
@@ -591,7 +546,7 @@ func calibrationTable(scenarios []calibrationScenario, get func(int) (rates, rat
 	var b strings.Builder
 	b.WriteString("rates in percent of trials; change is the true change of the metric; (cv N) is the share inconclusive by max_cv\n")
 	fmt.Fprintf(&b, "%-36s %4s %4s %7s %6s | %-29s | %-29s\n", "scenario", "n", "cv", "change", "trials",
-		"independent reg/pass/imp/inc", "paired reg/pass/imp/inc")
+		"independent reg/pass/imp/inc", "rounds reg/pass/imp/inc")
 	for i, s := range scenarios {
 		ind, pair := get(i)
 		fmt.Fprintf(&b, "%-36s %4d %3.0f%% %+6.0f%% %6d | %s | %s\n", s.name, s.n, s.cv*100, s.change, ind.trials,

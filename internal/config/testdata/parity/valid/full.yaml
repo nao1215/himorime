@@ -23,6 +23,7 @@ defaults:
     confidence: 0.99
     min_samples: 10
     max_cv: 0.25
+    pairing: rounds
     cpu_total: {statistic: mean, max_percent: "12%", min_difference: 2ms}
     peak_rss: {statistic: median, max_percent: 5, min_difference: 1MiB}
 build:
@@ -110,6 +111,7 @@ benchmarks:
       confidence: 0.95
       min_samples: 12
       max_cv: 0
+      pairing: independent
       commands: [tool]
   - name: inline stdin
     stdin:

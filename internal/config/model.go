@@ -34,6 +34,7 @@ const (
 	DefaultConfidence   = 0.95
 	DefaultMinSamples   = 10
 	DefaultMaxCV        = 0.5
+	DefaultPairing      = PairingIndependent
 	OutputDiscard       = "discard"
 )
 
@@ -44,6 +45,18 @@ type Metric string
 const (
 	MetricMean   Metric = "mean"
 	MetricMedian Metric = "median"
+)
+
+// Pairing names how a comparison treats the samples of base and head.
+type Pairing string
+
+// Pairings a comparison can use.
+const (
+	// PairingIndependent resamples base and head separately.
+	PairingIndependent Pairing = "independent"
+	// PairingRounds pairs base and head by round: each round runs both once,
+	// so the per-round ratio cancels a slowdown shared by the round.
+	PairingRounds Pairing = "rounds"
 )
 
 // Format names a report format.
@@ -242,12 +255,13 @@ type Budget struct {
 }
 
 // Regression configures the comparison between a base revision and the
-// working tree. Confidence, MinSamples, MaxCV and Commands apply to every
-// metric; each comparable metric has its own MetricRegression.
+// working tree. Confidence, MinSamples, MaxCV, Pairing and Commands apply to
+// every metric; each comparable metric has its own MetricRegression.
 type Regression struct {
 	Confidence float64
 	MinSamples int
 	MaxCV      float64
+	Pairing    Pairing
 	// Commands limits the comparison to these commands; all when empty.
 	Commands []string
 	Latency  MetricRegression

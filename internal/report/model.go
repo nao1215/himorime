@@ -291,6 +291,12 @@ type MetricComparison struct {
 	RequiredConfidence float64 `json:"required_confidence"`
 	MinSamples         int     `json:"min_samples"`
 	MaxCV              float64 `json:"max_cv"`
+	// Pairing is independent or rounds: whether the change is the ratio of
+	// the two side statistics or the statistic of the per-round ratios. With
+	// rounds, ChangePercent is that statistic - 1 and Difference is Base
+	// times ChangePercent, so Head - Base can differ from Difference. Empty
+	// in reports written before the field existed.
+	Pairing string `json:"pairing,omitempty"`
 	// Verdict is pass, improved, regression, inconclusive or skipped.
 	Verdict string `json:"verdict"`
 	Reason  string `json:"reason"`

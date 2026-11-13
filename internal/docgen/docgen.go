@@ -147,6 +147,7 @@ func defaults() string {
 		{"regression.confidence", fmt.Sprint(config.DefaultConfidence)},
 		{"regression.min_samples", fmt.Sprint(config.DefaultMinSamples)},
 		{"regression.max_cv", fmt.Sprint(config.DefaultMaxCV)},
+		{"regression.pairing", string(config.DefaultPairing)},
 		{"regression.latency, cpu_total, peak_rss: statistic", string(config.DefaultMetric)},
 		{"regression.latency, cpu_total, peak_rss: max_percent", fmt.Sprint(config.DefaultMaxPercent)},
 		{"regression.latency, cpu_total, peak_rss: min_difference", "unset (none)"},
