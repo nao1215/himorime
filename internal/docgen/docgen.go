@@ -43,7 +43,7 @@ var (
 // Sync returns the content of the Markdown file at path with every generated
 // section and example block brought up to date. root is the repository root.
 func Sync(root, path string) (string, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // G304: documentation files of this repository
+	data, err := os.ReadFile(path) // #nosec G304 -- documentation files of this repository
 	if err != nil {
 		return "", err
 	}
@@ -64,7 +64,7 @@ func Sync(root, path string) (string, error) {
 	})
 	text = exampleRE.ReplaceAllStringFunc(text, func(block string) string {
 		m := exampleRE.FindStringSubmatch(block)
-		example, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(m[2]))) //nolint:gosec // G304: example paths written in this repository's docs
+		example, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(m[2]))) // #nosec G304 -- example paths written in this repository's docs
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: example %s: %w", path, m[2], err))
 			return block

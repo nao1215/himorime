@@ -111,7 +111,7 @@ func startSpawner() (*spawner, error) {
 	}
 	local := os.NewFile(uintptr(fds[0]), "spawner")
 	remote := os.NewFile(uintptr(fds[1]), "spawner")
-	cmd := exec.Command(exe) //nolint:noctx,gosec // the spawner lives as long as himorime; G204: himorime's own executable
+	cmd := exec.Command(exe) /* #nosec G204 -- the spawner lives as long as himorime; G204: himorime's own executable */ //nolint:noctx
 	cmd.Args = []string{os.Args[0]}
 	cmd.Env = append(os.Environ(), SpawnerEnv+"=1")
 	cmd.ExtraFiles = []*os.File{remote}

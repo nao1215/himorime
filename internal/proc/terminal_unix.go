@@ -46,7 +46,7 @@ func setTerminalSize(f *os.File) error {
 func pendingInput(f *os.File) (int, error) {
 	var n int
 	err := control(f, func(fd int) error {
-		if _, err := unix.Poll([]unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}, 0); err != nil && !errors.Is(err, unix.EINTR) { //nolint:gosec // G115: a descriptor fits in an int32
+		if _, err := unix.Poll([]unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}, 0); err != nil && !errors.Is(err, unix.EINTR) { // #nosec G115 -- a descriptor fits in an int32
 			return err
 		}
 		var err error

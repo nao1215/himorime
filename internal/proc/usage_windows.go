@@ -20,7 +20,7 @@ type usageProbe struct {
 }
 
 func newUsageProbe(cmd *exec.Cmd, _ *tree) *usageProbe {
-	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(cmd.Process.Pid)) //nolint:gosec // a PID always fits in uint32
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(cmd.Process.Pid)) // #nosec G115 -- a PID always fits in uint32
 	if err != nil {
 		return &usageProbe{}
 	}
@@ -89,14 +89,14 @@ func (p *usageProbe) peakWorkingSet() (int64, error) {
 	}
 	var c processMemoryCounters
 	c.cb = uint32(unsafe.Sizeof(c))
-	r, _, callErr := procGetProcessMemoryInfo.Call(uintptr(p.process), uintptr(unsafe.Pointer(&c)), uintptr(c.cb)) //nolint:gosec // G103: the structure outlives the call
+	r, _, callErr := procGetProcessMemoryInfo.Call(uintptr(p.process), uintptr(unsafe.Pointer(&c)), uintptr(c.cb)) // #nosec G103 -- the structure outlives the call
 	if r == 0 {
 		return 0, fmt.Errorf("GetProcessMemoryInfo: %w", callErr)
 	}
 	if c.PeakWorkingSetSize == 0 {
 		return 0, errors.New("the operating system reported a peak working set of 0")
 	}
-	return int64(c.PeakWorkingSetSize), nil //nolint:gosec // a working set fits in int64
+	return int64(c.PeakWorkingSetSize), nil // #nosec G115 -- a working set fits in int64
 }
 
 // filetimeUnits converts a count of 100-nanosecond intervals.

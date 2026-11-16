@@ -52,7 +52,7 @@ func (t *tree) close() {
 }
 
 func shellCommand(script string) (*exec.Cmd, error) {
-	return exec.Command("/bin/sh", "-c", script), nil //nolint:noctx,gosec // shell: true is an explicit opt-in; substituted values are quoted by ShellQuote
+	return exec.Command("/bin/sh", "-c", script), nil /* #nosec G204 -- shell: true is an explicit opt-in; substituted values are quoted by ShellQuote */ //nolint:noctx
 }
 
 // ShellQuote quotes s for /bin/sh so that it is one literal word.

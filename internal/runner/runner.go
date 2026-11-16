@@ -275,7 +275,7 @@ func (r *Runner) Measure(ctx context.Context, b config.Benchmark, sides []Side) 
 
 	l := &loop{
 		r: r, ctx: ctx, b: b, states: states, units: units,
-		rng: rand.New(rand.NewPCG(r.Seed, nameHash(b.Name))), //nolint:gosec // the order must be reproducible from --seed
+		rng: rand.New(rand.NewPCG(r.Seed, nameHash(b.Name))), // #nosec G404 -- the order must be reproducible from --seed
 	}
 	for warmups := 0; warmups < warmup; warmups++ {
 		if _, f := l.round(false); f != nil {
@@ -554,7 +554,7 @@ func (r *Runner) Version(ctx context.Context, tool config.ToolVersion, side Side
 
 // firstLine returns the first non-empty line of a capture file, trimmed.
 func firstLine(path string) string {
-	f, err := os.Open(path) //nolint:gosec // G304: a capture file himorime created in its temp dir
+	f, err := os.Open(path) // #nosec G304 -- a capture file himorime created in its temp dir
 	if err != nil {
 		return ""
 	}
@@ -863,7 +863,7 @@ func (r *Runner) outputPath(setting string, st *sideState, name string, capture 
 }
 
 func openOutput(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) //nolint:gosec // G304: confined to ${workdir} or himorime's private temp dir by outputPath
+	return os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) // #nosec G304 -- confined to ${workdir} or himorime's private temp dir by outputPath
 }
 
 func sanitize(s string) string {
@@ -935,7 +935,7 @@ func (r *Runner) resolvePath(p string, vars config.Vars, base string, roots ...s
 }
 
 func (r *Runner) tail(path string) string {
-	f, err := os.Open(path) //nolint:gosec // G304: a capture file himorime created in its temp dir
+	f, err := os.Open(path) // #nosec G304 -- a capture file himorime created in its temp dir
 	if err != nil {
 		return ""
 	}

@@ -47,7 +47,7 @@ func Load(ctx context.Context, path string) (*Suite, error) {
 	if info.Size() > maxFileSize {
 		return nil, &ValidationError{Issues: []Issue{{File: path, Message: fmt.Sprintf("suite file is larger than %d bytes", maxFileSize)}}}
 	}
-	src, err := os.ReadFile(abs) //nolint:gosec // G304: the suite file the user named; its size was checked above
+	src, err := os.ReadFile(abs) // #nosec G304 -- the suite file the user named; its size was checked above
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}

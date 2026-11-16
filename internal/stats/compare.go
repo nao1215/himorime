@@ -257,7 +257,7 @@ func separated(base, head Summary) bool {
 func bootstrapChanges(base, head []float64, m Metric, resamples int, seed uint64) []float64 {
 	// Two PCG streams from one seed: the base and head draws are independent
 	// yet fully determined by the seed.
-	rng := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15)) //nolint:gosec // a reproducible bootstrap needs a seeded generator, not a secure one
+	rng := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15)) // #nosec G404 -- a reproducible bootstrap needs a seeded generator, not a secure one
 	bbuf := make([]float64, len(base))
 	hbuf := make([]float64, len(head))
 	out := make([]float64, 0, resamples)
@@ -285,7 +285,7 @@ func bootstrapChanges(base, head []float64, m Metric, resamples int, seed uint64
 // sorted changes (statistic of the drawn ratios - 1) * 100. Every ratio is
 // positive, so every change is defined.
 func roundChanges(ratios []float64, m Metric, resamples int, seed uint64) []float64 {
-	rng := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15)) //nolint:gosec // a reproducible bootstrap needs a seeded generator, not a secure one
+	rng := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15)) // #nosec G404 -- a reproducible bootstrap needs a seeded generator, not a secure one
 	buf := make([]float64, len(ratios))
 	out := make([]float64, 0, resamples)
 	for range resamples {
