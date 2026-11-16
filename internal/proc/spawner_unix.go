@@ -127,7 +127,7 @@ func (c *spawnConn) send(msg any, files []*os.File) error {
 	if err != nil {
 		return err
 	}
-	head := binary.BigEndian.AppendUint32(nil, uint32(len(body))) //nolint:gosec // bounded by maxMessage on the reading side
+	head := binary.BigEndian.AppendUint32(nil, uint32(len(body))) // #nosec G115 -- bounded by maxMessage on the reading side
 	if len(files) > 0 {
 		fds := make([]int, len(files))
 		for i, f := range files {
@@ -311,7 +311,7 @@ func serveSpawner(c *spawnConn, gc *heapGrowth) int {
 // is measured here, around the start and the reaping, so no message to or
 // from himorime is ever part of it.
 func serveRequest(c *spawnConn, req spawnRequest, files []*os.File, wakeR, wakeW *os.File) error {
-	cmd := exec.Command(req.Path) //nolint:noctx,gosec // stopped through himorime's kill request; G204: the suite's command, resolved by himorime
+	cmd := exec.Command(req.Path) /* #nosec G204 -- stopped through himorime's kill request; G204: the suite's command, resolved by himorime */ //nolint:noctx
 	cmd.Args = req.Args
 	cmd.Dir = req.Dir
 	cmd.Env = req.Env
@@ -424,8 +424,8 @@ func (r *runningTree) close() {
 // himorime is gone.
 func watchHimorime(c *spawnConn, wake *os.File, t *runningTree) bool {
 	fds := []unix.PollFd{
-		{Fd: int32(c.fd), Events: unix.POLLIN},      //nolint:gosec // a descriptor fits in int32
-		{Fd: int32(wake.Fd()), Events: unix.POLLIN}, //nolint:gosec // a descriptor fits in int32
+		{Fd: int32(c.fd), Events: unix.POLLIN},      // #nosec G115 -- a descriptor fits in int32
+		{Fd: int32(wake.Fd()), Events: unix.POLLIN}, // #nosec G115 -- a descriptor fits in int32
 	}
 	gone := false
 	drain := func() bool {

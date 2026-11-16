@@ -68,7 +68,7 @@ func run(args []string) error {
 }
 
 func writeFile(path string, write func(*bufio.Writer) error) error {
-	f, err := os.Create(path) //nolint:gosec // G304: the path is the -o flag, or a file under it, given by the suite that runs this generator
+	f, err := os.Create(path) // #nosec G304 -- the path is the -o flag, or a file under it, given by the suite that runs this generator
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func writeJSONL(w *bufio.Writer, total int64, seed uint64) error {
 	if total < int64(minPadLen) {
 		return fmt.Errorf("bad -size for jsonl: want at least %d bytes", minPadLen)
 	}
-	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) // #nosec G404 -- the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
 	written := int64(0)
 	for {
 		line := record(r)
@@ -197,7 +197,7 @@ func writeTree(dir string, size int64, seed uint64) error {
 	if size%treeFileSize != 0 {
 		return fmt.Errorf("bad -size for tree: want a multiple of %d bytes, the size of one file", treeFileSize)
 	}
-	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) // #nosec G404 -- the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
 	for i := range size / treeFileSize {
 		sub := filepath.Join(dir, fmt.Sprintf("d%02d", i%16), fmt.Sprintf("s%02d", i/16%8))
 		if err := os.MkdirAll(sub, 0o750); err != nil {
@@ -257,7 +257,7 @@ func writeCSV(w *bufio.Writer, total int64, seed uint64) error {
 	if least := int64(len(csvHeader) + len(csvPadPrefix) + 1); total < least {
 		return fmt.Errorf("bad -size for csv: want at least %d bytes", least)
 	}
-	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) // #nosec G404 -- the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
 	if _, err := w.WriteString(csvHeader); err != nil {
 		return err
 	}
@@ -303,7 +303,7 @@ func writeYAML(w *bufio.Writer, total int64, seed uint64) error {
 	if least := len(yamlPadPrefix) + 2; total < int64(least) {
 		return fmt.Errorf("bad -size for yaml: want at least %d bytes", least)
 	}
-	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) // #nosec G404 -- the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
 	written := int64(0)
 	for {
 		rec := yamlRecord(r)
@@ -339,7 +339,7 @@ const cHeader = "#include <stdio.h>\n\n"
 // compiler does with it, and a benchmark over a program reads its size from
 // the file, not from the request.
 func writeC(w *bufio.Writer, total int64, seed uint64) error {
-	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) // #nosec G404 -- the input must be the same bytes on every run, which is the opposite of what a cryptographic source gives
 	if _, err := w.WriteString(cHeader); err != nil {
 		return err
 	}

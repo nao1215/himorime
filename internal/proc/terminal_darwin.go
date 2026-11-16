@@ -34,7 +34,7 @@ func openPTY() (master, slave *os.File, err error) {
 				return errno
 			}
 		}
-		if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(unix.TIOCPTYGNAME), uintptr(unsafe.Pointer(&name[0]))); errno != 0 { //nolint:gosec // G103: TIOCPTYGNAME writes the name into this buffer
+		if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(unix.TIOCPTYGNAME), uintptr(unsafe.Pointer(&name[0]))); errno != 0 { // #nosec G103 -- TIOCPTYGNAME writes the name into this buffer
 			return errno
 		}
 		return nil
@@ -43,7 +43,7 @@ func openPTY() (master, slave *os.File, err error) {
 		return nil, nil, fmt.Errorf("open a pseudo-terminal: %w", err)
 	}
 	path := string(name[:bytes.IndexByte(name[:], 0)])
-	slave, err = os.OpenFile(path, os.O_RDWR|syscall.O_NOCTTY, 0) //nolint:gosec // G304: the terminal the kernel just allocated
+	slave, err = os.OpenFile(path, os.O_RDWR|syscall.O_NOCTTY, 0) // #nosec G304 -- the terminal the kernel just allocated
 	if err != nil {
 		_ = master.Close()
 		return nil, nil, fmt.Errorf("open a pseudo-terminal: %w", err)

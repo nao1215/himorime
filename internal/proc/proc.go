@@ -281,7 +281,7 @@ func command(s Spec) (*exec.Cmd, error) {
 	// Not CommandContext: cancellation must stop the whole process tree, which
 	// watch does through the platform tree handle. CommandContext would kill
 	// only the direct child.
-	cmd := exec.Command(path, s.Args...) //nolint:noctx,gosec // see above; G204: running the suite's command is the purpose, as an argv without a shell
+	cmd := exec.Command(path, s.Args...) /* #nosec G204 -- see above; G204: running the suite's command is the purpose, as an argv without a shell */ //nolint:noctx
 	return cmd, nil
 }
 

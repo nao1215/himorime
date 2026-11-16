@@ -54,11 +54,11 @@ func attach(cmd *exec.Cmd) (*tree, error) {
 	// SetInformationJobObject takes the structure by address; the pointer is
 	// only valid for this call and info outlives it.
 	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
-		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil { //nolint:gosec // G103: audited, see above
+		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil { // #nosec G103 -- audited, see above
 		_ = windows.CloseHandle(job)
 		return nil, fmt.Errorf("configure job object: %w", err)
 	}
-	pid := uint32(cmd.Process.Pid) //nolint:gosec // a PID always fits in uint32
+	pid := uint32(cmd.Process.Pid) // #nosec G115 -- a PID always fits in uint32
 	h, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, pid)
 	if err != nil {
 		_ = windows.CloseHandle(job)
@@ -157,7 +157,7 @@ type jobAccounting struct {
 func jobAccountingInfo(job windows.Handle) (jobAccounting, error) {
 	var info jobAccounting
 	err := windows.QueryInformationJobObject(job, windows.JobObjectBasicAccountingInformation,
-		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), nil) //nolint:gosec // G103: the structure outlives the call
+		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), nil) // #nosec G103 -- the structure outlives the call
 	return info, err
 }
 
@@ -174,7 +174,7 @@ func shellCommand(script string) (*exec.Cmd, error) {
 	if comspec == "" {
 		comspec = filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
 	}
-	cmd := exec.Command(comspec) //nolint:noctx,gosec // %ComSpec% is the system shell; the tree is stopped by Run's watcher
+	cmd := exec.Command(comspec) /* #nosec G204 G702 -- %ComSpec% is the system shell; the tree is stopped by Run's watcher */ //nolint:noctx
 	// cmd.exe does not parse its command line with the C runtime rules, so the
 	// line is passed verbatim: /s strips exactly the outer quotes.
 	cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: `/d /s /c "` + script + `"`}
@@ -214,7 +214,7 @@ func lookPathIn(name, pathList, workdir string) (string, error) {
 		}
 		for _, ext := range exts {
 			p := filepath.Join(pathEntry(dir, workdir), name+ext)
-			if info, err := os.Stat(p); err == nil && !info.IsDir() { //nolint:gosec // G703: probing PATH entries is what a PATH lookup is
+			if info, err := os.Stat(p); err == nil && !info.IsDir() { // #nosec G703 -- probing PATH entries is what a PATH lookup is
 				return p, nil
 			}
 		}

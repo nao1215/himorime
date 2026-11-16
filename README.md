@@ -1,4 +1,6 @@
 [![UnitTest](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/unit_test.yml) [![E2E](https://github.com/nao1215/himorime/actions/workflows/e2e.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/e2e.yml) [![Lint](https://github.com/nao1215/himorime/actions/workflows/lint.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/lint.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/nao1215/himorime.svg)](https://pkg.go.dev/github.com/nao1215/himorime)
+[![Gosec](https://github.com/nao1215/himorime/actions/workflows/gosec.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/gosec.yml)
+[![Trivy](https://github.com/nao1215/himorime/actions/workflows/trivy.yml/badge.svg)](https://github.com/nao1215/himorime/actions/workflows/trivy.yml)
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/nao1215/himorime/total) [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/nao1215/himorime/badge)](https://scorecard.dev/viewer/?uri=github.com/nao1215/himorime)
 
 

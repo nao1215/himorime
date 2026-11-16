@@ -42,7 +42,7 @@ func runInit(_ context.Context, a *App, args []string) int {
 	if o.force {
 		flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	}
-	f, err := os.OpenFile(path, flags, 0o644) //nolint:gosec // the user names the file to create
+	f, err := os.OpenFile(path, flags, 0o644) // #nosec G302 -- the user names the file to create
 	if err != nil {
 		if errors.Is(err, iofs.ErrExist) {
 			diag.Print(a.Stderr, exitcode.Usage, "himorime init: %s already exists; it was not changed (use --force to overwrite it)", path)

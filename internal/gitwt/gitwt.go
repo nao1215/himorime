@@ -223,7 +223,7 @@ func (r *Repo) pruneOrphans(ctx context.Context) error {
 	var errs []error
 	for _, e := range entries {
 		entry := filepath.Join(admin, e.Name())
-		gitdir, err := os.ReadFile(filepath.Join(entry, "gitdir")) //nolint:gosec // G304: a file Git keeps in its own directory
+		gitdir, err := os.ReadFile(filepath.Join(entry, "gitdir")) // #nosec G304 -- a file Git keeps in its own directory
 		if err != nil {
 			continue
 		}
@@ -231,7 +231,7 @@ func (r *Repo) pruneOrphans(ctx context.Context) error {
 		if !isOwnWorktree(dir) {
 			continue
 		}
-		if _, err := os.Lstat(dir); !errors.Is(err, os.ErrNotExist) { //nolint:gosec // G703: only checks whether the checkout Git recorded still exists
+		if _, err := os.Lstat(dir); !errors.Is(err, os.ErrNotExist) { // #nosec G703 -- only checks whether the checkout Git recorded still exists
 			continue
 		}
 		if err := os.RemoveAll(entry); err != nil {
@@ -248,7 +248,7 @@ func isOwnWorktree(dir string) bool {
 }
 
 func (r *Repo) run(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, r.git, args...) //nolint:gosec // G204: fixed git subcommands; revisions are validated by ResolveCommit
+	cmd := exec.CommandContext(ctx, r.git, args...) // #nosec G204 -- fixed git subcommands; revisions are validated by ResolveCommit
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C")
 	var stdout, stderr bytes.Buffer
