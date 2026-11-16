@@ -505,7 +505,7 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 
 // TestWorkflowPermissionsAreReadOnly reserves writes for releasing, coverage
 // history/comments, the separately validated benchmark comments, and the
-// CodeQL and OpenSSF Scorecard uploads to code scanning.
+// CodeQL, OpenSSF Scorecard and Trivy uploads to code scanning.
 func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 	t.Parallel()
 	files, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
@@ -515,6 +515,7 @@ func TestWorkflowPermissionsAreReadOnly(t *testing.T) {
 		"coverage.yml":  {"actions", "pull-requests"},
 		"codeql.yml":    {"security-events"},
 		"scorecard.yml": {"security-events", "id-token"},
+		"trivy.yml":     {"security-events"},
 		// contents: the GitHub Release and its files, and the SLSA provenance
 		// uploaded to it; id-token: cosign, the attestation, the SLSA
 		// provenance and Pages; attestations: the GitHub attestation;
