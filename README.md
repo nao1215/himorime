@@ -79,6 +79,7 @@ Homebrew: `brew install --cask nao1215/tap/himorime`. Arch Linux: `yay -S himori
 | [Statistical calibration](./internal/stats/calibration_test.go) | False regressions and missed regressions at a known noise level |
 | [Metamorphic relations and properties](./internal/stats/properties_test.go) | Verdicts that change with the unit, the better direction or the sample order |
 | [Fuzzing](./internal/config/parity_test.go) | Crashes and schema/loader disagreements on arbitrary suites, durations and reports |
+| [Mutation testing](./.github/workflows/mutation.yml) | Statistics and threshold code that no test would notice going wrong |
 
 Commands and CI jobs are listed in [CONTRIBUTING](./CONTRIBUTING.md#testing).
 
