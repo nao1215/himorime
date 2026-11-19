@@ -24,6 +24,14 @@ make docs      # regenerate generated documentation sections
 make check     # fmt, vet, lint, test, test-race, e2e
 ```
 
+## Testing
+
+- Unit tests run with `make test` on Linux, macOS and Windows, at the go.mod minimum and the newest Go (`unit_test.yml`).
+- The CLI E2E suite in `test/e2e/atago` runs with `make e2e` on all three systems (`e2e.yml`), and again against the snapshot release binaries (`release-smoke.yml`).
+- `make calibration` measures the false regression and missed regression rates of the classifier (`internal/stats/calibration_test.go`).
+- `internal/stats/properties_test.go` checks relations between comparisons with [rapid](https://pkg.go.dev/pgregory.net/rapid): the verdict does not change with the unit (both sides scaled by a power of two), flipping the better direction swaps regression and improvement, identical samples are never a change, and a slower head never lowers the regression probability. They run in `make test` with rapid's default 100 cases; pass `-rapid.checks=10000` to search longer. A failure prints the seed to rerun it with.
+- Fuzz targets (`func Fuzz*`) run for a short time on every pull request and longer every night (`fuzz.yml`); `make fuzz FUZZTIME=20s` runs them locally.
+
 ## Rules of thumb
 
 - Add or update tests with every new feature, bug fix and behavior change; a bug fix comes with a test that fails without it. Unit tests live next to the code; anything a user observes as a process (exit codes, output, files, Git worktrees, interrupts) gets an E2E scenario in `test/e2e/atago`.

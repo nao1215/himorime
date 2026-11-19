@@ -70,6 +70,18 @@ go install github.com/nao1215/himorime@latest
 
 Homebrew: `brew install --cask nao1215/tap/himorime`. Arch Linux: `yay -S himorime-bin` from the [AUR](https://aur.archlinux.org/packages/himorime-bin). The [release page](https://github.com/nao1215/himorime/releases) has archives and Linux packages, and [setup-himorime](https://github.com/nao1215/setup-himorime) installs a release in GitHub Actions.
 
+## Testing
+
+| Technique | Bug class caught here |
+|---|---|
+| [Unit tests](./internal) | Wrong parsing, statistics, report rendering and exit codes |
+| [CLI E2E with atago](./test/e2e/atago) | Wrong behavior of the built binary: exit codes, output, reports, Git worktrees |
+| [Statistical calibration](./internal/stats/calibration_test.go) | False regressions and missed regressions at a known noise level |
+| [Metamorphic relations and properties](./internal/stats/properties_test.go) | Verdicts that change with the unit, the better direction or the sample order |
+| [Fuzzing](./internal/config/parity_test.go) | Crashes and schema/loader disagreements on arbitrary suites, durations and reports |
+
+Commands and CI jobs are listed in [CONTRIBUTING](./CONTRIBUTING.md#testing).
+
 ## The name
 
 himorime was inspired by atago and named after 火防女 (himorime), the maiden who tends the fire in Demon's Souls.
