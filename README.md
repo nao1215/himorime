@@ -76,8 +76,10 @@ Homebrew: `brew install --cask nao1215/tap/himorime`. Arch Linux: `yay -S himori
 |---|---|
 | [Unit tests](./internal) | Wrong parsing, statistics, report rendering and exit codes |
 | [CLI E2E with atago](./test/e2e/atago) | Wrong behavior of the built binary: exit codes, output, reports, Git worktrees |
+| [Golden files](./internal/report/testdata) | Unintended changes to the Markdown report and job summary that people read in pull requests |
 | [Statistical calibration](./internal/stats/calibration_test.go) | False regressions and missed regressions at a known noise level |
 | [Metamorphic relations and properties](./internal/stats/properties_test.go) | Verdicts that change with the unit, the better direction or the sample order |
+| [Differential testing against /usr/bin/time](./test/differential/rusage_test.go) | Peak RSS and CPU time that look plausible but are wrong: a unit error, user and system time swapped, the starter's memory counted as the command's |
 | [Fuzzing](./internal/config/parity_test.go) | Crashes and schema/loader disagreements on arbitrary suites, durations and reports |
 | [Mutation testing](./.github/workflows/mutation.yml) | Statistics and threshold code that no test would notice going wrong |
 
