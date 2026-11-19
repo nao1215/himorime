@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"flag"
 	"math"
 	"os"
 	"path/filepath"
@@ -1233,6 +1234,11 @@ func TestCompareKeepsTheVerdictWhenTheWorkIsTheSame(t *testing.T) {
 	}
 }
 
+// update rewrites the golden files under testdata with the current output:
+// go test ./internal/report -run Golden -update. Review the diff before
+// committing it.
+var update = flag.Bool("update", false, "rewrite the golden files in testdata")
+
 func TestFullGitHubReportGolden(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"pass", "improved", "inconclusive", "regression", "budget", "metric-error", "error", "mixed"} {
@@ -1245,12 +1251,17 @@ func TestFullGitHubReportGolden(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join("testdata", "report-"+name+".md")
+			if *update {
+				if err := os.WriteFile(path, out.Bytes(), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			want, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if out.String() != string(want) {
-				t.Errorf("output differs from %s:\n%s", path, out.String())
+				t.Errorf("output differs from %s (rerun with -update to accept it):\n%s", path, out.String())
 			}
 			after, _ := json.Marshal(rep)
 			if !bytes.Equal(before, after) {
