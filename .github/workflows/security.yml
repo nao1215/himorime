@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # A standard-library advisory is fixed in a specific patch, so the go.mod
   # minimum and the newest Go can differ. Keep the first entry equal to the go
