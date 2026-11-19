@@ -551,3 +551,99 @@ func TestComparePairRounds(t *testing.T) {
 		})
 	}
 }
+
+// TestCompareMinDifferenceIsExclusive pins "below": a difference of exactly
+// min_difference is large enough to be judged, so a +50% change of exactly
+// that size is still a regression.
+func TestCompareMinDifferenceIsExclusive(t *testing.T) {
+	t.Parallel()
+	o := defaultOptions()
+	o.MinDifference = 0.5 * msf
+	c := Compare(ms(1, 1, 1, 1, 1, 1, 1, 1, 1, 1), ms(1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5), o)
+	if c.Verdict != VerdictRegression || c.Difference != o.MinDifference {
+		t.Fatalf("a difference equal to min_difference = %s (%q, difference %v), want regression", c.Verdict, c.Reason, c.Difference)
+	}
+}
+
+// TestCompareConfidenceIsInclusive pins ">= Confidence": when every bootstrap
+// draw agrees, the probability is exactly 1 and a confidence of 1 is met for
+// a regression, an improvement and a pass alike.
+func TestCompareConfidenceIsInclusive(t *testing.T) {
+	t.Parallel()
+	base := ms(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+	o := defaultOptions()
+	o.Confidence = 1
+	for _, tt := range []struct {
+		name string
+		head []float64
+		want Verdict
+	}{
+		{"twice as slow is a regression", ms(2, 2, 2, 2, 2, 2, 2, 2, 2, 2), VerdictRegression},
+		{"twice as fast is an improvement", ms(0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5), VerdictImproved},
+		{"unchanged is a pass", base, VerdictPass},
+	} {
+		if c := Compare(base, tt.head, o); c.Verdict != tt.want {
+			t.Errorf("%s: verdict = %s (%q, P(reg)=%v, P(imp)=%v) with confidence 1, want %s", tt.name, c.Verdict, c.Reason, c.ProbRegression, c.ProbImprovement, tt.want)
+		}
+	}
+}
+
+// TestCompareIntervalIsTheCentralConfidenceInterval pins Low and High to the
+// (1-Confidence)/2 and 1-(1-Confidence)/2 percentiles of the bootstrap
+// changes, so a 95% interval cuts 2.5% from each tail.
+func TestCompareIntervalIsTheCentralConfidenceInterval(t *testing.T) {
+	t.Parallel()
+	base := noisy(3, 40, 100*time.Millisecond, 0.05)
+	head := noisy(4, 40, 120*time.Millisecond, 0.05)
+	o := defaultOptions()
+	changes := bootstrapChanges(base, head, o.Metric, resamplesOf(o), o.Seed)
+	c := Compare(base, head, o)
+	alpha := (1 - o.Confidence) / 2
+	if low, high := percentile(changes, alpha), percentile(changes, 1-alpha); c.Low != low || c.High != high {
+		t.Fatalf("interval = [%v, %v], want the 2.5th and 97.5th percentiles [%v, %v]", c.Low, c.High, low, high)
+	}
+}
+
+// TestCompareUnpairedRoundsReportTheDifference pins that a comparison refused
+// for unequal round counts still reports the side statistics and their
+// difference, so the report shows what was measured.
+func TestCompareUnpairedRoundsReportTheDifference(t *testing.T) {
+	t.Parallel()
+	o := defaultOptions()
+	o.PairRounds = true
+	c := Compare(ms(1, 1, 1), ms(3, 3), o)
+	if c.Verdict != VerdictInconclusive || c.Reason != ReasonUnpaired {
+		t.Fatalf("3 base and 2 head rounds = %s (%q), want inconclusive (%q)", c.Verdict, c.Reason, ReasonUnpaired)
+	}
+	if c.BaseValue != msf || c.HeadValue != 3*msf || c.Difference != 2*msf {
+		t.Fatalf("values = base %v head %v difference %v, want %v %v %v", c.BaseValue, c.HeadValue, c.Difference, msf, 3*msf, 2*msf)
+	}
+}
+
+// TestCompareTouchingRangesAreNotSeparated pins "complete separation": when
+// the fastest head sample equals the slowest base sample the ranges overlap,
+// so dispersion beyond max_cv still makes the comparison inconclusive.
+func TestCompareTouchingRangesAreNotSeparated(t *testing.T) {
+	t.Parallel()
+	o := defaultOptions()
+	o.MaxCV = 0.1
+	o.MinSamples = 0
+	base := ms(10, 10, 10, 10, 10, 20, 20, 20, 20, 20)
+	touching := ms(20, 40, 40, 40, 40, 40, 40, 40, 40, 40)
+	if c := Compare(base, touching, o); c.Verdict != VerdictInconclusive || c.Reason != ReasonNoisy {
+		t.Fatalf("touching ranges with base robust cv %.3f > 0.1 = %s (%q), want inconclusive (%q)", c.Base.RobustCV, c.Verdict, c.Reason, ReasonNoisy)
+	}
+	separate := ms(20.5, 40, 40, 40, 40, 40, 40, 40, 40, 40)
+	if c := Compare(base, separate, o); c.Verdict != VerdictRegression {
+		t.Fatalf("separated ranges = %s (%q), want regression", c.Verdict, c.Reason)
+	}
+	// The same from the other side: the slowest head sample equals the
+	// fastest base sample.
+	wide := ms(20, 20, 20, 20, 20, 40, 40, 40, 40, 40)
+	if c := Compare(wide, ms(10, 10, 10, 10, 10, 10, 10, 10, 10, 20), o); c.Verdict != VerdictInconclusive || c.Reason != ReasonNoisy {
+		t.Fatalf("touching ranges below = %s (%q), want inconclusive (%q)", c.Verdict, c.Reason, ReasonNoisy)
+	}
+	if c := Compare(wide, ms(10, 10, 10, 10, 10, 10, 10, 10, 10, 19.5), o); c.Verdict != VerdictImproved {
+		t.Fatalf("separated ranges below = %s (%q), want improved", c.Verdict, c.Reason)
+	}
+}

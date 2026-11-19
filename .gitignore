@@ -42,6 +42,9 @@ go.work.sum
 /third_party_licenses/
 cover.html
 
+# rapid saves failing cases here; mutation runs produce them on purpose
+testdata/rapid/
+
 # atago keeps its rerun ledger here
 .atago/
 

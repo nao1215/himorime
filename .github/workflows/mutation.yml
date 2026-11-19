@@ -1,0 +1,114 @@
+name: Mutation
+# Mutation testing rewrites one expression at a time and checks that a test
+# fails. It reruns the tests once per mutant, so it is too slow for every pull
+# request: the full run is weekly, and pull requests mutate only the lines
+# they change (gremlins --diff, run from the module root so the paths that
+# git diff prints match the files gremlins mutates).
+#
+# The weekly run covers the packages that compute what himorime reports and
+# decides: the statistics and verdicts, and the metric units and
+# thresholds. The baseline scores are recorded in CONTRIBUTING.md; the
+# --threshold-efficacy of each package sits a few points below it (the rapid
+# properties draw new cases every run, so the score moves a little), and the
+# job fails when tests stop killing mutants they used to kill. gremlins counts
+# switch case expressions as not covered, so the verdict switch in
+# internal/stats/compare.go is checked by hand (see CONTRIBUTING.md).
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '**.go'
+      - go.mod
+      - go.sum
+      - scripts/verdict_mutants.py
+      - .github/workflows/mutation.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GREMLINS_VERSION: v0.6.0
+
+jobs:
+  diff:
+    name: mutation (changed lines)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install gremlins
+        run: go install "github.com/go-gremlins/gremlins/cmd/gremlins@${GREMLINS_VERSION}"
+      - name: Mutate the lines this pull request changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        # Run from the module root: gremlins compares git diff paths as given.
+        run: gremlins unleash --diff "$BASE_SHA" --workers 2 --timeout-coefficient 10 --output mutation.json .
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mutation-report-diff
+          path: mutation.json
+          if-no-files-found: ignore
+
+  full:
+    name: mutation (${{ matrix.pkg }})
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pkg: ./internal/stats, threshold: "90" }
+          - { pkg: ./internal/metric, threshold: "92" }
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install gremlins
+        run: go install "github.com/go-gremlins/gremlins/cmd/gremlins@${GREMLINS_VERSION}"
+      - name: Mutate the package
+        env:
+          PKG: ${{ matrix.pkg }}
+          THRESHOLD: ${{ matrix.threshold }}
+        run: gremlins unleash --workers 2 --timeout-coefficient 10 --threshold-efficacy "$THRESHOLD" --output mutation.json "$PKG"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mutation-report-${{ strategy.job-index }}
+          path: mutation.json
+          if-no-files-found: ignore
+
+  # The verdict switch is invisible to gremlins (see the top of this file);
+  # the script mutates its case conditions and fails on a surviving mutant
+  # that is not listed as equivalent. It takes a minute or two, so it runs on
+  # every event, pull requests included.
+  verdict-switch:
+    name: mutation (verdict switch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Mutate the verdict switch
+        run: python3 scripts/verdict_mutants.py

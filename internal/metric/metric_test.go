@@ -181,7 +181,11 @@ func TestParseDuration(t *testing.T) {
 	if d, err := ParseDuration("1m30s"); err != nil || d != 90*time.Second {
 		t.Fatalf("ParseDuration = %v, %v", d, err)
 	}
-	for _, in := range []string{"10", "-1s", "25h", "1 s"} {
+	// The maximum is inclusive: 24h is accepted, anything longer is not.
+	if d, err := ParseDuration("24h"); err != nil || d != MaxDuration {
+		t.Fatalf("ParseDuration(24h) = %v, %v; want %v", d, err, MaxDuration)
+	}
+	for _, in := range []string{"10", "-1s", "25h", "24h0m0.000000001s", "1 s"} {
 		if _, err := ParseDuration(in); err == nil {
 			t.Errorf("ParseDuration(%q) accepted", in)
 		}
@@ -194,7 +198,7 @@ func TestParseDuration(t *testing.T) {
 			t.Errorf("ParseDuration(%q) = %v, %v; want %v", in, d, err, want)
 		}
 	}
-	for _, in := range []string{"1.9ns", "0.5ns", "1.0ns", "0.0001us", "0.0000000001s", "1s0.5ns"} {
+	for _, in := range []string{"1.9ns", "0.5ns", "1.0ns", "0.0001us", "0.0000000001s", "1s0.5ns", "1s0.0001us"} {
 		if _, err := ParseDuration(in); err == nil || !strings.Contains(err.Error(), "a fraction of a nanosecond") {
 			t.Errorf("ParseDuration(%q) error = %v, want it to name a fraction of a nanosecond", in, err)
 		}
