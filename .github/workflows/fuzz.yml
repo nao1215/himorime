@@ -4,12 +4,26 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths-ignore:
+      - README.md
+      - CHANGELOG.md
+      - CONTRIBUTING.md
+      - CODE_OF_CONDUCT.md
+      - SECURITY.md
+      - 'website/**'
+      - 'doc/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - .github/pull_request_template.md
   schedule:
     - cron: "0 4 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: fuzz-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Every event runs each target briefly; the nightly schedule runs each for
