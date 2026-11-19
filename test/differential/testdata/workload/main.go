@@ -29,7 +29,7 @@ func main() {
 	case "alloc":
 		buf := make([]byte, n<<20)
 		for i := 0; i < len(buf); i += 4096 {
-			buf[i] = byte(i)
+			buf[i] = 1
 		}
 		time.Sleep(20 * time.Millisecond)
 		runtime.KeepAlive(buf)
