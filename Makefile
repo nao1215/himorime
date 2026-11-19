@@ -5,7 +5,7 @@ VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo d
 LDFLAGS    := -s -w -X github.com/nao1215/himorime/internal/buildinfo.Version=$(VERSION)
 PKGS       := ./...
 GOLANGCI   := v2.15.0
-ATAGO      := v0.23.0
+ATAGO      := v0.26.1
 GORELEASER := v2.16.0
 ACTIONLINT := v1.7.12
 FUZZTIME   ?= 10s
@@ -114,6 +114,7 @@ tools: ## Install the developer tools used by this repository
 	go install github.com/goreleaser/goreleaser/v2@$(GORELEASER)
 	go install github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT)
 	go install golang.org/x/vuln/cmd/govulncheck@latest
+	go install github.com/google/go-licenses/v2@v2.0.1
 
 .PHONY: help
 help: ## Show this help

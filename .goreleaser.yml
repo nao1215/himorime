@@ -7,6 +7,11 @@ before:
   hooks:
     - go mod tidy
     - go run ./scripts/completions completions
+    # The license texts of the modules linked into each GOOS build, shipped
+    # in the archives and Linux packages as THIRD_PARTY_LICENSES.
+    - sh -c 'GOROOT="$(go env GOROOT)" CGO_ENABLED=0 GOOS=linux go-licenses save . --save_path=third_party_licenses/linux --force'
+    - sh -c 'GOROOT="$(go env GOROOT)" CGO_ENABLED=0 GOOS=windows go-licenses save . --save_path=third_party_licenses/windows --force'
+    - sh -c 'GOROOT="$(go env GOROOT)" CGO_ENABLED=0 GOOS=darwin go-licenses save . --save_path=third_party_licenses/darwin --force'
 
 builds:
   - id: himorime
@@ -35,6 +40,8 @@ archives:
       - README.md
       - CHANGELOG.md
       - completions/*
+      - src: "third_party_licenses/{{ .Os }}/**/*"
+        dst: THIRD_PARTY_LICENSES
 
 checksum:
   name_template: checksums.txt
@@ -86,6 +93,9 @@ nfpms:
         dst: /usr/share/fish/vendor_completions.d/himorime.fish
         file_info:
           mode: 0644
+      - src: ./third_party_licenses/linux
+        dst: /usr/share/doc/himorime/THIRD_PARTY_LICENSES
+        type: tree
 
 # A cask for nao1215/homebrew-tap. Writing to the tap needs TAP_GITHUB_TOKEN,
 # which only the tag-triggered release job has; snapshots generate the cask

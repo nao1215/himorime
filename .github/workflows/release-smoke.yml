@@ -33,6 +33,9 @@ jobs:
           cache: false
       - name: Install Syft (SBOM generator)
         uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      # The goreleaser before hooks save the dependency licenses with it.
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses/v2@v2.0.1
       - name: Validate .goreleaser.yml
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
@@ -68,7 +71,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
-      ATAGO_VERSION: v0.25.0
+      ATAGO_VERSION: v0.26.1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
