@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Changed
 
 - CI scans the repository with gosec and Trivy on every pull request (Trivy covers dependency vulnerabilities, committed secrets and misconfigurations, and also runs daily). Workflow actions are recorded in `.github/workflows/actions.lock`, which CI verifies against the pinned commits.
+- Release archives and Linux packages now include the license texts of the linked dependencies under `THIRD_PARTY_LICENSES/`, and CI rejects a dependency whose license is GPL, LGPL, AGPL or unidentifiable.
+- Dependencies: golang.org/x/sys v0.50.0, golang.org/x/text v0.44.0.
 
 ## [0.6.0] - 2026-11-13
 

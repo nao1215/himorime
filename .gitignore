@@ -39,6 +39,7 @@ go.work.sum
 /himorime.exe
 /bench/.ci-release.yaml
 /completions/
+/third_party_licenses/
 cover.html
 
 # atago keeps its rerun ledger here

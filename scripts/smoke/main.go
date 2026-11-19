@@ -104,6 +104,10 @@ func readVersion(dist string) (string, error) {
 	return meta.Version, nil
 }
 
+// thirdPartyLicense is one dependency license text that every archive and
+// Linux package must carry: go-yaml is linked on every GOOS.
+const thirdPartyLicense = "THIRD_PARTY_LICENSES/github.com/goccy/go-yaml/LICENSE"
+
 func checkArchive(dist, version, goos, goarch string, host bool, fail func(string, ...any)) {
 	exe := ""
 	ext := ".tar.gz"
@@ -117,7 +121,7 @@ func checkArchive(dist, version, goos, goarch string, host bool, fail func(strin
 		fail("%s: %v", name, err)
 		return
 	}
-	for _, want := range []string{"himorime" + exe, "LICENSE", "README.md", "CHANGELOG.md", "completions/himorime.bash", "completions/himorime.zsh", "completions/himorime.fish", "completions/himorime.ps1"} {
+	for _, want := range []string{"himorime" + exe, "LICENSE", "README.md", "CHANGELOG.md", "completions/himorime.bash", "completions/himorime.zsh", "completions/himorime.fish", "completions/himorime.ps1", thirdPartyLicense} {
 		if len(files[want]) == 0 {
 			fail("%s lacks %s", name, want)
 		}
@@ -282,7 +286,7 @@ func checkPackages(dist, version string, fail func(string, ...any)) {
 				fail("dpkg-deb -c %s: %v", deb, err)
 				continue
 			}
-			for _, want := range []string{"./usr/bin/himorime", "./usr/share/bash-completion/completions/himorime", "./usr/share/zsh/vendor-completions/_himorime", "./usr/share/fish/vendor_completions.d/himorime.fish"} {
+			for _, want := range []string{"./usr/bin/himorime", "./usr/share/bash-completion/completions/himorime", "./usr/share/zsh/vendor-completions/_himorime", "./usr/share/fish/vendor_completions.d/himorime.fish", "./usr/share/doc/himorime/" + thirdPartyLicense} {
 				if !bytes.Contains(out, []byte(want+"\n")) {
 					fail("%s lacks %s", filepath.Base(deb), want)
 				}

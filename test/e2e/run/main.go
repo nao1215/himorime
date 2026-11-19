@@ -40,7 +40,7 @@ func run(args []string) (int, error) {
 	}
 	atago, err := exec.LookPath("atago")
 	if err != nil {
-		return 127, errors.New("atago is not installed: go install github.com/nao1215/atago@v0.25.0")
+		return 127, errors.New("atago is not installed: go install github.com/nao1215/atago@v0.26.1")
 	}
 	bin, err := os.MkdirTemp("", "himorime-e2e-bin-")
 	if err != nil {
@@ -71,7 +71,7 @@ func run(args []string) (int, error) {
 	atagoArgs := []string{"run"}
 	if !hasParallel(args) {
 		// Several scenarios measure CPU time and utilization, which drop when
-		// other scenarios compete for the CPUs. atago v0.25.0 runs four
+		// other scenarios compete for the CPUs. atago (v0.25.0 and later) runs four
 		// scenarios per CPU by default; the suite keeps one per CPU, the
 		// concurrency its thresholds were set under.
 		atagoArgs = append(atagoArgs, "--parallel", strconv.Itoa(runtime.NumCPU()))
