@@ -7,7 +7,7 @@ aliases: ["/commands/", "/exit-codes/"]
 
 Flags may appear before or after paths: `himorime run bench.yaml --format json` and `himorime run --format json bench.yaml` are the same. `--` ends flag parsing. Errors go to standard error; reports go to standard output or to the file named by `--output`.
 
-`--filter`, `--tag` and `--skip-tag` are shared by `list`, `run`, `compare` and `ci`. `--tag` keeps benchmarks with any of the given tags; `--skip-tag` drops benchmarks with any of them and wins over `--tag`; `--filter` is a regular expression on the benchmark name, matched anywhere in it: `--filter 'run 10'` also selects `run 1000`, and `--filter '^run 10$'` selects that one benchmark. A selection that matches nothing exits 3.
+`list`, `run`, `compare` and `ci` share `--filter`, `--tag` and `--skip-tag`. `--tag` keeps benchmarks with any of the tags, and `--skip-tag` drops them and wins over `--tag`. `--filter` is a regular expression matched anywhere in the name, so `--filter 'run 10'` also selects `run 1000`; use `'^run 10$'` for one benchmark. A selection that matches nothing exits 3.
 
 <!-- BEGIN GENERATED: commands -->
 ### init
@@ -28,7 +28,7 @@ Writes a small suite that measures `git --version`, with a JSON Schema comment s
 himorime validate [PATH...]
 ```
 
-Checks YAML syntax, the schema (unknown keys, types, durations, byte sizes, rates, percentages, paths) and semantic rules (baselines, budgets and regression settings that refer to real commands and measured metrics, budget directions, throughput units, variables that exist). No command is executed. Each PATH is a suite file or a directory holding himorime.yaml or *.himorime.yaml files; the default is himorime.yaml.
+Checks YAML syntax, the schema and semantic rules such as references to real commands, budget directions and throughput units, without running anything. Each PATH is a suite file or a directory holding himorime.yaml or *.himorime.yaml files; the default is himorime.yaml.
 
 ### list
 
@@ -74,7 +74,7 @@ Builds the suite's artifact when a build section exists, then measures every sel
 himorime compare --against REF [flags] [PATH...]
 ```
 
-Checks REF out into a temporary Git worktree, builds both REF and the current working tree (uncommitted changes included), and measures them interleaved on this machine. Commands run in ${root} of each revision, so each runs its own code; ${head_root} names the working tree's copy for shared fixtures. Every measured metric is compared in the direction that is worse for it; a metric with `regression.<metric>.gate: false` is reported but never fails. The working tree, index and branches are never modified. Exits 1 on a gated regression or an exceeded budget, and 6 when a requested metric cannot be measured or a required budget cannot be assessed.
+Builds REF in a temporary Git worktree and the current working tree (uncommitted changes included), and measures them interleaved. Commands run in ${root} of each revision; ${head_root} names the working tree's copy for shared fixtures. A metric with `regression.<metric>.gate: false` is reported but never fails. The working tree, index and branches are never modified. Exits 1 on a gated regression or an exceeded budget, and 6 when a requested metric cannot be measured or a required budget cannot be assessed.
 
 | Flag | Description |
 |---|---|
@@ -99,7 +99,7 @@ Checks REF out into a temporary Git worktree, builds both REF and the current wo
 himorime ci [flags] [PATH...]
 ```
 
-Like compare, with CI defaults: no colors, and a Markdown summary appended to $GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $HIMORIME_BASE_REF, else the base commit of the GitHub Actions pull_request, merge_group or push event. pull_request_target is refused. In GitHub Actions, every missed budget, regression and failure is also printed as an annotation. Exits 6 when a requested metric cannot be measured or a required budget cannot be assessed.
+Like compare, with CI defaults: no colors, and a Markdown summary appended to $GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $HIMORIME_BASE_REF, else the base commit of the GitHub Actions pull_request, merge_group or push event. pull_request_target is refused. Problems are also printed as GitHub Actions annotations. Exits 6 when a requested metric cannot be measured or a required budget cannot be assessed.
 
 | Flag | Description |
 |---|---|
@@ -184,7 +184,7 @@ Execution failures take precedence over metric failures, which take precedence o
 
 ## Diagnostic codes
 
-Tool errors printed to standard error carry an `HMR` code identifying the error category and cause. Use the exit status for scripts and the diagnostic code when reporting a problem. Measurement-result lines for success and performance-result exit `1`, including `--fail-on-inconclusive`, have no diagnostic prefix; an auxiliary operation such as writing an annotation can still report a separate error.
+Tool errors on standard error carry an `HMR` code naming the category and cause. Scripts should use the exit status; quote the code when reporting a problem. Success and exit `1` results have no code.
 
 <!-- BEGIN GENERATED: error-codes -->
 | Code | Name | Meaning |

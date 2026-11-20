@@ -47,9 +47,8 @@ $ himorime run examples/cpu-utilization
 
 `scanner` shows a utilization near 100%, `parallel` well above it on a machine with several CPUs, while its latency is lower.
 
-- [CPU utilization](/metrics/#cpu-time-and-utilization) is total CPU time divided by wall-clock time, times 100. One CPU busy for the whole run is 100%; four CPUs busy for the whole run is 400%.
-- A Go, Java or .NET program runs garbage collection and runtime threads next to your code, so even a single-threaded program can exceed 100% slightly.
-- A value far below 100% means the program waited: for I/O, a lock, a child process or a sleep.
-- Utilization has no better direction, so it can carry a budget in either direction but is never judged as a regression.
+- [CPU utilization](/metrics/#cpu-time-and-utilization) is CPU time / wall-clock time × 100, so four busy CPUs show 400%.
+- Garbage collection and runtime threads can push a single-threaded Go, Java or .NET program slightly above 100%. Far below 100% means the program waited.
+- Utilization can carry a budget in either direction but is never judged as a regression.
 
 Example: [`examples/cpu-utilization`](https://github.com/nao1215/himorime/tree/main/examples/cpu-utilization)

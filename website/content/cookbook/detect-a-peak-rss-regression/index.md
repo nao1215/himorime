@@ -50,8 +50,7 @@ $ himorime compare --against main examples/memory-regression
 
 A `peak rss` comparison table in MiB. When the head holds clearly more memory the row says `REGRESSION` and himorime exits 1. The end-to-end suite proves it by switching the word counter's default implementation to one that reads the whole input into memory.
 
-- [Peak RSS](/metrics/#peak-rss) is the largest resident set size of one process in the tree, not a runtime heap or a sum of concurrent processes.
-- `min_difference` filters small changes; budget statistic meanings are in [Configuration](/configuration/#metrics-budgets-and-tolerances).
-- On Unix a peak RSS cannot be measured below a floor of a few MiB, the memory of the process that starts the command. A streaming base at the floor still shows a regression when the head clearly exceeds the floor; see [The floor](/metrics/#the-floor).
+- [Peak RSS](/metrics/#peak-rss) is the largest resident set size of one process in the tree.
+- On Unix peak RSS has a floor of a few MiB. A streaming base at the floor still shows a regression when the head clearly exceeds it; see [The floor](/metrics/#the-floor).
 
 Example: [`examples/memory-regression`](https://github.com/nao1215/himorime/tree/main/examples/memory-regression)

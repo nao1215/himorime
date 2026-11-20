@@ -43,11 +43,9 @@ func Commands() []Command {
 			Name:  "validate",
 			Usage: "himorime validate [PATH...]",
 			Short: "Check suite files without running anything",
-			Long: "Checks YAML syntax, the schema (unknown keys, types, durations, byte sizes, rates, " +
-				"percentages, paths) and semantic rules (baselines, budgets and regression settings that refer " +
-				"to real commands and measured metrics, budget directions, throughput units, variables that " +
-				"exist). No command is executed. Each PATH is a suite file or a directory holding himorime.yaml " +
-				"or *.himorime.yaml files; the default is himorime.yaml.",
+			Long: "Checks YAML syntax, the schema and semantic rules such as references to real commands, " +
+				"budget directions and throughput units, without running anything. Each PATH is a suite file " +
+				"or a directory holding himorime.yaml or *.himorime.yaml files; the default is himorime.yaml.",
 			Flags: func(*flag.FlagSet) any { return nil },
 			run:   runValidate,
 		},
@@ -77,14 +75,12 @@ func Commands() []Command {
 			Name:  "compare",
 			Usage: "himorime compare --against REF [flags] [PATH...]",
 			Short: "Compare a Git revision with the working tree",
-			Long: "Checks REF out into a temporary Git worktree, builds both REF and the current working " +
-				"tree (uncommitted changes included), and measures them interleaved on this machine. Commands " +
-				"run in ${root} of each revision, so each runs its own code; ${head_root} names the working " +
-				"tree's copy for shared fixtures. Every measured metric is compared in the direction that is " +
-				"worse for it; a metric with `regression.<metric>.gate: false` is reported but never fails. The " +
-				"working tree, index and branches are never modified. Exits 1 on a gated regression or an " +
-				"exceeded budget, and 6 when a requested metric cannot be measured or a required budget " +
-				"cannot be assessed.",
+			Long: "Builds REF in a temporary Git worktree and the current working tree (uncommitted " +
+				"changes included), and measures them interleaved. Commands run in ${root} of each revision; " +
+				"${head_root} names the working tree's copy for shared fixtures. A metric with " +
+				"`regression.<metric>.gate: false` is reported but never fails. The working tree, index and " +
+				"branches are never modified. Exits 1 on a gated regression or an exceeded budget, and 6 when " +
+				"a requested metric cannot be measured or a required budget cannot be assessed.",
 			Flags: compareFlags,
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "compare", args) },
 		},
@@ -95,8 +91,7 @@ func Commands() []Command {
 			Long: "Like compare, with CI defaults: no colors, and a Markdown summary appended to " +
 				"$GITHUB_STEP_SUMMARY when it is set. The base revision is --against, else $HIMORIME_BASE_REF, " +
 				"else the base commit of the GitHub Actions pull_request, merge_group or push event. " +
-				"pull_request_target is refused. In GitHub Actions, every missed budget, regression and " +
-				"failure is also printed as an annotation. Exits 6 when a requested metric cannot be measured " +
+				"pull_request_target is refused. Problems are also printed as GitHub Actions annotations. Exits 6 when a requested metric cannot be measured " +
 				"or a required budget cannot be assessed.",
 			Flags: ciFlags,
 			run:   func(ctx context.Context, a *App, args []string) int { return runMeasure(ctx, a, "ci", args) },

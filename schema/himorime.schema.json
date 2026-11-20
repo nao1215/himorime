@@ -66,7 +66,7 @@
           "$ref": "#/definitions/positiveDuration"
         },
         "cwd": {
-          "description": "Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files.",
+          "description": "Working directory: relative to ${root}, the suite directory in the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}.",
           "$ref": "#/definitions/pathTemplate"
         },
         "env": {
@@ -137,7 +137,7 @@
                 "$ref": "#/definitions/relativePath"
               },
               "section": {
-                "description": "Markdown only: replace the section of this name in the existing file, between its himorime:begin and himorime:end comment lines, and keep the rest of the file. Lowercase letters, digits and '-'.",
+                "description": "Markdown only: replace only the text between the himorime:begin and himorime:end lines of this name. Lowercase letters, digits and '-'.",
                 "type": "string",
                 "pattern": "^[a-z0-9][a-z0-9-]*$"
               }
@@ -145,7 +145,7 @@
           }
         },
         "versions": {
-          "description": "Tools whose versions every report records, such as jc: [jc, --version]. Each command runs once in the suite directory before measuring, with a 30s time limit; the first non-empty line it prints is recorded, and a failure fails the run.",
+          "description": "Tools whose versions every report records, such as jc: [jc, --version]. Each runs once before measuring, with a 30s limit; the first non-empty line is recorded, and a failure fails the run.",
           "type": "object",
           "propertyNames": {
             "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
@@ -429,7 +429,7 @@
           "type": "boolean"
         },
         "cwd": {
-          "description": "Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files.",
+          "description": "Working directory: relative to ${root}, the suite directory in the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}.",
           "$ref": "#/definitions/pathTemplate"
         },
         "env": {
@@ -507,19 +507,19 @@
           "maximum": 0.999
         },
         "min_samples": {
-          "description": "Fewest samples per side for a verdict. In a comparison, adaptive runs keep measuring until every compared command has this many; fewer is inconclusive. Default 10.",
+          "description": "Fewest samples per side for a verdict; adaptive comparisons run until every command has this many. Default 10.",
           "type": "integer",
           "minimum": 2,
           "maximum": 100000
         },
         "max_cv": {
-          "description": "Overlapping or touching sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. Completely separated ranges still need the sample count, tolerance and bootstrap confidence checks. 0 disables the noise check. Default 0.5.",
+          "description": "Overlapping sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. 0 disables the check. Default 0.5.",
           "type": "number",
           "minimum": 0,
           "maximum": 10
         },
         "pairing": {
-          "description": "How base and head samples are compared. independent (default) resamples each side separately and compares their statistics. rounds pairs the samples of one round, takes head / base per round and compares the statistic of those ratios, which cancels a slowdown shared by both runs of a round; use it on noisy machines. The change it reports can differ from the ratio of the two side statistics.",
+          "description": "How base and head samples are compared. independent (default) resamples each side separately. rounds compares the per-round ratios head / base, which cancels a slowdown shared by both runs of a round; use it on noisy machines.",
           "enum": [
             "independent",
             "rounds"
@@ -548,19 +548,19 @@
           "maximum": 0.999
         },
         "min_samples": {
-          "description": "Fewest samples per side for a verdict. In a comparison, adaptive runs keep measuring until every compared command has this many; fewer is inconclusive. Default 10.",
+          "description": "Fewest samples per side for a verdict; adaptive comparisons run until every command has this many. Default 10.",
           "type": "integer",
           "minimum": 2,
           "maximum": 100000
         },
         "max_cv": {
-          "description": "Overlapping or touching sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. Completely separated ranges still need the sample count, tolerance and bootstrap confidence checks. 0 disables the noise check. Default 0.5.",
+          "description": "Overlapping sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. 0 disables the check. Default 0.5.",
           "type": "number",
           "minimum": 0,
           "maximum": 10
         },
         "pairing": {
-          "description": "How base and head samples are compared. independent (default) resamples each side separately and compares their statistics. rounds pairs the samples of one round, takes head / base per round and compares the statistic of those ratios, which cancels a slowdown shared by both runs of a round; use it on noisy machines. The change it reports can differ from the ratio of the two side statistics.",
+          "description": "How base and head samples are compared. independent (default) resamples each side separately. rounds compares the per-round ratios head / base, which cancels a slowdown shared by both runs of a round; use it on noisy machines.",
           "enum": [
             "independent",
             "rounds"
@@ -646,7 +646,7 @@
           "$ref": "#/definitions/positiveDuration"
         },
         "cwd": {
-          "description": "Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files.",
+          "description": "Working directory: relative to ${root}, the suite directory in the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}.",
           "$ref": "#/definitions/pathTemplate"
         },
         "env": {
@@ -669,7 +669,7 @@
           "description": "Standard input of every run: a fixture path (reopened for each run), or a mapping with file or content.",
           "oneOf": [
             {
-              "description": "Fixture path: relative to ${root} of the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Use ${head_root} to give every revision the working tree's file.",
+              "description": "Fixture path: relative to ${root}, or starting with ${root}, ${head_root} or ${workdir}. Use ${head_root} to give every revision the working tree's file.",
               "$ref": "#/definitions/pathTemplate"
             },
             {
@@ -692,7 +692,7 @@
           ]
         },
         "terminal": {
-          "description": "Run every command on a pseudo-terminal of 80 columns and 24 rows (Linux and macOS): standard input, output and error are the terminal, stdin is typed into it one key at a time once the command is ready and has read the key before, and what the command writes goes to stdout. The input must end the program. stderr cannot be set.",
+          "description": "Run every command on an 80x24 pseudo-terminal (Linux and macOS) and type stdin into it one key at a time. The input must end the program. stderr cannot be set.",
           "type": "boolean"
         },
         "setup": {
@@ -751,7 +751,7 @@
           "exclusiveMinimum": 0
         },
         "file_size": {
-          "description": "A file whose size in bytes is the work of each run: relative to ${root} of the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Read before every run, outside the measured time.",
+          "description": "A file whose size in bytes is the work of each run: relative to ${root}, or starting with ${root}, ${head_root} or ${workdir}. Read before every run, outside the measured time.",
           "$ref": "#/definitions/pathTemplate"
         },
         "unit": {
@@ -828,11 +828,11 @@
           "$ref": "#/definitions/percent"
         },
         "min_difference": {
-          "description": "The smallest absolute difference that can be a regression or an improvement; smaller differences pass. A duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory. Default: none.",
+          "description": "Smaller absolute differences pass: a duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory. Default: none.",
           "$ref": "#/definitions/duration"
         },
         "gate": {
-          "description": "Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run.",
+          "description": "Whether this metric's verdict decides the exit status (default true). With false it is still compared and reported, marked as not gated, but never fails the run.",
           "type": "boolean"
         },
         "statistic": {
@@ -858,7 +858,7 @@
           "$ref": "#/definitions/duration"
         },
         "gate": {
-          "description": "Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run.",
+          "description": "Whether this metric's verdict decides the exit status (default true). With false it is still compared and reported, marked as not gated, but never fails the run.",
           "type": "boolean"
         },
         "statistic": {
@@ -884,7 +884,7 @@
           "$ref": "#/definitions/bytes"
         },
         "gate": {
-          "description": "Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run.",
+          "description": "Whether this metric's verdict decides the exit status (default true). With false it is still compared and reported, marked as not gated, but never fails the run.",
           "type": "boolean"
         },
         "statistic": {

@@ -61,8 +61,7 @@ $ himorime compare --against main examples/gate-cpu-memory
 
 Three comparison tables. The `latency` row reads `PASS (NOT GATED)`, or `REGRESSION (NOT GATED)` when the program got slower; `cpu total` and `peak rss` decide the exit status.
 
-- `gate: false` keeps a metric measured, compared and reported without letting its verdict fail the run; see [Regression detection](/regression-detection/#what-fails-the-run).
-- The report marks not-gated comparisons in tables, JSON and GitHub Actions; budgets remain enforced as described in [Configuration](/configuration/#metrics-budgets-and-tolerances).
-- The command is given work to do and memory to hold so that both gated metrics are measurable on every platform. Gate on a metric your program moves by more than the resolution of its measurement: see [CPU time](/metrics/#cpu-time-and-utilization) and [The floor](/metrics/#the-floor).
+- `gate: false` reports a verdict without letting it fail the run; budgets are still enforced. See [What fails the run](/regression-detection/#what-fails-the-run).
+- Gate on a metric your program moves by more than its measurement resolution; see [CPU time](/metrics/#cpu-time-and-utilization) and [The floor](/metrics/#the-floor).
 
 Example: [`examples/gate-cpu-memory`](https://github.com/nao1215/himorime/tree/main/examples/gate-cpu-memory)

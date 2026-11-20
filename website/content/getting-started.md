@@ -19,7 +19,7 @@ wrote himorime.yaml
 next: himorime validate himorime.yaml && himorime run himorime.yaml
 ```
 
-`himorime init` writes a small suite that measures `git --version`. The first line points editors at the JSON Schema, so completion and validation work while you type. Replace the command with the program you care about:
+`himorime init` writes a suite that measures `git --version`, with a first line that gives editors the JSON Schema. Replace the command with your program:
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
@@ -34,7 +34,7 @@ benchmarks:
         command: [mytool, --help]
 ```
 
-A command is a list of arguments. It runs without a shell, so it behaves the same on Linux, macOS and Windows. Use a string with `shell: true` only when you need pipes or redirection.
+A command is a list of arguments run without a shell. Use a string with `shell: true` only when you need pipes or redirection.
 
 ## 3. Check it without running anything
 
@@ -43,7 +43,7 @@ $ himorime validate
 himorime.yaml: ok (1 benchmark, 1 command)
 ```
 
-Mistakes are all reported at once, each with its file, line, column, field and, where there is one, a fix. Nothing runs, and the exit status is 2. A typo in `command` looks like this:
+Every mistake is reported at once with its position and field, and the exit status is 2. A typo in `command`:
 
 ```text
 himorime.yaml:10:7: benchmarks[0].commands.mytool.command: command is required
@@ -64,11 +64,11 @@ RELATIVE is the median divided by the baseline command's median, or by the faste
 1 passed · 1 benchmark · seed 5398001677524849 · exit 0
 ```
 
-Without `runs`, himorime measures adaptively: at least 10 runs and 2 seconds per command, at most 100 runs. Progress goes to standard error and the report to standard output, so `himorime run --format json > result.json` stays clean.
+Without `runs`, himorime measures at least 10 runs and 2 seconds per command, at most 100 runs. Progress goes to standard error, so `himorime run --format json > result.json` stays clean.
 
 ## 5. Add budgets
 
-A budget is an upper or lower limit for a chosen statistic of one command. Latency is always measured; switch on the other metrics you care about:
+A budget limits one statistic of one command. Latency is always measured; switch on the others:
 
 ```yaml
 version: "1"
@@ -93,7 +93,7 @@ benchmarks:
 $ himorime run
 ```
 
-The report now has a latency, a CPU, a memory and a budgets table. A missed budget says `FAIL`, and himorime exits 1. To declare throughput, tell himorime how much work one run does; see [Metrics](/metrics/#throughput).
+The report gains CPU, memory and budget tables. A missed budget shows `FAIL` and exits 1. For throughput, declare the work of one run; see [Metrics](/metrics/#throughput).
 
 ## 6. Compare with main
 
@@ -114,7 +114,7 @@ benchmarks:
 $ himorime compare --against main
 ```
 
-himorime checks `main` out into a temporary Git worktree, builds both `main` and your working tree (uncommitted changes included), measures them interleaved on this machine, and exits 1 when a gated regression is statistically confirmed or a budget is exceeded. Your working tree, index and branches are not touched, and the worktree is removed even when you press Ctrl+C.
+himorime builds `main` in a temporary worktree and your working tree (uncommitted changes included), measures them interleaved, and exits 1 on a confirmed regression or an exceeded budget. Your working tree, index and branches are not touched.
 
 ## 7. Run it on pull requests
 

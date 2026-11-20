@@ -45,8 +45,7 @@ $ himorime run examples/startup
 
 A latency table, a budgets table with `PASS` for the median and the 95th percentile, and exit status 0. When a budget is missed its row says `FAIL`, the latency row says `OVER BUDGET`, a note names the budget and the measured value, and himorime exits 1.
 
-- Use the budget syntax in [Configuration](/configuration/#metrics-budgets-and-tolerances); percentiles belong under `latency`.
-- A command this short mostly measures process creation, so use a representative workload for algorithmic regressions; see [Regression detection](/regression-detection/#noise-and-inconclusive-results).
-- A budget does not need a base revision, so the same file works in `himorime run` on a laptop and in CI.
+- See the [budget syntax](/configuration/#metrics-budgets-and-tolerances); percentiles belong under `latency`.
+- A command this short mostly measures process creation; see [noise](/regression-detection/#noise-and-inconclusive-results). A budget needs no base revision.
 
 Example: [`examples/startup`](https://github.com/nao1215/himorime/tree/main/examples/startup)

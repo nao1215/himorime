@@ -47,9 +47,8 @@ $ himorime compare --against main examples/script-compare
 
 One `count records` row. A slower `work.sh` in the working tree is a `REGRESSION`; an unchanged one passes.
 
-- Commands and hooks run in `${root}` of each revision, and relative paths such as `work.sh` resolve there, so the base worktree runs the base's script. A command that ran from the working tree in both revisions would compare your changes with themselves.
-- `${head_root}` is the suite directory in the working tree for both revisions. Use it for a fixture both must read, as `stdin` does here, or for a tool you do not want compared.
-- A relative path the base revision does not have, such as a fixture added in this change, fails the base with a hint to use `${head_root}`.
+- Relative paths such as `work.sh` resolve in `${root}` of each revision, so the base worktree runs the base's script.
+- `${head_root}` is the working tree's suite directory for both revisions. Use it for a shared fixture, as `stdin` does here. A relative path the base does not have fails with a hint to use it.
 - The script needs `sh`; on Windows, point `command` at an interpreter that exists there.
 
 Example: [`examples/script-compare`](https://github.com/nao1215/himorime/tree/main/examples/script-compare)
