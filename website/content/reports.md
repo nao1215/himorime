@@ -29,7 +29,7 @@ df large / jc       Latency (median)  41.08ms (2.89x vs baseline)       PASS    
 2 passed · 1 benchmark · seed 42 · exit 0
 ```
 
-Latency ratios use the configured baseline, or the fastest command when no baseline is set. The compact view shows median latency, throughput, total CPU time and peak RSS; budget rows name their own statistic. [Metrics](/metrics/) explains their scope and measurement bounds.
+Ratios are against the configured baseline, or the fastest command. Rows show median latency, throughput, CPU time and peak RSS; budget rows name their own statistic.
 
 A comparison shows base → head and the relative change:
 
@@ -38,20 +38,18 @@ TARGET         METRIC                                     VALUE  RESULT      REA
 encode / tool  Latency (median)  8.10ms → 9.43ms (+16.4%)          REGRESSION  -
 ```
 
-`REGRESSION` means the bootstrap probability of exceeding the tolerance meets the configured confidence. `INCONCLUSIVE` means the samples cannot separate the change from noise. [Regression detection](/regression-detection/) describes the test and gating rules.
-
-For suites with several benchmarks, the comparison summary includes a geometric mean of ratios. It is useful as an overall direction, while each benchmark still keeps its own verdict.
+`INCONCLUSIVE` means the samples cannot separate the change from noise; see [Regression detection](/regression-detection/). With several benchmarks, the summary adds a geometric mean of the ratios as an overall direction.
 
 ## JSON
 
-JSON is the lossless report format. It includes metadata, tool versions, raw samples, statistics, budgets, comparisons and the final exit code. The published [JSON Schema](/schema/report.schema.json) defines the fields and units.
+JSON is the lossless format: metadata, tool versions, raw samples, statistics, budgets, comparisons and the exit code, defined by the [JSON Schema](/schema/report.schema.json).
 
 ```console
 $ himorime run --format json --output result.json
 $ jq '.suites[].benchmarks[].commands[] | {name, median_ns: .head.metrics.latency.stats.median}' result.json
 ```
 
-Values use canonical units: nanoseconds for durations, bytes for memory, and numeric rates and percentages. The `samples` arrays contain the observations used for statistics and comparison.
+Durations are in nanoseconds and memory in bytes. The `samples` arrays hold the raw observations.
 
 ### Reuse a saved report
 
@@ -62,13 +60,11 @@ $ himorime report result.json
 $ himorime report result.json --format markdown --output result.md
 ```
 
-The command validates the current report schema and renders the stored samples, units, bounds, verdicts, reasons and summary. It preserves the saved verdict and displayed measurement exit code; it does not recompute statistics or apply current suite defaults. Reports from an older or unknown schema version are rejected explicitly.
+It keeps the saved verdicts and exit code and does not recompute statistics. Reports with an older or unknown schema version are rejected.
 
 ## CSV
 
-`--format csv` writes one row per statistic, budget or comparison, with columns for command identity and metric details. Empty cells mean that the field does not apply to that row. This long layout can represent latency, throughput, CPU and memory in one file.
-
-`--format samples-csv` writes one row per raw observation. Use `run` to join metrics from the same run and `side` to distinguish base and head samples.
+`--format csv` writes one row per statistic, budget or comparison; empty cells do not apply to that row. `--format samples-csv` writes one row per raw observation, with `run` and `side` (base or head) columns.
 
 ```console
 $ himorime compare --against main --format samples-csv --output samples.csv
@@ -76,13 +72,9 @@ $ himorime compare --against main --format samples-csv --output samples.csv
 
 ## Markdown and GitHub Actions
 
-Markdown includes detailed result tables suitable for a checked-in page. The `github` format starts with a compact result table; statistics, decision rules, collection methods and environment are available in expandable sections.
+`markdown` writes detailed tables for a checked-in page. `github` starts with a compact table and puts statistics, decision rules and the environment in expandable sections. In GitHub Actions it is also written to the log on standard error, and `himorime ci` appends it to `$GITHUB_STEP_SUMMARY`.
 
-In GitHub Actions, this summary is also written to the log on standard error, including when JSON is written to standard output or a file. `himorime ci` appends it to `$GITHUB_STEP_SUMMARY` when available. Annotations and [exit statuses](/reference/#exit-codes) are unchanged.
-
-setup-himorime automatically posts a notification from the saved JSON report on same-repository pull requests. See [GitHub Actions](/github-actions/#a-pull-request-comment) for the required path and job permissions; no local comment command or separate workflow is needed.
-
-PR comments contain only the overall status, problem rows and a full-report link; passing and improved results are omitted. Errors appear before regressions, budget violations and inconclusive measurements. Comments show at most ten problems; the link leads to the benchmark run. The action's post step logs all saved results as tables, including with older himorime releases. The measurement step keeps its existing Job Summary, and raw samples remain in the JSON artifact.
+On same-repository pull requests, setup-himorime posts a comment from the saved JSON report; see [GitHub Actions](/github-actions/#a-pull-request-comment). It lists at most ten problems, errors first, then regressions, budget violations and inconclusive results, and links to the run. Passing results are left out.
 
 ## Update part of a page
 
@@ -100,4 +92,4 @@ old report
 $ himorime run --format markdown --output docs/benchmarks.md --section speed
 ```
 
-The section name uses lowercase letters, digits and hyphens. Each marker is a line of its own, indented by at most three spaces; markers inside a code block or indented as code are examples and are ignored. The same fields are available in `report.outputs` so a normal run can update the page.
+Section names use lowercase letters, digits and hyphens. Each marker is a line of its own, indented by at most three spaces; markers in code blocks are ignored. `report.outputs` accepts the same `section` field.

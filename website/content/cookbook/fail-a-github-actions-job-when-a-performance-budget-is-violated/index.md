@@ -64,68 +64,9 @@ benchmarks:
         min_difference: 4MiB
 ```
 
-The workflow:
-
-<!-- example: examples/github-actions/benchmark.yml -->
-```yaml
-# Copy this file to .github/workflows/benchmark.yml.
-# Recipe: fail a GitHub Actions job when a performance budget is violated.
-# https://nao1215.github.io/himorime/cookbook/#fail-a-github-actions-job-when-a-performance-budget-is-violated
-name: Benchmark
-
-on:
-  pull_request:
-
-# Fork PRs run with read-only permissions and receive no comment.
-permissions:
-  contents: read
-
-jobs:
-  benchmark:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The base commit must exist locally for the temporary worktree.
-          fetch-depth: 0
-          persist-credentials: false
-      # Go builds the suite's program; drop it if your suite needs no Go.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: stable
-      # Installs a prebuilt, checksum-verified himorime release.
-      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
-      # Compares the pull request base and head, writes a job summary and
-      # annotations, and saves JSON for setup-himorime's automatic comment.
-      - run: himorime ci --format json --output "$RUNNER_TEMP/himorime.json"
-      # Keep raw samples available from the run page.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: himorime-report
-          path: ${{ runner.temp }}/himorime.json
-          retention-days: 7
-```
-
-```console
-$ himorime run examples/github-actions
-```
-
-Locally, `himorime run` checks the same budgets without a base revision. In the workflow, `himorime ci` compares with the pull request's base, writes the tables to the job summary, adds an annotation for every missed budget or regression, and exits:
-
-| Exit | The job failed because |
-|---|---|
-| `1` | a budget was missed or a regression was confirmed: the code got slower, hungrier or less productive |
-| `4` | a command, hook, build or Git operation failed: the measurement did not complete |
-| `6` | a requested metric could not be measured or a required budget could not be assessed |
-
-The last line of the log says the same in words, and annotations are titled `performance budget exceeded`, `performance regression`, `benchmark could not run`, `metric could not be measured` or `required budget could not be assessed`.
+Copy the workflow from [GitHub Actions](/github-actions/#a-workflow). `himorime ci` compares with the pull request's base, writes the job summary, annotates every missed budget or regression, and exits 1 for a performance failure, 4 when the measurement did not complete, and 6 when a metric or required budget could not be assessed; see [Why did the job fail?](/github-actions/#why-did-the-job-fail).
 
 - The workflow is `pull_request` with `contents: read` and no secrets. himorime refuses `pull_request_target`.
-- Check out with `fetch-depth: 0` so the base commit exists locally.
-- The same suite file runs unchanged on a laptop and in CI; only the command differs.
+- Check out with `fetch-depth: 0` so the base commit exists locally. Locally, `himorime run` checks the same budgets.
 
 Example: [`examples/github-actions`](https://github.com/nao1215/himorime/tree/main/examples/github-actions)

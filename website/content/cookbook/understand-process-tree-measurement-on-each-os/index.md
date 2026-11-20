@@ -47,8 +47,7 @@ $ himorime run examples/process-tree
 | Peak RSS | the largest peak of the process or any descendant its parents waited for | the peak working set of the started process, reported only when it started no child processes |
 | Not included | a descendant still running when the command exits, or orphaned before it exits | a child started in the microseconds before the process joined the job |
 
-- Neither platform adds up processes that ran at the same time: peak RSS is the largest single process.
-- Collection happens after the measured interval and uses the operating system's high-water marks; see [Metrics](/metrics/#overhead).
-- `shell: true` adds the shell process to the tree: its start-up time, CPU time and memory count too.
+- Peak RSS is the largest single process, never a sum; collection happens after the measured interval ([overhead](/metrics/#overhead)).
+- `shell: true` adds the shell to the tree, with its start-up time, CPU time and memory.
 
 Example: [`examples/process-tree`](https://github.com/nao1215/himorime/tree/main/examples/process-tree)

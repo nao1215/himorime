@@ -14,13 +14,11 @@ Put this comment on the first line for completion and validation in editors that
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
 ```
 
-himorime embeds the same schema and validates it before running a suite.
-
-himorime v0.4.0 keeps `version: "1"` but changes the layout and removes the old spellings. See [GitHub Actions](/github-actions/) before copying it into a workflow.
-
-For a runnable first suite, use [Getting started](/getting-started/). The [Cookbook](/cookbook/) has examples for budgets, regression checks, fixtures and CI.
+himorime validates every suite against the same embedded schema. For a first suite, see [Getting started](/getting-started/); the [Cookbook](/cookbook/) has worked examples.
 
 ## Migrating from the previous layout
+
+himorime v0.4.0 keeps `version: "1"` but changed the layout and removed the old spellings:
 
 | Previous field | Version 1 field now used |
 |---|---|
@@ -36,7 +34,7 @@ For a runnable first suite, use [Getting started](/getting-started/). The [Cookb
 
 ## Commands
 
-Use a list to run a program directly: `command: [jq, -c, ., input.json]`. Use a string only with `shell: true` when shell syntax is required. Variables in shell strings are quoted by himorime and must not be quoted again. On Windows, substituted values cannot contain quotes, percent signs, line breaks or trailing backslashes. Shell startup is part of the measured time.
+A list runs a program directly: `command: [jq, -c, ., input.json]`. Use a string with `shell: true` only when you need shell syntax; himorime quotes variables in it, so do not quote them again. On Windows, substituted values cannot contain quotes, percent signs, line breaks or trailing backslashes. Shell startup counts toward the measured time.
 
 ## Runs
 
@@ -55,9 +53,7 @@ metrics:
   unsupported: fail        # or skip
 ```
 
-`cpu`, `memory` and `unsupported` may be defaults or benchmark overrides. Throughput belongs to one benchmark because it needs that benchmark's work value or input file.
-
-A budget is an absolute limit for one command, metric and aggregation. Available aggregations are `min`, `max`, `mean`, `median` and percentiles from `p1` to `p99.9`.
+`cpu`, `memory` and `unsupported` can be set in `defaults` or per benchmark; throughput only per benchmark. A budget limits one command, metric and aggregation: `min`, `max`, `mean`, `median` or a percentile from `p1` to `p99.9`.
 
 ```yaml
 commands:
@@ -72,7 +68,7 @@ commands:
 
 Latency, CPU time and peak RSS use upper bounds; throughput uses lower bounds. A budget for an unmeasured metric is invalid.
 
-`regression` configures latency, total CPU time and peak RSS comparisons. Throughput comparisons are derived from latency; use a throughput budget for an absolute rate limit.
+`regression` configures the latency, CPU time and peak RSS comparisons. Throughput comparisons are derived from latency.
 
 ```yaml
 regression:
@@ -90,11 +86,11 @@ regression:
 - `prepare_each` runs outside the measured time before every warmup and measured run.
 - `cleanup` runs after the benchmark, including after failure or interruption.
 
-Background processes are stopped when their command or hook exits, so hooks cannot host a resident service. A failed hook fails the benchmark or prepared command; its standard-error tail is included in the report.
+Background processes stop when their hook exits, so a hook cannot keep a service running. A failed hook fails the benchmark or command, and the report shows its standard-error tail.
 
 ## Reports
 
-`report.outputs` writes reports after every run. Paths are relative to the suite file. A Markdown output with `section` updates matching `himorime:begin` and `himorime:end` markers instead of replacing the file. `report.versions` records the first non-empty output line from each version command.
+`report.outputs` writes reports after every run, relative to the suite file. A Markdown output with `section` replaces only the text between matching `himorime:begin` and `himorime:end` markers. `report.versions` records the first non-empty line each version command prints.
 
 ```yaml
 report:
@@ -109,15 +105,15 @@ report:
     jo: [jo, -v]
 ```
 
-Version commands run once before the build, without a shell, with `LC_ALL=C` and a 30-second timeout. A failed command fails the suite. See [Reports](/reports/) for formats and section updates.
+Version commands run once before the build, without a shell, with `LC_ALL=C` and a 30-second timeout; a failure fails the suite. See [Reports](/reports/).
 
 ## Standard input and output
 
-`stdin` is a fixture path (`stdin: testdata/input.txt`), `stdin: {file: ...}`, or inline text (`stdin: {content: "..."}`). The file is reopened for every run, so every run reads it from the first byte.
+`stdin` is a fixture path (`stdin: testdata/input.txt`), `stdin: {file: ...}`, or inline text (`stdin: {content: "..."}`). Every run reads the file from the first byte.
 
-A command's standard output and standard error are discarded by default and never mixed with himorime's own report. Set `stdout` or `stderr` to a path inside `${workdir}` to keep the latest run's output. When a run fails, the last lines of its standard error are shown in the report either way, with secrets masked.
+Standard output and standard error are discarded by default. Set `stdout` or `stderr` to a path inside `${workdir}` to keep the latest run's output. When a run fails, the report shows the last lines of its standard error, with secrets masked.
 
-Set `terminal: true` for an interactive shell, line editor or TUI. On Linux and macOS, himorime runs the command on an 80 by 24 pseudo-terminal and types `stdin` one key at a time:
+Set `terminal: true` for an interactive shell or TUI. On Linux and macOS, himorime runs it on an 80 by 24 pseudo-terminal and types `stdin` one key at a time:
 
 ```yaml
 - name: shell completion
@@ -128,7 +124,7 @@ Set `terminal: true` for an interactive shell, line editor or TUI. On Linux and 
       command: ["${artifact}", "${workdir}/users.csv"]
 ```
 
-The input must end the program, for example with `.exit`, `q` or Ctrl-D (`\u0004`); otherwise `timeout` stops it. Key waits count toward latency. Terminal input and output are outside the measured process tree, and `stderr` cannot be captured separately.
+The input must end the program, for example with `.exit`, `q` or Ctrl-D (`\u0004`), or `timeout` stops it. Key waits count toward latency, and `stderr` cannot be captured separately.
 
 ## Variables
 
@@ -150,7 +146,7 @@ An unknown variable is a validation error. `${artifact}` without a build and `${
 
 ## Paths
 
-Every relative path of a suite is relative to `${root}`, the directory holding the suite file inside the tree being measured. In a plain run that is the directory of the suite file. In a comparison it is that directory in the base revision's temporary worktree for the base, and in your working tree for the head, so each revision runs its own code:
+Relative paths resolve against `${root}`, the suite file's directory in the tree being measured. In a comparison that is the base worktree for the base and your working tree for the head, so each revision runs its own code:
 
 | Setting | Relative to | Default |
 |---|---|---|
@@ -163,7 +159,7 @@ Every relative path of a suite is relative to `${root}`, the directory holding t
 | `report.outputs[].path` | the suite file in the working tree | |
 | a relative program of `report.versions` | the directory of the suite file in the working tree | |
 
-`${head_root}` names the working tree for both revisions. Use it when both revisions must read the same fixture:
+`${head_root}` is the working tree for both revisions. Use it for a fixture both must read:
 
 ```yaml
 benchmarks:
@@ -174,11 +170,11 @@ benchmarks:
         command: [sh, parse.sh]                # each revision's own parse.sh
 ```
 
-Absolute paths and `~` are rejected. Relative paths and resolved symbolic links must stay inside the repository, the base worktree or `${workdir}`. Output and report paths cannot climb above their base directory. A suite that does not exist in the base revision is measured only in the working tree; see [Regression detection](/regression-detection/).
+Absolute paths and `~` are rejected. Relative paths and resolved symbolic links must stay inside the repository, the base worktree or `${workdir}`, and output paths cannot climb above their base directory.
 
 ## Environment
 
-Commands and hooks inherit himorime's environment. `env` from `defaults`, the benchmark and the command or hook is applied in that order. Reports omit the environment and show command lines before `${env:NAME}` substitution.
+Commands and hooks inherit himorime's environment, then `env` from `defaults`, the benchmark and the command or hook, in that order. Reports omit the environment and show command lines before `${env:NAME}` substitution.
 
 ## Defaults
 
@@ -221,9 +217,9 @@ Every value is typed; himorime never compares a formatted string.
 | Rate | a number, the work unit and `/s`, such as `50MiB/s` or `"1000 records/s"` | throughput budgets |
 | Percentage | a number (`10`) or a string with a percent sign (`"10%"`) | `max_percent`, CPU utilization budgets |
 
-A bare number is rejected where a unit is expected, because `10` could mean ten of anything. Units are case-sensitive: `64mib` is an error. Durations may not exceed `24h`; a budget's limit and a work value must be greater than zero.
+A bare number is rejected where a unit is expected. Units are case-sensitive (`64mib` is an error), durations may not exceed `24h`, and budget limits and work values must be greater than zero.
 
-A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or `">= 50MiB/s"`. Quote it: YAML reads a leading `<` fine, but a leading `>` starts a folded block.
+A budget is an operator and a value, such as `"< 20ms"`, `"<= 64MiB"` or `">= 50MiB/s"`. Quote it, because a leading `>` starts a YAML folded block.
 
 ## Validation
 
@@ -233,7 +229,7 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 2. The schema: unknown keys, types, required keys, durations, budgets, percentages, names and path shapes. Every problem is listed at once.
 3. Semantic rules, including unique names, valid references, run bounds, variable availability, metric directions and throughput units.
 
-`himorime compare` and `himorime ci` additionally refuse a benchmark whose `runs`, `max_runs` or `--runs` is below `regression.min_samples`, because such a comparison could never be conclusive; adaptive runs of a comparison continue until `min_samples`.
+`himorime compare` and `himorime ci` also refuse a benchmark whose `runs`, `max_runs` or `--runs` is below `regression.min_samples`, since it could never be conclusive.
 
 ## Field reference
 
@@ -260,7 +256,7 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | `max_runs` |  | Adaptive runs: the most runs per command. Default 100. |
 | `min_time` |  | Adaptive runs: keep measuring until each command has run for at least this long in total. Default 2s. |
 | `timeout` |  | Per-run time limit. A run that exceeds it is stopped with its whole process tree and fails the benchmark. Default 1m. |
-| `cwd` |  | Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files. |
+| `cwd` |  | Working directory: relative to ${root}, the suite directory in the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}. |
 | `env` |  | Environment variables added to the inherited environment. Values may use variables. |
 | `stdout` |  | "discard" (default), or a path inside ${workdir} that receives the standard output of the latest run. |
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
@@ -291,13 +287,13 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | `max_runs` |  | Adaptive runs: the most runs per command. Default 100. |
 | `min_time` |  | Adaptive runs: keep measuring until each command has run for at least this long in total. Default 2s. |
 | `timeout` |  | Per-run time limit. A run that exceeds it is stopped with its whole process tree and fails the benchmark. Default 1m. |
-| `cwd` |  | Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files. |
+| `cwd` |  | Working directory: relative to ${root}, the suite directory in the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}. |
 | `env` |  | Environment variables added to the inherited environment. Values may use variables. |
 | `stdout` |  | "discard" (default), or a path inside ${workdir} that receives the standard output of the latest run. |
 | `stderr` |  | "discard" (default), or a path inside ${workdir} that receives the standard error of the latest run. A failing run's stderr tail is reported either way. |
 | `exit_codes` |  | Exit statuses that count as success. Default [0]. |
 | `stdin` |  | Standard input of every run: a fixture path (reopened for each run), or a mapping with file or content. |
-| `terminal` |  | Run every command on a pseudo-terminal of 80 columns and 24 rows (Linux and macOS): standard input, output and error are the terminal, stdin is typed into it one key at a time once the command is ready and has read the key before, and what the command writes goes to stdout. The input must end the program. stderr cannot be set. |
+| `terminal` |  | Run every command on an 80x24 pseudo-terminal (Linux and macOS) and type stdin into it one key at a time. The input must end the program. stderr cannot be set. |
 | `setup` |  | Processes run once per benchmark (per revision in a comparison) before any warmup. A failure fails the benchmark. |
 | `prepare_each` |  | Processes run before every warmup and measured run, outside the measured time. |
 | `cleanup` |  | Processes run after the benchmark whether it passed, failed or was interrupted. |
@@ -312,7 +308,7 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 |---|---|---|
 | `command` | yes | The command: a list of arguments (no shell), or a string when shell is true. |
 | `shell` |  | Run the command string through /bin/sh -c (cmd.exe /d /s /c on Windows). Variables substituted into the string are quoted for that shell. |
-| `cwd` |  | Working directory: relative to ${root} (the suite directory in the revision being measured), or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}, so each revision runs its own files. |
+| `cwd` |  | Working directory: relative to ${root}, the suite directory in the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Default: ${root}. |
 | `env` |  | Environment variables added to the inherited environment. Values may use variables. |
 | `timeout` |  | Per-run time limit. A run that exceeds it is stopped with its whole process tree and fails the benchmark. Default 1m. |
 | `stdout` |  | "discard" (default), or a path inside ${workdir} that receives the standard output of the latest run. |
@@ -346,7 +342,7 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | Key | Required | Description |
 |---|---|---|
 | `value` |  | A fixed amount of work per run, greater than zero, such as 100000. |
-| `file_size` |  | A file whose size in bytes is the work of each run: relative to ${root} of the revision being measured, or starting with ${root}, ${head_root} or ${workdir}. Read before every run, outside the measured time. |
+| `file_size` |  | A file whose size in bytes is the work of each run: relative to ${root}, or starting with ${root}, ${head_root} or ${workdir}. Read before every run, outside the measured time. |
 | `unit` |  | The unit of work, such as records, lines or bytes. Default: operations for value, bytes for file_size. |
 
 ### regression
@@ -354,9 +350,9 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | Key | Required | Description |
 |---|---|---|
 | `confidence` |  | Bootstrap probability required to call a regression, an improvement or a pass. Default 0.95. |
-| `min_samples` |  | Fewest samples per side for a verdict. In a comparison, adaptive runs keep measuring until every compared command has this many; fewer is inconclusive. Default 10. |
-| `max_cv` |  | Overlapping or touching sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. Completely separated ranges still need the sample count, tolerance and bootstrap confidence checks. 0 disables the noise check. Default 0.5. |
-| `pairing` |  | How base and head samples are compared. independent (default) resamples each side separately and compares their statistics. rounds pairs the samples of one round, takes head / base per round and compares the statistic of those ratios, which cancels a slowdown shared by both runs of a round; use it on noisy machines. The change it reports can differ from the ratio of the two side statistics. |
+| `min_samples` |  | Fewest samples per side for a verdict; adaptive comparisons run until every command has this many. Default 10. |
+| `max_cv` |  | Overlapping sample ranges are inconclusive when either side exceeds this dispersion: IQR / 1.349 / median, or standard deviation / mean for the mean. 0 disables the check. Default 0.5. |
+| `pairing` |  | How base and head samples are compared. independent (default) resamples each side separately. rounds compares the per-round ratios head / base, which cancels a slowdown shared by both runs of a round; use it on noisy machines. |
 | `commands` |  | Compare only these commands. Default: every command. |
 | `latency` |  | How latency (wall-clock time; lower is better) is compared. |
 | `cpu_total` |  | How total CPU time (lower is better) is compared. |
@@ -367,8 +363,8 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | Key | Required | Description |
 |---|---|---|
 | `max_percent` |  | Tolerated degradation in percent: a number such as 10, or a string such as "10%". Default 10. |
-| `min_difference` |  | The smallest absolute difference that can be a regression or an improvement; smaller differences pass. A duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory. Default: none. |
-| `gate` |  | Whether this metric's verdict decides the result and the exit status (default true). With false the metric is still compared and reported, marked as not gated, but a regression or an inconclusive result never fails the run. |
+| `min_difference` |  | Smaller absolute differences pass: a duration such as 1ms for latency and cpu, a byte size such as 1MiB for memory. Default: none. |
+| `gate` |  | Whether this metric's verdict decides the exit status (default true). With false it is still compared and reported, marked as not gated, but never fails the run. |
 | `statistic` |  | Statistic compared: median (default) or mean. |
 
 ### report
@@ -376,7 +372,7 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 | Key | Required | Description |
 |---|---|---|
 | `outputs` |  | Report files. |
-| `versions` |  | Tools whose versions every report records, such as jc: [jc, --version]. Each command runs once in the suite directory before measuring, with a 30s time limit; the first non-empty line it prints is recorded, and a failure fails the run. |
+| `versions` |  | Tools whose versions every report records, such as jc: [jc, --version]. Each runs once before measuring, with a 30s limit; the first non-empty line is recorded, and a failure fails the run. |
 
 ### report.outputs[]
 
@@ -384,6 +380,6 @@ A budget is an operator followed by a value, such as `"< 20ms"`, `"<= 64MiB"` or
 |---|---|---|
 | `format` | yes | Report format. |
 | `path` | yes | Relative path of the file. |
-| `section` |  | Markdown only: replace the section of this name in the existing file, between its himorime:begin and himorime:end comment lines, and keep the rest of the file. Lowercase letters, digits and '-'. |
+| `section` |  | Markdown only: replace only the text between the himorime:begin and himorime:end lines of this name. Lowercase letters, digits and '-'. |
 
 <!-- END GENERATED: config-reference -->

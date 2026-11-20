@@ -4,7 +4,7 @@ description: Install himorime with go install, Homebrew, the AUR, GitHub Release
 toc: true
 ---
 
-himorime is a single binary with no runtime dependencies. `git` is needed for `himorime compare` and `himorime ci`; `himorime run` uses it only to record the commit in the report, and works without it.
+himorime is a single binary. `himorime compare` and `himorime ci` need `git`; `himorime run` works without it.
 
 ## go install
 
@@ -54,7 +54,7 @@ $ tar -xzf "himorime_${VERSION}_linux_amd64.tar.gz" himorime
 $ ./himorime version
 ```
 
-Windows archives are `.zip` files and contain `himorime.exe`. The archives also hold completion scripts under `completions/`; the Linux packages install them into the standard bash, zsh and fish locations.
+Windows archives are `.zip` files with `himorime.exe`. Archives hold completion scripts under `completions/`, and the Linux packages install them.
 
 ## Shell completion
 
@@ -68,7 +68,7 @@ In PowerShell, add `himorime completion powershell | Out-String | Invoke-Express
 
 ## Verify a release
 
-Every release is built by GoReleaser in GitHub Actions from the tag. `checksums.txt` lists the SHA-256 of every archive and package. It is signed with [cosign](https://github.com/sigstore/cosign) keyless signing, so the signature proves it was produced by the release workflow of this repository.
+GoReleaser builds every release in GitHub Actions from the tag. `checksums.txt` lists the SHA-256 of every file and is signed with [cosign](https://github.com/sigstore/cosign) keyless signing by this repository's release workflow.
 
 1. Check the file you downloaded against the checksums:
 
@@ -94,7 +94,7 @@ Every release is built by GoReleaser in GitHub Actions from the tag. `checksums.
    $ gh attestation verify "himorime_${VERSION}_linux_amd64.tar.gz" --repo nao1215/himorime
    ```
 
-   Releases after v0.5.1 also attach the SLSA provenance to the release as `multiple.intoto.jsonl`, so a downloaded archive can be checked against that file with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier):
+   Releases after v0.5.1 also attach the provenance as `multiple.intoto.jsonl`, for [slsa-verifier](https://github.com/slsa-framework/slsa-verifier):
 
    ```console
    $ curl -fsSLO "https://github.com/nao1215/himorime/releases/download/v${VERSION}/multiple.intoto.jsonl"

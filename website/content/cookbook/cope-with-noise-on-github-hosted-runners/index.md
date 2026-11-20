@@ -64,10 +64,7 @@ $ himorime compare --against main examples/noisy
 
 `bimodal` is `INCONCLUSIVE` with the reason `measurements are noisier than max_cv`; `steady` passes. himorime exits 0. With `--fail-on-inconclusive` the same run exits 1.
 
-- `INCONCLUSIVE` means the comparison cannot tell; its exit behavior and causes are in [Regression detection](/regression-detection/#the-verdict).
-- Interleaved rounds expose both revisions to the same noise; [noise guidance](/regression-detection/#noise-and-inconclusive-results) covers samples and warmups.
-- `min_difference` and `max_percent` are the absolute and relative thresholds described in [Regression detection](/regression-detection/#minimum-meaningful-change).
-- Prefer an absolute budget with a wide margin for hard limits, and a relative comparison for trends. CPU time and peak RSS are usually steadier than latency on a shared runner.
-- A single-digit percentage change of a millisecond command is below what a shared runner can resolve. Measure a representative workload instead.
+- See [the verdict](/regression-detection/#the-verdict), [noise guidance](/regression-detection/#noise-and-inconclusive-results) and [minimum meaningful change](/regression-detection/#minimum-meaningful-change).
+- Use a budget with a wide margin for hard limits and a comparison for trends. CPU time and peak RSS are usually steadier than latency on a shared runner.
 
 Example: [`examples/noisy`](https://github.com/nao1215/himorime/tree/main/examples/noisy)

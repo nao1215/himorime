@@ -2,7 +2,7 @@
 description: himorime measures the latency, throughput, CPU time and peak RSS of a command-line program from a YAML suite kept in your repository, checks budgets and fails CI when a change makes it worse.
 ---
 
-himorime measures how fast and how lean a command-line program is. You keep the benchmarks, budgets and tolerances in a `himorime.yaml` next to your code. The same file and the same command run on a laptop and in GitHub Actions, and the exit status tells CI whether performance got worse.
+himorime measures how fast and how lean a command-line program is. Benchmarks, budgets and tolerances live in a `himorime.yaml` next to your code, and the same command runs on a laptop and in GitHub Actions. The exit status tells CI whether performance got worse.
 
 ```console
 $ himorime compare --against main
@@ -43,10 +43,6 @@ Each metric can have absolute budgets (`p95 <= 100ms`, `>= 50MiB/s`, `<= 64MiB`)
 | compare performance tools | [Comparison](/comparison/) |
 | fix a problem | [Troubleshooting](/troubleshooting/) |
 
-## What himorime measures, and what it does not
+## What it does not do
 
-himorime runs the command exactly as you wrote it, measures the whole process from start to reaping, and reads CPU time and peak memory from the operating system when it exits. It does not profile, it does not see inside a language runtime, and it cannot remove the noise of a shared CI runner. To limit the effect of noise, revisions run interleaved, a regression needs statistical confidence, and a result that cannot be told apart from noise is reported as inconclusive. Treat the results as evidence for a pull-request decision. See [Regression detection](/regression-detection/) and [Metrics](/metrics/).
-
-himorime checks performance. To check that a CLI *behaves* correctly, including exit codes, output and files, use [atago](https://github.com/nao1215/atago).
-
-See [Comparison](/comparison/) for when to choose himorime, hyperfine, benchstat, Bencher or CodSpeed. himorime keeps no server or result database; it compares two revisions in the same job.
+himorime measures whole processes and reads CPU time and peak memory from the operating system. It does not profile or look inside a language runtime, and it keeps no server or result database. It cannot remove a shared runner's noise, so revisions run interleaved and a change it cannot separate from noise is reported as inconclusive. To test that a CLI behaves correctly, use [atago](https://github.com/nao1215/atago).

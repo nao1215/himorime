@@ -63,8 +63,7 @@ $ himorime compare --against main examples/git-compare
 
 One comparison table per metric: `latency`, `throughput`, `cpu total` and `peak rss`. The tolerance column shows the direction that counts as worse: `+10%` for latency, `-10%` for throughput. The log says whether uncommitted changes were included.
 
-- The base is checked out into a temporary Git worktree and built there. Your working tree, index and branches are never modified, and the worktree is removed on success, failure and Ctrl+C.
-- Both builds are measured on this machine in interleaved rounds, so every metric sees the same noise; [Regression detection](/regression-detection/#measuring) describes the comparison.
-- A regression needs a change beyond the tolerance and bootstrap confidence; use `--format json` to keep raw samples.
+- The base is built in a temporary worktree, removed on success, failure and Ctrl+C. Your working tree, index and branches are never modified.
+- Both builds run in interleaved rounds; see [Regression detection](/regression-detection/#measuring). Use `--format json` to keep raw samples.
 
 Example: [`examples/git-compare`](https://github.com/nao1215/himorime/tree/main/examples/git-compare)

@@ -56,8 +56,7 @@ $ himorime compare --against main examples/cpu-regression
 
 Two comparison tables, `latency` and `cpu total`, each with `BASE`, `HEAD`, `DIFF`, `CHANGE`, `CONFIDENCE`, `TOLERANCE` and `RESULT`. When the head uses clearly more CPU time the `cpu total` row says `REGRESSION` and himorime exits 1. The end-to-end suite proves it by shrinking the word counter's read buffer in a scratch repository, which multiplies its read calls.
 
-- [CPU time](/metrics/#cpu-time-and-utilization) is user plus system time for the process tree, reported when each run exits; waiting is excluded.
-- `cpu.max_percent` and `cpu.min_difference` are separate from latency; [minimum meaningful change](/regression-detection/#minimum-meaningful-change) explains the absolute threshold.
-- CPU utilization is reported but not judged as a regression because higher use can mean better parallelism.
+- [CPU time](/metrics/#cpu-time-and-utilization) is user plus system time of the process tree; waiting is excluded.
+- The CPU tolerance and [minimum meaningful change](/regression-detection/#minimum-meaningful-change) are set separately from latency's.
 
 Example: [`examples/cpu-regression`](https://github.com/nao1215/himorime/tree/main/examples/cpu-regression)
