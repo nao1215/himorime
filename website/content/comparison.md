@@ -29,7 +29,7 @@ You write a YAML suite, choose workloads and possibly add build/setup hooks, and
 
 ## Complementary correctness testing
 
-[atago](https://github.com/nao1215/atago) tests what a CLI does: exit status, output, files, services and terminal interaction. himorime tests how the command performs. A project can use atago for behavioral end-to-end coverage and himorime for performance budgets; neither replaces the other.
+[atago](https://github.com/nao1215/atago) tests what a CLI does: exit status, output, files, services and terminal interaction. himorime tests how the command performs. A project can use atago for behavioral end-to-end tests and himorime for performance budgets.
 
 ## Sources
 

@@ -45,7 +45,7 @@ Each metric can have absolute budgets (`p95 <= 100ms`, `>= 50MiB/s`, `<= 64MiB`)
 
 ## What himorime measures, and what it does not
 
-himorime runs the command exactly as you wrote it, measures the whole process from start to reaping, and reads CPU time and peak memory from the operating system when it exits. It does not profile, it does not see inside a language runtime, and it cannot remove the noise of a shared CI runner. It reduces the damage that noise does: revisions run interleaved, a regression needs statistical confidence, and a result that cannot be told apart from noise is reported as inconclusive rather than passed or failed. Its results are evidence for a decision in a pull request, not a guarantee. See [Regression detection](/regression-detection/) and [Metrics](/metrics/).
+himorime runs the command exactly as you wrote it, measures the whole process from start to reaping, and reads CPU time and peak memory from the operating system when it exits. It does not profile, it does not see inside a language runtime, and it cannot remove the noise of a shared CI runner. To limit the effect of noise, revisions run interleaved, a regression needs statistical confidence, and a result that cannot be told apart from noise is reported as inconclusive. Treat the results as evidence for a pull-request decision. See [Regression detection](/regression-detection/) and [Metrics](/metrics/).
 
 himorime checks performance. To check that a CLI *behaves* correctly, including exit codes, output and files, use [atago](https://github.com/nao1215/atago).
 
